@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-pnull-core = { path = "../pnull-core", version = "=0.0.1" }
-pnull-publish = { path = "../pnull-publish", version = "=0.0.1" }
+pnull-core = { path = "../pnull-core", version = "=0.0.2" }
+pnull-publish = { path = "../pnull-publish", version = "=0.0.2" }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

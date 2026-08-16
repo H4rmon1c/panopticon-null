@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-pnull-core = { path = "../pnull-core", version = "=0.0.1" }
+pnull-core = { path = "../pnull-core", version = "=0.0.2" }
 reqwest.workspace = true
 scraper.workspace = true
 regex.workspace = true

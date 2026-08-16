@@ -991,7 +991,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "pnull-cli"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "hex",
  "rusqlite",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-detect"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "pnull-core",
  "regex",
@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-ingest"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "pnull-core",
  "regex",
@@ -1050,7 +1050,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-publish"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "pnull-core",
  "quick-xml",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-x"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "pnull-core",
  "pnull-publish",

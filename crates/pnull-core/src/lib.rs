@@ -4,10 +4,21 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+pub mod migrate;
+pub mod types;
+
+pub use migrate::{SCHEMA_VERSION, migrate};
+pub use types::{
+    Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation, MapWord,
+    Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation, ProcessingRun,
+    PublicationAllowlist, ReviewBinding, ReviewDecision, ReviewState, SourceReview, Subject,
+    SubjectKind, TextMap, XAttempt, XReconciliation, XSegment,
+};
 
 pub const PROCESSING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -29,6 +40,8 @@ pub enum CoreError {
         expected: String,
         observed: String,
     },
+    #[error("schema migration failed: {0}")]
+    Migration(#[from] migrate::MigrationError),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -219,7 +232,7 @@ impl Store {
         set_private_directory(&data_dir.join("evidence"))?;
         set_private_directory(&data_dir.join("records"))?;
         let database_path = data_dir.join("pnull.db");
-        let connection = Connection::open(&database_path)?;
+        let mut connection = Connection::open(&database_path)?;
         set_private_file(&database_path)?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
@@ -262,6 +275,7 @@ impl Store {
                PRIMARY KEY(alert_id, segment_index)
              );",
         )?;
+        migrate(&mut connection)?;
         Ok(Self {
             connection,
             data_dir,
@@ -384,7 +398,7 @@ impl Store {
     }
 
     pub fn findings(&self) -> Result<Vec<Finding>, CoreError> {
-        self.read_json_rows("SELECT finding_json FROM findings ORDER BY id")
+        self.read_json_rows("SELECT finding_json FROM findings ORDER BY id", &[])
     }
 
     pub fn insert_alert(&self, alert: &Alert) -> Result<bool, CoreError> {
@@ -409,15 +423,19 @@ impl Store {
     pub fn alerts(&self) -> Result<Vec<Alert>, CoreError> {
         self.read_json_rows(
             "SELECT alert_json FROM alerts ORDER BY json_extract(alert_json, '$.publication_date') DESC, id",
+            &[],
         )
     }
 
     fn read_json_rows<T: for<'de> Deserialize<'de>>(
         &self,
         query: &str,
+        params: &[&str],
     ) -> Result<Vec<T>, CoreError> {
         let mut statement = self.connection.prepare(query)?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let rows = statement.query_map(params_from_iter(params.iter().copied()), |row| {
+            row.get::<_, String>(0)
+        })?;
         rows.map(|row| Ok(serde_json::from_str(&row?)?)).collect()
     }
 
@@ -540,6 +558,291 @@ impl Store {
                 observed,
             })
         }
+    }
+
+    pub fn schema_version(&self) -> Result<u32, CoreError> {
+        Ok(migrate::current_version(&self.connection)?)
+    }
+
+    pub fn insert_matter(&self, matter: &Matter) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO matters(id, source_id, official_matter_id, matter_json)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                matter.id,
+                matter.source_id,
+                matter.official_matter_id,
+                serde_json::to_string(matter)?
+            ],
+        )? == 1)
+    }
+
+    pub fn matter(&self, id: &str) -> Result<Matter, CoreError> {
+        self.read_json_row("SELECT matter_json FROM matters WHERE id = ?1", &[id])
+    }
+
+    pub fn matters(&self) -> Result<Vec<Matter>, CoreError> {
+        self.read_json_rows("SELECT matter_json FROM matters ORDER BY official_matter_id", &[])
+    }
+
+    pub fn insert_attachment(&self, attachment: &MatterAttachment) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO matter_attachments(id, matter_id, attachment_json)
+             VALUES (?1, ?2, ?3)",
+            params![
+                attachment.id,
+                attachment.matter_id,
+                serde_json::to_string(attachment)?
+            ],
+        )? == 1)
+    }
+
+    pub fn attachments(&self, matter_id: &str) -> Result<Vec<MatterAttachment>, CoreError> {
+        self.read_json_rows(
+            "SELECT attachment_json FROM matter_attachments WHERE matter_id = ?1 ORDER BY name",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_subject(&self, subject: &Subject) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO subjects(id, matter_id, subject_json) VALUES (?1, ?2, ?3)",
+            params![
+                subject.id,
+                subject.matter_id,
+                serde_json::to_string(subject)?
+            ],
+        )? == 1)
+    }
+
+    pub fn subjects(&self, matter_id: &str) -> Result<Vec<Subject>, CoreError> {
+        self.read_json_rows(
+            "SELECT subject_json FROM subjects WHERE matter_id = ?1 ORDER BY kind, name",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_action(&self, action: &Action) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO actions(id, matter_id, subject_id, action_json)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                action.id,
+                action.matter_id,
+                action.subject_id,
+                serde_json::to_string(action)?
+            ],
+        )? == 1)
+    }
+
+    pub fn actions(&self, matter_id: &str) -> Result<Vec<Action>, CoreError> {
+        self.read_json_rows(
+            "SELECT action_json FROM actions WHERE matter_id = ?1 ORDER BY id",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_text_map(&self, map: &TextMap) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO text_maps(id, evidence_id, text_map_json) VALUES (?1, ?2, ?3)",
+            params![map.id, map.evidence_id, serde_json::to_string(map)?],
+        )? == 1)
+    }
+
+    pub fn text_maps(&self, evidence_id: &str) -> Result<Vec<TextMap>, CoreError> {
+        self.read_json_rows(
+            "SELECT text_map_json FROM text_maps WHERE evidence_id = ?1 ORDER BY page_number",
+            &[evidence_id],
+        )
+    }
+
+    pub fn text_map(&self, id: &str) -> Result<TextMap, CoreError> {
+        self.read_json_row("SELECT text_map_json FROM text_maps WHERE id = ?1", &[id])
+    }
+
+    pub fn insert_page_citation(&self, citation: &PageCitation) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO page_citations(id, evidence_id, page_citation_json)
+             VALUES (?1, ?2, ?3)",
+            params![
+                citation.id,
+                citation.evidence_id,
+                serde_json::to_string(citation)?
+            ],
+        )? == 1)
+    }
+
+    pub fn page_citations(&self, evidence_id: &str) -> Result<Vec<PageCitation>, CoreError> {
+        self.read_json_rows(
+            "SELECT page_citation_json FROM page_citations WHERE evidence_id = ?1 ORDER BY page_number, id",
+            &[evidence_id],
+        )
+    }
+
+    pub fn page_citation(&self, id: &str) -> Result<PageCitation, CoreError> {
+        self.read_json_row(
+            "SELECT page_citation_json FROM page_citations WHERE id = ?1",
+            &[id],
+        )
+    }
+
+    pub fn insert_review(&self, decision: &ReviewDecision) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO review_decisions(id, citation_id, decision_json)
+             VALUES (?1, ?2, ?3)",
+            params![
+                decision.id,
+                decision.citation_id,
+                serde_json::to_string(decision)?
+            ],
+        )? == 1)
+    }
+
+    pub fn reviews_for_citation(&self, citation_id: &str) -> Result<Vec<ReviewDecision>, CoreError> {
+        self.read_json_rows(
+            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY decided_at",
+            &[citation_id],
+        )
+    }
+
+    pub fn all_reviews(&self) -> Result<Vec<ReviewDecision>, CoreError> {
+        self.read_json_rows(
+            "SELECT decision_json FROM review_decisions ORDER BY decided_at",
+            &[],
+        )
+    }
+
+    pub fn current_review(&self, citation_id: &str) -> Result<Option<ReviewDecision>, CoreError> {
+        let reviews = self.reviews_for_citation(citation_id)?;
+        Ok(reviews.into_iter().last())
+    }
+
+    pub fn insert_processing_run(&self, run: &ProcessingRun) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO processing_runs(id, run_json) VALUES (?1, ?2)",
+            params![run.id, serde_json::to_string(run)?],
+        )? == 1)
+    }
+
+    pub fn processing_runs(&self) -> Result<Vec<ProcessingRun>, CoreError> {
+        self.read_json_rows("SELECT run_json FROM processing_runs ORDER BY started_at", &[])
+    }
+
+    pub fn insert_source_review(&self, review: &SourceReview) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO source_reviews(id, source_id, review_json) VALUES (?1, ?2, ?3)",
+            params![review.id, review.source_id, serde_json::to_string(review)?],
+        )? == 1)
+    }
+
+    pub fn source_reviews(&self, source_id: &str) -> Result<Vec<SourceReview>, CoreError> {
+        self.read_json_rows(
+            "SELECT review_json FROM source_reviews WHERE source_id = ?1 ORDER BY reviewed_at",
+            &[source_id],
+        )
+    }
+
+    pub fn current_source_review(&self, source_id: &str) -> Result<Option<SourceReview>, CoreError> {
+        Ok(self.source_reviews(source_id)?.into_iter().last())
+    }
+
+    pub fn insert_fetch_observation(&self, observation: &FetchObservation) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO fetch_observations(id, source_id, observation_json)
+             VALUES (?1, ?2, ?3)",
+            params![
+                observation.id,
+                observation.source_id,
+                serde_json::to_string(observation)?
+            ],
+        )? == 1)
+    }
+
+    pub fn fetch_observations(&self, source_id: &str) -> Result<Vec<FetchObservation>, CoreError> {
+        self.read_json_rows(
+            "SELECT observation_json FROM fetch_observations WHERE source_id = ?1 ORDER BY retrieved_at",
+            &[source_id],
+        )
+    }
+
+    pub fn insert_x_attempt(&self, attempt: &XAttempt) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO x_attempts(id, alert_id, attempt_json) VALUES (?1, ?2, ?3)",
+            params![attempt.id, attempt.alert_id, serde_json::to_string(attempt)?],
+        )? == 1)
+    }
+
+    pub fn x_attempt(&self, id: &str) -> Result<XAttempt, CoreError> {
+        self.read_json_row("SELECT attempt_json FROM x_attempts WHERE id = ?1", &[id])
+    }
+
+    pub fn x_attempts(&self) -> Result<Vec<XAttempt>, CoreError> {
+        self.read_json_rows("SELECT attempt_json FROM x_attempts ORDER BY started_at", &[])
+    }
+
+    pub fn x_attempts_for_alert(&self, alert_id: &str) -> Result<Vec<XAttempt>, CoreError> {
+        self.read_json_rows(
+            "SELECT attempt_json FROM x_attempts WHERE alert_id = ?1 ORDER BY started_at",
+            &[alert_id],
+        )
+    }
+
+    pub fn insert_x_reconciliation(&self, item: &XReconciliation) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO x_reconciliations(id, attempt_id, reconciliation_json)
+             VALUES (?1, ?2, ?3)",
+            params![item.id, item.attempt_id, serde_json::to_string(item)?],
+        )? == 1)
+    }
+
+    pub fn x_reconciliations(&self, attempt_id: &str) -> Result<Vec<XReconciliation>, CoreError> {
+        self.read_json_rows(
+            "SELECT reconciliation_json FROM x_reconciliations WHERE attempt_id = ?1 ORDER BY decided_at",
+            &[attempt_id],
+        )
+    }
+
+    pub fn insert_publication_allowlist(&self, item: &PublicationAllowlist) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO publication_allowlists(id, allowlist_json) VALUES (?1, ?2)",
+            params![item.id, serde_json::to_string(item)?],
+        )? == 1)
+    }
+
+    pub fn publication_allowlists(&self) -> Result<Vec<PublicationAllowlist>, CoreError> {
+        self.read_json_rows(
+            "SELECT allowlist_json FROM publication_allowlists ORDER BY created_at",
+            &[],
+        )
+    }
+
+    fn read_json_row<T: for<'de> Deserialize<'de>>(
+        &self,
+        query: &str,
+        params: &[&str],
+    ) -> Result<T, CoreError> {
+        let json: Option<String> = self
+            .connection
+            .query_row(query, params_from_iter(params.iter().copied()), |row| {
+                row.get(0)
+            })
+            .optional()?;
+        Ok(serde_json::from_str(&json.ok_or_else(|| {
+            CoreError::NotFound("record".to_owned())
+        })?)?)
+    }
+}
+
+impl Store {
+    /// Runs a transactional closure over the underlying connection.
+    pub fn transaction<T>(
+        &self,
+        f: impl FnOnce(&Transaction<'_>) -> Result<T, CoreError>,
+    ) -> Result<T, CoreError> {
+        let transaction = self.connection.unchecked_transaction()?;
+        let result = f(&transaction)?;
+        transaction.commit()?;
+        Ok(result)
     }
 }
 
