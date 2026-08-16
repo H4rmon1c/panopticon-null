@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v17
+      - name: Check flake
+        run: nix flake check --print-build-logs
+      - name: Format
+        run: nix develop --command cargo fmt --all --check
+      - name: Clippy
+        run: nix develop --command cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test offline fixtures
+        run: nix develop --command cargo test --workspace --all-features
+      - name: Dependency policy
+        run: nix develop --command cargo deny check

@@ -1,0 +1,12 @@
+/target
+/.direnv
+/.pnull
+/demo-output
+/result
+/result-*
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example

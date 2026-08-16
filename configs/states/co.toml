@@ -1,0 +1,48 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Colorado Springs, Colorado"
+canonical_base_url = "https://panopticon-null.example/alerts/co"
+x_feed_label = "Colorado surveillance alerts"
+default_dry_run = true
+
+[[sources]]
+id = "colorado-springs-legistar-events"
+name = "Colorado Springs City Council Legistar events"
+url = "https://webapi.legistar.com/v1/coloradosprings/events?$filter=EventDate%20ge%20datetime%272025-01-01%27&$orderby=EventDate%20desc&$top=100"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
+official_discovery_url = "https://coloradosprings.gov/city-council-meetings"
+minimum_interval_seconds = 86400
+maximum_bytes = 20971520
+robots_status = "Unverified on 2026-08-16; production refresh must verify current directives before scheduled retrieval. The documented public API was accessed manually at conservative rates for v0.0.1 fixtures."
+terms_note = "No API-specific automated-use terms or published quota were found. Use one request at a time, date filters, caching, and backoff; stop on restrictions."
+
+[[demo_documents]]
+id = "ordinance-draft"
+path = "fixtures/co/ordinance-25-93-draft.pdf"
+url = "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876734&GUID=754550C8-73DC-49BC-B779-9ECDAB97D404"
+title = "Draft Ordinance No. 25-93 — Police Department Technology Surcharge"
+publication_date = "2025-10-20"
+retrieval_timestamp = "2026-08-16T09:33:58Z"
+source_type = "agenda"
+mime_type = "application/pdf"
+
+[[demo_documents]]
+id = "supporting-presentation"
+path = "fixtures/co/police-technology-surcharge-presentation.pdf"
+url = "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D"
+title = "2025 Police Technology Surcharge presentation"
+publication_date = "2025-10-20"
+retrieval_timestamp = "2026-08-16T09:35:00Z"
+source_type = "agenda"
+mime_type = "application/pdf"
+
+[[demo_documents]]
+id = "ordinance-signed"
+path = "fixtures/co/ordinance-25-93-signed.pdf"
+url = "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03"
+title = "Signed Ordinance No. 25-93 — Police Department Technology Surcharge"
+publication_date = "2025-11-25"
+retrieval_timestamp = "2026-08-16T09:33:59Z"
+source_type = "agenda"
+mime_type = "application/pdf"

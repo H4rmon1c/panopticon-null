@@ -1,0 +1,116 @@
+version: 1
+rules:
+  - id: technology.alpr
+    label: Automated license plate readers
+    category: technology
+    terms: ["automated license plate reader", "automated license plate recognition", "ALPR", "license plate reader", "LPR"]
+    false_positive_phrases: ["alpr test string", "lpr camera lens mount"]
+    rationale: Flags institutional references to systems that index vehicles by plate. A match establishes only a mention unless a separate state phrase is cited.
+  - id: vendor.flock-safety
+    label: Flock Safety
+    category: vendor
+    terms: ["Flock Safety", "Flock vehicle-intelligence", "Flock ALPR", "Flock camera", "Flock"]
+    false_positive_phrases: ["flock of birds", "safety of the flock"]
+    rationale: Flock Safety supplies vehicle-identification and camera systems. Vendor mention alone does not establish a purchase.
+  - id: vendor.vigilant-solutions
+    label: Vigilant Solutions
+    category: vendor
+    terms: ["Vigilant Solutions", "Vigilant LEARN"]
+    false_positive_phrases: []
+    rationale: Vendor associated with license-plate recognition and vehicle-location databases.
+  - id: vendor.motorola-solutions
+    label: Motorola Solutions
+    category: vendor
+    terms: ["Motorola Solutions"]
+    false_positive_phrases: []
+    rationale: Vendor with public-safety camera, analytics, and command-center products; generic Motorola references are intentionally excluded.
+  - id: vendor.palantir
+    label: Palantir
+    category: vendor
+    terms: ["Palantir Technologies", "Palantir Gotham"]
+    false_positive_phrases: ["palantir in Tolkien"]
+    rationale: Vendor associated with investigative data integration and analysis.
+  - id: vendor.axon
+    label: Axon
+    category: vendor
+    terms: ["Axon Enterprise", "Axon body", "Axon ecosystem", "Axon Evidence", "Axon"]
+    false_positive_phrases: ["axon of a neuron", "axon guidance"]
+    rationale: Vendor associated with body cameras, digital evidence, drones, and public-safety software. Generic biological uses are excluded.
+  - id: vendor.clearview-ai
+    label: Clearview AI
+    category: vendor
+    terms: ["Clearview AI"]
+    false_positive_phrases: []
+    rationale: Vendor associated with face-search services.
+  - id: vendor.cellebrite
+    label: Cellebrite
+    category: vendor
+    terms: ["Cellebrite", "UFED"]
+    false_positive_phrases: []
+    rationale: Vendor associated with device extraction and digital investigation tools.
+  - id: vendor.soundthinking-shotspotter
+    label: SoundThinking and ShotSpotter
+    category: vendor
+    terms: ["SoundThinking", "ShotSpotter"]
+    false_positive_phrases: ["shot spotter fabric"]
+    rationale: Vendor and product associated with acoustic gunshot-detection networks.
+  - id: technology.facial-recognition
+    label: Facial recognition
+    category: technology
+    terms: ["facial recognition", "face recognition", "face matching"]
+    false_positive_phrases: ["facial recognition memory test"]
+    rationale: Flags institutional acquisition, policy, or use discussions involving automated face matching.
+  - id: technology.biometric-identification
+    label: Biometric identification
+    category: technology
+    terms: ["biometric identification", "biometric matching", "iris recognition", "voiceprint"]
+    false_positive_phrases: []
+    rationale: Flags systems that identify people through bodily or behavioral characteristics.
+  - id: technology.real-time-crime-center
+    label: Real-time crime centers
+    category: technology
+    terms: ["real-time crime center", "real time crime center", "RTCC"]
+    false_positive_phrases: []
+    rationale: Flags centralized police monitoring and data-integration operations.
+  - id: technology.predictive-policing
+    label: Predictive policing
+    category: technology
+    terms: ["predictive policing", "crime prediction", "risk terrain modeling"]
+    false_positive_phrases: []
+    rationale: Flags systems presented as forecasting crime, locations, or individual risk.
+  - id: technology.social-media-monitoring
+    label: Social-media monitoring
+    category: technology
+    terms: ["social media monitoring", "social-media monitoring", "social media intelligence"]
+    false_positive_phrases: []
+    rationale: Flags institutional tools for collecting or analyzing social-media activity.
+  - id: technology.cell-site-simulator
+    label: Cell-site simulators
+    category: technology
+    terms: ["cell-site simulator", "cell site simulator", "StingRay", "IMSI catcher"]
+    false_positive_phrases: ["stingray fish"]
+    rationale: Flags devices that impersonate cellular infrastructure to locate or identify devices.
+  - id: practice.geofence-warrant
+    label: Geofence warrants
+    category: legal-process
+    terms: ["geofence warrant", "reverse location warrant"]
+    false_positive_phrases: []
+    rationale: Flags legal demands seeking devices associated with a geographic area.
+  - id: technology.drone-surveillance
+    label: Drone surveillance
+    category: technology
+    terms: ["drone as first responder", "drone surveillance", "unmanned aircraft surveillance", "police drone"]
+    false_positive_phrases: ["drone music", "worker drone"]
+    rationale: Flags institutional aerial observation; generic drone references are deliberately narrower than this rule.
+  - id: industry.data-broker
+    label: Data brokers
+    category: industry
+    terms: ["data broker", "commercially available information", "location data vendor"]
+    false_positive_phrases: []
+    rationale: Flags third-party acquisition of data originally collected outside government.
+  - id: technology.investigative-platform
+    label: Third-party investigative platforms
+    category: technology
+    terms: ["third-party investigative platform", "investigative data platform", "investigative analytics platform"]
+    false_positive_phrases: []
+    rationale: Flags externally supplied systems that combine records for institutional investigation.
