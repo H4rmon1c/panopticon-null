@@ -1071,6 +1071,7 @@ name = "pnull-x"
 version = "0.0.0-dev"
 dependencies = [
  "pnull-core",
+ "pnull-publish",
  "reqwest",
  "serde",
  "serde_json",

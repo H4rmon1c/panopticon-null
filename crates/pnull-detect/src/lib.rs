@@ -70,19 +70,18 @@ fn validate_rules(rules: &RuleSet) -> Result<(), DetectError> {
 }
 
 pub fn scan(record: &EvidenceRecord, text: &str, rules: &RuleSet) -> Option<Finding> {
-    let lowercase = text.to_lowercase();
     let mut matched = BTreeSet::new();
     let mut citations = Vec::new();
     for rule in &rules.rules {
-        if rule
-            .false_positive_phrases
-            .iter()
-            .any(|phrase| lowercase.contains(&phrase.to_lowercase()))
-        {
-            continue;
-        }
         for term in &rule.terms {
-            if let Some(line_index) = find_term_line(text, term) {
+            let line_index = find_term_lines(text, term).into_iter().find(|index| {
+                let line = text.lines().nth(*index).unwrap_or_default().to_lowercase();
+                !rule
+                    .false_positive_phrases
+                    .iter()
+                    .any(|phrase| line.contains(&phrase.to_lowercase()))
+            });
+            if let Some(line_index) = line_index {
                 matched.insert(rule.id.clone());
                 citations.push(citation(record, text, line_index));
                 break;
@@ -101,9 +100,16 @@ pub fn scan(record: &EvidenceRecord, text: &str, rules: &RuleSet) -> Option<Find
         citations.push(item);
     }
     let matched_rule_ids: Vec<String> = matched.into_iter().collect();
+    let digest = rules_digest(rules);
     let id = stable_id(
         "finding",
-        &[&record.id, state.label(), &matched_rule_ids.join(",")],
+        &[
+            &record.id,
+            state.label(),
+            &matched_rule_ids.join(","),
+            &rules.version.to_string(),
+            &digest,
+        ],
     );
     Some(Finding {
         id,
@@ -111,23 +117,37 @@ pub fn scan(record: &EvidenceRecord, text: &str, rules: &RuleSet) -> Option<Find
         jurisdiction: record.jurisdiction.clone(),
         state,
         classification_reason: reason,
+        rules_version: rules.version,
+        rules_digest: digest,
         matched_rule_ids,
         citations,
     })
 }
 
-fn find_term_line(text: &str, term: &str) -> Option<usize> {
+fn term_regex(term: &str) -> Option<Regex> {
     let escaped = regex::escape(term);
     let starts_word = term.chars().next().is_some_and(char::is_alphanumeric);
     let ends_word = term.chars().last().is_some_and(char::is_alphanumeric);
-    let pattern = format!(
+    Regex::new(&format!(
         "(?i){}{}{}",
         if starts_word { r"\b" } else { "" },
         escaped,
         if ends_word { r"\b" } else { "" }
-    );
-    let regex = Regex::new(&pattern).ok()?;
-    text.lines().position(|line| regex.is_match(line))
+    ))
+    .ok()
+}
+
+fn find_term_lines(text: &str, term: &str) -> Vec<usize> {
+    term_regex(term).map_or_else(Vec::new, |regex| {
+        text.lines()
+            .enumerate()
+            .filter_map(|(index, line)| regex.is_match(line).then_some(index))
+            .collect()
+    })
+}
+
+fn find_term_line(text: &str, term: &str) -> Option<usize> {
+    find_term_lines(text, term).into_iter().next()
 }
 
 pub fn classify_document(
@@ -218,24 +238,58 @@ fn classify_with_filter<F: Fn(usize) -> bool>(
             "The source describes a proposal, request, or referral, not a completed purchase.",
         ),
     ];
+    let mut candidates = Vec::new();
     for (state, phrases, reason) in PATTERNS {
         for phrase in *phrases {
-            if let Some(index) = find_term_line(text, phrase)
-                && accepts(index)
-            {
-                return (
-                    *state,
-                    (*reason).to_owned(),
-                    Some(citation(record, text, index)),
-                );
+            for index in find_term_lines(text, phrase) {
+                let line = text.lines().nth(index).unwrap_or_default();
+                if accepts(index) && !is_negated_or_conditional(line, phrase) {
+                    candidates.push((*state, *reason, index));
+                }
             }
         }
+    }
+    candidates.sort_by_key(|candidate| candidate.2);
+    candidates.dedup_by_key(|candidate| (candidate.0, candidate.2));
+    let distinct: BTreeSet<String> = candidates
+        .iter()
+        .map(|candidate| candidate.0.label().to_owned())
+        .collect();
+    if distinct.len() > 1 {
+        let index = candidates.last().map_or(0, |candidate| candidate.2);
+        return (
+            FindingState::Unknown,
+            "The source contains multiple potentially conflicting state phrases; no stronger state is asserted without human review.".to_owned(),
+            Some(citation(record, text, index)),
+        );
+    }
+    if let Some((state, reason, index)) = candidates.last() {
+        return (
+            *state,
+            (*reason).to_owned(),
+            Some(citation(record, text, *index)),
+        );
     }
     (
         FindingState::MentionDetected,
         "A taxonomy term appears, but the source span does not establish proposal, approval, purchase, deployment, or another stronger state.".to_owned(),
         None,
     )
+}
+
+fn is_negated_or_conditional(line: &str, phrase: &str) -> bool {
+    let line = line.to_lowercase();
+    let phrase = phrase.to_lowercase();
+    [
+        format!("not {phrase}"),
+        format!("no {phrase}"),
+        format!("never {phrase}"),
+        format!("if {phrase}"),
+        format!("unless {phrase}"),
+    ]
+    .iter()
+    .any(|pattern| line.contains(pattern))
+        || (phrase == "approved" && line.contains("subject to approval"))
 }
 
 fn citation(record: &EvidenceRecord, text: &str, zero_based_line: usize) -> Citation {
@@ -299,13 +353,14 @@ pub fn compare(
     }
     changes.sort_by(|left, right| left.kind.cmp(&right.kind));
     changes.dedup_by(|left, right| left.kind == right.kind && left.summary == right.summary);
+    let unified_text = meaningful_diff(&changes);
     EvidenceDiff {
         old_evidence_id: old_record.id.clone(),
         new_evidence_id: new_record.id.clone(),
         old_source_url: old_record.source_url.clone(),
         new_source_url: new_record.source_url.clone(),
         changes,
-        unified_text: unified_text(old_text, new_text),
+        unified_text,
     }
 }
 
@@ -470,20 +525,12 @@ fn compare_pattern(
                 old_values.into_iter().collect::<Vec<_>>().join(", "),
                 new_values.into_iter().collect::<Vec<_>>().join(", ")
             ),
-            before: regex.find(old_text).map(|item| {
-                citation(
-                    old_record,
-                    old_text,
-                    old_text[..item.start()].lines().count() - 1,
-                )
-            }),
-            after: regex.find(new_text).map(|item| {
-                citation(
-                    new_record,
-                    new_text,
-                    new_text[..item.start()].lines().count() - 1,
-                )
-            }),
+            before: regex
+                .find(old_text)
+                .map(|item| citation(old_record, old_text, line_index_at(old_text, item.start()))),
+            after: regex
+                .find(new_text)
+                .map(|item| citation(new_record, new_text, line_index_at(new_text, item.start()))),
         });
     }
 }
@@ -528,22 +575,86 @@ fn find_topic_citation(record: &EvidenceRecord, text: &str, topics: &[&str]) -> 
     find_topic_line(text, topics).map(|index| citation(record, text, index))
 }
 
+fn meaningful_diff(changes: &[DiffChange]) -> String {
+    let mut lines = vec![
+        "--- earlier evidence".to_owned(),
+        "+++ newer evidence".to_owned(),
+    ];
+    for change in changes {
+        lines.push(format!("@@ {} @@", change.kind));
+        if let Some(before) = &change.before {
+            lines.push(format!("- {}: {}", before.locator.label, before.quote));
+        }
+        if let Some(after) = &change.after {
+            lines.push(format!("+ {}: {}", after.locator.label, after.quote));
+        }
+    }
+    lines.join("\n")
+}
+
+fn line_index_at(text: &str, byte_index: usize) -> usize {
+    text[..byte_index.min(text.len())].matches('\n').count()
+}
+
+#[cfg(test)]
 fn unified_text(old: &str, new: &str) -> String {
-    let old_lines: BTreeSet<&str> = old.lines().collect();
-    let new_lines: BTreeSet<&str> = new.lines().collect();
-    let mut result = vec!["--- earlier evidence", "+++ newer evidence"]
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
+    const MAX_CHANGED_LINES: usize = 200;
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    let prefix = old_lines
+        .iter()
+        .zip(&new_lines)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let suffix = old_lines[prefix..]
+        .iter()
+        .rev()
+        .zip(new_lines[prefix..].iter().rev())
+        .take_while(|(left, right)| left == right)
+        .count();
+    let old_end = old_lines.len().saturating_sub(suffix);
+    let new_end = new_lines.len().saturating_sub(suffix);
+    let mut result = vec![
+        "--- earlier evidence".to_owned(),
+        "+++ newer evidence".to_owned(),
+    ];
+    let context_start = prefix.saturating_sub(2);
     result.extend(
-        old_lines
-            .difference(&new_lines)
+        old_lines[context_start..prefix]
+            .iter()
+            .map(|line| format!("  {line}")),
+    );
+    let removed = &old_lines[prefix..old_end];
+    let added = &new_lines[prefix..new_end];
+    result.extend(
+        removed
+            .iter()
+            .take(MAX_CHANGED_LINES)
             .map(|line| format!("- {line}")),
     );
+    if removed.len() > MAX_CHANGED_LINES {
+        result.push(format!(
+            "- … {} additional removed lines omitted",
+            removed.len() - MAX_CHANGED_LINES
+        ));
+    }
     result.extend(
-        new_lines
-            .difference(&old_lines)
+        added
+            .iter()
+            .take(MAX_CHANGED_LINES)
             .map(|line| format!("+ {line}")),
+    );
+    if added.len() > MAX_CHANGED_LINES {
+        result.push(format!(
+            "+ … {} additional added lines omitted",
+            added.len() - MAX_CHANGED_LINES
+        ));
+    }
+    result.extend(
+        old_lines[old_end..]
+            .iter()
+            .take(2)
+            .map(|line| format!("  {line}")),
     );
     result.join("\n")
 }
@@ -575,6 +686,7 @@ pub fn build_alert(
             previous.as_deref().unwrap_or(""),
             finding.state.label(),
             &finding.matched_rule_ids.join(","),
+            &finding.rules_digest,
         ],
     );
     Some(Alert {
@@ -587,6 +699,8 @@ pub fn build_alert(
         summary,
         publication_date,
         rule_ids: finding.matched_rule_ids.clone(),
+        rules_version: finding.rules_version,
+        rules_digest: finding.rules_digest.clone(),
         citations: finding.citations.clone(),
         diff,
     })
@@ -681,6 +795,20 @@ mod tests {
     }
 
     #[test]
+    fn negated_approval_never_becomes_approved() {
+        let finding =
+            scan(&record("one"), "Axon proposal was not approved.", &rules()).expect("mention");
+        assert_ne!(finding.state, FindingState::Approved);
+    }
+
+    #[test]
+    fn false_positive_elsewhere_does_not_hide_real_vendor_reference() {
+        let text = "A biology appendix mentions the axon of a neuron.\nThe city proposed an Axon body camera agreement.";
+        let finding = scan(&record("one"), text, &rules()).expect("real vendor finding");
+        assert_eq!(finding.state, FindingState::Proposal);
+    }
+
+    #[test]
     fn detects_price_and_privacy_language_removal() {
         let old = "Axon price: $10,000\nRetention shall be 30 days\nPrivacy review required";
         let new = "Axon price: $20,000\nRetention shall be 90 days";
@@ -700,6 +828,30 @@ mod tests {
                 .iter()
                 .any(|change| change.kind == "removed_relevant_language")
         );
+    }
+
+    #[test]
+    fn diff_locators_handle_matches_at_byte_zero() {
+        let diff = compare(
+            &record("old"),
+            "$10 Axon",
+            &record("new"),
+            "$20 Axon",
+            &rules(),
+        );
+        let price = diff
+            .changes
+            .iter()
+            .find(|change| change.kind == "changed_price")
+            .expect("price change");
+        assert_eq!(price.before.as_ref().expect("before").locator.start, 1);
+        assert_eq!(price.after.as_ref().expect("after").locator.start, 1);
+    }
+
+    #[test]
+    fn textual_diff_preserves_duplicate_line_changes() {
+        let rendered = unified_text("Axon\nAxon\nend", "Axon\nend");
+        assert!(rendered.contains("- Axon"));
     }
 
     #[test]

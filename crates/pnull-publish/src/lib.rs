@@ -1,5 +1,6 @@
 //! Deterministic, JavaScript-free publication with sensitive-data gates.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,8 @@ pub enum PublishError {
     Io(#[from] std::io::Error),
     #[error("public output rejected by privacy gate: {0}")]
     Sensitive(String),
+    #[error("public output contains a broken evidence reference: {0}")]
+    BrokenReference(String),
 }
 
 pub struct SiteConfig<'a> {
@@ -28,14 +31,32 @@ pub fn build_site(
     config: &SiteConfig<'_>,
 ) -> Result<Vec<PathBuf>, PublishError> {
     let output_dir = output_dir.as_ref();
+    let temporary = output_dir.with_extension("pnull-building");
+    if temporary.exists() {
+        fs::remove_dir_all(&temporary)?;
+    }
+    let temporary_files = build_site_in(store, &temporary, config)?;
     if output_dir.exists() {
         fs::remove_dir_all(output_dir)?;
     }
+    fs::rename(&temporary, output_dir)?;
+    Ok(temporary_files
+        .into_iter()
+        .map(|path| output_dir.join(path.strip_prefix(&temporary).unwrap_or(&path)))
+        .collect())
+}
+
+fn build_site_in(
+    store: &Store,
+    output_dir: &Path,
+    config: &SiteConfig<'_>,
+) -> Result<Vec<PathBuf>, PublishError> {
     fs::create_dir_all(output_dir.join("alerts"))?;
     fs::create_dir_all(output_dir.join("evidence"))?;
     fs::create_dir_all(output_dir.join("diffs"))?;
     let alerts = store.alerts()?;
     let evidence = store.all_evidence()?;
+    validate_references(&alerts, &evidence)?;
     let mut written = Vec::new();
     write_public(
         output_dir.join("style.css"),
@@ -99,6 +120,34 @@ pub fn build_site(
     Ok(written)
 }
 
+fn validate_references(
+    alerts: &[Alert],
+    evidence: &[(EvidenceRecord, String)],
+) -> Result<(), PublishError> {
+    let ids: BTreeSet<&str> = evidence
+        .iter()
+        .map(|(record, _)| record.id.as_str())
+        .collect();
+    for (record, _) in evidence {
+        if let Some(supersedes) = record.supersedes.as_deref()
+            && !ids.contains(supersedes)
+        {
+            return Err(PublishError::BrokenReference(supersedes.to_owned()));
+        }
+    }
+    for alert in alerts {
+        if !ids.contains(alert.evidence_id.as_str()) {
+            return Err(PublishError::BrokenReference(alert.evidence_id.clone()));
+        }
+        for citation in &alert.citations {
+            if !ids.contains(citation.evidence_id.as_str()) {
+                return Err(PublishError::BrokenReference(citation.evidence_id.clone()));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn write_root_documents(
     output_dir: &Path,
     config: &SiteConfig<'_>,
@@ -160,6 +209,11 @@ pub fn validate_public_text(text: &str) -> Result<(), PublishError> {
             "street-address-like value".to_owned(),
         ));
     }
+    if contains_person_identifier(text) {
+        return Err(PublishError::Sensitive(
+            "person-level identifier or movement record".to_owned(),
+        ));
+    }
     Ok(())
 }
 
@@ -203,6 +257,36 @@ fn contains_street_address(text: &str) -> bool {
     })
 }
 
+fn contains_person_identifier(text: &str) -> bool {
+    let uppercase = text.to_uppercase();
+    if [
+        "SOCIAL SECURITY NUMBER:",
+        "PHONE NUMBER:",
+        "HOME ADDRESS:",
+        "MOVEMENT LOG:",
+        "LOCATION HISTORY:",
+        "LATITUDE:",
+        "LONGITUDE:",
+    ]
+    .iter()
+    .any(|marker| uppercase.contains(marker))
+    {
+        return true;
+    }
+    text.split_whitespace().any(|token| {
+        let token = token
+            .trim_matches(|character: char| !character.is_ascii_alphanumeric() && character != '-');
+        let groups: Vec<&str> = token.split('-').collect();
+        groups.len() == 3
+            && groups[0].len() == 3
+            && groups[1].len() == 2
+            && groups[2].len() == 4
+            && groups
+                .iter()
+                .all(|group| group.bytes().all(|byte| byte.is_ascii_digit()))
+    })
+}
+
 fn page(title: &str, body: &str, prefix: &str) -> String {
     format!(
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} — Panopticon Null</title><link rel=\"stylesheet\" href=\"{}style.css\"><link rel=\"alternate\" type=\"application/atom+xml\" href=\"{}atom.xml\"></head><body><header><a class=\"brand\" href=\"{}index.html\">PANOPTICON NULL</a><p>No human being is born to be indexed.</p><nav><a href=\"{}index.html\">Alerts</a><a href=\"{}history.html\">History</a><a href=\"{}methodology.html\">Method</a><a href=\"{}rules.html\">Rules</a><a href=\"{}privacy.html\">Privacy</a><a href=\"{}manifesto.html\">Manifesto</a><a href=\"{}legal.html\">Boundaries</a></nav></header><main><h1>{}</h1>{}</main><footer><p>We think, therefore we are free. Evidence before rhetoric; institutions, not private people.</p></footer></body></html>\n",
@@ -243,12 +327,14 @@ fn alerts_index(alerts: &[Alert], history: bool) -> String {
 
 fn alert_page(alert: &Alert) -> String {
     let mut body = format!(
-        "<p class=\"state\">{}</p><p>{}</p><dl><dt>Jurisdiction</dt><dd>{}</dd><dt>Date</dt><dd>{}</dd><dt>Rules</dt><dd>{}</dd></dl><h2>Exact citations</h2>{}",
+        "<p class=\"state\">{}</p><p>{}</p><dl><dt>Jurisdiction</dt><dd>{}</dd><dt>Date</dt><dd>{}</dd><dt>Rules</dt><dd>{}</dd><dt>Rule-set provenance</dt><dd>version {} · <code>{}</code></dd></dl><h2>Exact citations</h2>{}",
         escape(alert.state.label()),
         escape(&alert.summary),
         escape(&alert.jurisdiction),
         escape(&alert.publication_date),
         escape(&alert.rule_ids.join(", ")),
+        alert.rules_version,
+        escape(&alert.rules_digest),
         citations_html(&alert.citations)
     );
     writeln!(
@@ -272,7 +358,7 @@ fn alert_page(alert: &Alert) -> String {
 fn citations_html(citations: &[Citation]) -> String {
     let mut body = String::from("<ol class=\"citations\">");
     for citation in citations {
-        writeln!(body, "<li><blockquote>{}</blockquote><p><a rel=\"external nofollow\" href=\"{}\">Official source</a>, {}</p></li>", escape(&citation.quote), escape_attr(&citation.source_url), escape(&citation.locator.label)).expect("string write");
+        writeln!(body, "<li><blockquote>{}</blockquote><p><a rel=\"external nofollow\" href=\"{}\">Official source</a> · <a href=\"../evidence/{}.html\">local hash and provenance</a> · {}</p></li>", escape(&citation.quote), escape_attr(&citation.source_url), safe_id(&citation.evidence_id), escape(&citation.locator.label)).expect("string write");
     }
     body.push_str("</ol>");
     body
@@ -365,6 +451,8 @@ mod tests {
         assert!(validate_public_text("Plate: ABC123").is_err());
         assert!(validate_public_text("resident@example.com").is_err());
         assert!(validate_public_text("123 Main Street").is_err());
+        assert!(validate_public_text("Social Security Number: 123-45-6789").is_err());
+        assert!(validate_public_text("Movement log: 39.7,-104.9").is_err());
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! Canonical evidence, finding, alert, and durable-state primitives.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -20,6 +21,8 @@ pub enum CoreError {
     Io(#[from] std::io::Error),
     #[error("record not found: {0}")]
     NotFound(String),
+    #[error("invalid SHA-256 digest: {0}")]
+    InvalidDigest(String),
     #[error("digest mismatch for evidence {evidence_id}: expected {expected}, observed {observed}")]
     DigestMismatch {
         evidence_id: String,
@@ -142,6 +145,8 @@ pub struct Finding {
     pub jurisdiction: String,
     pub state: FindingState,
     pub classification_reason: String,
+    pub rules_version: u32,
+    pub rules_digest: String,
     pub matched_rule_ids: Vec<String>,
     pub citations: Vec<Citation>,
 }
@@ -175,6 +180,8 @@ pub struct Alert {
     pub summary: String,
     pub publication_date: String,
     pub rule_ids: Vec<String>,
+    pub rules_version: u32,
+    pub rules_digest: String,
     pub citations: Vec<Citation>,
     pub diff: Option<EvidenceDiff>,
 }
@@ -208,7 +215,12 @@ impl Store {
         fs::create_dir_all(&data_dir)?;
         fs::create_dir_all(data_dir.join("evidence/sha256"))?;
         fs::create_dir_all(data_dir.join("records"))?;
-        let connection = Connection::open(data_dir.join("pnull.db"))?;
+        set_private_directory(&data_dir)?;
+        set_private_directory(&data_dir.join("evidence"))?;
+        set_private_directory(&data_dir.join("records"))?;
+        let database_path = data_dir.join("pnull.db");
+        let connection = Connection::open(&database_path)?;
+        set_private_file(&database_path)?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;
@@ -217,8 +229,7 @@ impl Store {
                sha256 TEXT NOT NULL,
                source_url TEXT NOT NULL,
                record_json TEXT NOT NULL,
-               extracted_text TEXT NOT NULL,
-               UNIQUE(source_url, sha256)
+               extracted_text TEXT NOT NULL
              );
              CREATE TABLE IF NOT EXISTS findings (
                id TEXT PRIMARY KEY,
@@ -232,12 +243,23 @@ impl Store {
              );
              CREATE TABLE IF NOT EXISTS approvals (
                alert_id TEXT PRIMARY KEY REFERENCES alerts(id),
+               draft_digest TEXT NOT NULL,
                approved_at TEXT NOT NULL
              );
              CREATE TABLE IF NOT EXISTS posts (
                alert_id TEXT PRIMARY KEY REFERENCES alerts(id),
                remote_ids_json TEXT NOT NULL,
                posted_at TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS source_fetches (
+               source_id TEXT PRIMARY KEY,
+               fetched_at_unix INTEGER NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS post_segments (
+               alert_id TEXT NOT NULL REFERENCES posts(alert_id),
+               segment_index INTEGER NOT NULL,
+               remote_id TEXT NOT NULL,
+               PRIMARY KEY(alert_id, segment_index)
              );",
         )?;
         Ok(Self {
@@ -250,11 +272,29 @@ impl Store {
         &self.data_dir
     }
 
-    pub fn content_path(&self, digest: &str) -> PathBuf {
-        self.data_dir
+    pub fn content_path(&self, digest: &str) -> Result<PathBuf, CoreError> {
+        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(CoreError::InvalidDigest(digest.to_owned()));
+        }
+        Ok(self
+            .data_dir
             .join("evidence/sha256")
             .join(&digest[..2])
-            .join(digest)
+            .join(digest))
+    }
+
+    fn record_path(&self, id: &str) -> Result<PathBuf, CoreError> {
+        if !id.starts_with("evidence:")
+            || !id.strip_prefix("evidence:").is_some_and(|digest| {
+                digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+        {
+            return Err(CoreError::NotFound(id.to_owned()));
+        }
+        Ok(self
+            .data_dir
+            .join("records")
+            .join(format!("{}.json", id.replace(':', "_"))))
     }
 
     pub fn insert_evidence(
@@ -262,10 +302,20 @@ impl Store {
         record: &EvidenceRecord,
         extracted_text: &str,
     ) -> Result<bool, CoreError> {
-        let record_json = String::from_utf8(record.canonical_json()?)
+        let exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM evidence WHERE id = ?1)",
+            [&record.id],
+            |row| row.get(0),
+        )?;
+        if exists {
+            return Ok(false);
+        }
+        let canonical = record.canonical_json()?;
+        let record_json = String::from_utf8(canonical.clone())
             .map_err(|error| std::io::Error::other(error.to_string()))?;
-        let inserted = self.connection.execute(
-            "INSERT OR IGNORE INTO evidence(id, sha256, source_url, record_json, extracted_text)
+        write_atomic(&self.record_path(&record.id)?, &canonical)?;
+        self.connection.execute(
+            "INSERT INTO evidence(id, sha256, source_url, record_json, extracted_text)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 record.id,
@@ -274,16 +324,8 @@ impl Store {
                 record_json,
                 extracted_text
             ],
-        )? == 1;
-        if inserted {
-            fs::write(
-                self.data_dir
-                    .join("records")
-                    .join(format!("{}.json", record.id.replace(':', "_"))),
-                record.canonical_json()?,
-            )?;
-        }
-        Ok(inserted)
+        )?;
+        Ok(true)
     }
 
     pub fn update_evidence_annotations(
@@ -291,17 +333,14 @@ impl Store {
         record: &EvidenceRecord,
         extracted_text: &str,
     ) -> Result<(), CoreError> {
-        let record_json = String::from_utf8(record.canonical_json()?)
+        self.evidence(&record.id)?;
+        let canonical = record.canonical_json()?;
+        let record_json = String::from_utf8(canonical.clone())
             .map_err(|error| std::io::Error::other(error.to_string()))?;
+        write_atomic(&self.record_path(&record.id)?, &canonical)?;
         self.connection.execute(
             "UPDATE evidence SET record_json = ?2, extracted_text = ?3 WHERE id = ?1",
             params![record.id, record_json, extracted_text],
-        )?;
-        fs::write(
-            self.data_dir
-                .join("records")
-                .join(format!("{}.json", record.id.replace(':', "_"))),
-            record.canonical_json()?,
         )?;
         Ok(())
     }
@@ -382,20 +421,57 @@ impl Store {
         rows.map(|row| Ok(serde_json::from_str(&row?)?)).collect()
     }
 
-    pub fn approve(&self, alert_id: &str, approved_at: &str) -> Result<bool, CoreError> {
+    pub fn source_fetch_allowed(
+        &self,
+        source_id: &str,
+        minimum_interval_seconds: u64,
+        now_unix: i64,
+    ) -> Result<bool, CoreError> {
+        let last: Option<i64> = self
+            .connection
+            .query_row(
+                "SELECT fetched_at_unix FROM source_fetches WHERE source_id = ?1",
+                [source_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(last.is_none_or(|last| {
+            now_unix.saturating_sub(last)
+                >= i64::try_from(minimum_interval_seconds).unwrap_or(i64::MAX)
+        }))
+    }
+
+    pub fn record_source_fetch(&self, source_id: &str, now_unix: i64) -> Result<(), CoreError> {
+        self.connection.execute(
+            "INSERT INTO source_fetches(source_id, fetched_at_unix) VALUES (?1, ?2)
+             ON CONFLICT(source_id) DO UPDATE SET fetched_at_unix = excluded.fetched_at_unix",
+            params![source_id, now_unix],
+        )?;
+        Ok(())
+    }
+
+    pub fn approve(
+        &self,
+        alert_id: &str,
+        draft_digest: &str,
+        approved_at: &str,
+    ) -> Result<bool, CoreError> {
         self.alert(alert_id)?;
         Ok(self.connection.execute(
-            "INSERT OR IGNORE INTO approvals(alert_id, approved_at) VALUES (?1, ?2)",
-            params![alert_id, approved_at],
+            "INSERT OR IGNORE INTO approvals(alert_id, draft_digest, approved_at) VALUES (?1, ?2, ?3)",
+            params![alert_id, draft_digest, approved_at],
         )? == 1)
     }
 
-    pub fn is_approved(&self, alert_id: &str) -> Result<bool, CoreError> {
-        Ok(self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM approvals WHERE alert_id = ?1)",
-            [alert_id],
-            |row| row.get(0),
-        )?)
+    pub fn approved_draft_digest(&self, alert_id: &str) -> Result<Option<String>, CoreError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT draft_digest FROM approvals WHERE alert_id = ?1",
+                [alert_id],
+                |row| row.get(0),
+            )
+            .optional()?)
     }
 
     pub fn is_posted(&self, alert_id: &str) -> Result<bool, CoreError> {
@@ -413,6 +489,31 @@ impl Store {
         )? == 1)
     }
 
+    pub fn record_post_segment(
+        &self,
+        alert_id: &str,
+        segment_index: usize,
+        remote_id: &str,
+    ) -> Result<(), CoreError> {
+        self.connection.execute(
+            "INSERT INTO post_segments(alert_id, segment_index, remote_id) VALUES (?1, ?2, ?3)",
+            params![
+                alert_id,
+                i64::try_from(segment_index).unwrap_or(i64::MAX),
+                remote_id
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn post_segments(&self, alert_id: &str) -> Result<Vec<String>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT remote_id FROM post_segments WHERE alert_id = ?1 ORDER BY segment_index",
+        )?;
+        let rows = statement.query_map([alert_id], |row| row.get::<_, String>(0))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(CoreError::from)
+    }
+
     pub fn mark_posted(
         &self,
         alert_id: &str,
@@ -428,7 +529,7 @@ impl Store {
 
     pub fn verify(&self, evidence_id: &str) -> Result<(), CoreError> {
         let (record, _) = self.evidence(evidence_id)?;
-        let bytes = fs::read(self.content_path(&record.sha256))?;
+        let bytes = fs::read(self.content_path(&record.sha256)?)?;
         let observed = sha256_hex(&bytes);
         if observed == record.sha256 {
             Ok(())
@@ -440,6 +541,48 @@ impl Store {
             })
         }
     }
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), std::io::Error> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("record path has no parent"))?;
+    fs::create_dir_all(parent)?;
+    let mut temporary = path.to_path_buf();
+    temporary.set_extension(format!("tmp-{}", std::process::id()));
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&temporary)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    set_private_file(&temporary)?;
+    fs::rename(&temporary, path)?;
+    set_private_file(path)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_directory(path: &Path) -> Result<(), std::io::Error> {
+    use std::os::unix::fs::PermissionsExt as _;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn set_private_directory(_path: &Path) -> Result<(), std::io::Error> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_file(path: &Path) -> Result<(), std::io::Error> {
+    use std::os::unix::fs::PermissionsExt as _;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_private_file(_path: &Path) -> Result<(), std::io::Error> {
+    Ok(())
 }
 
 #[cfg(test)]

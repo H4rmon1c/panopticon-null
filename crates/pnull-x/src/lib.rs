@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
-use pnull_core::{Alert, CoreError, Store};
+use pnull_core::{Alert, CoreError, Store, stable_id};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,6 +18,14 @@ pub struct Draft {
     pub posts: Vec<String>,
 }
 
+impl Draft {
+    pub fn digest(&self) -> String {
+        let mut parts = vec![self.alert_id.as_str()];
+        parts.extend(self.posts.iter().map(String::as_str));
+        stable_id("x-draft", &parts)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum XError {
     #[error("draft refused: the finding has no exact source citation")]
@@ -26,7 +34,7 @@ pub enum XError {
     SensitiveData,
     #[error("draft cannot fit within X character limits")]
     CharacterLimit,
-    #[error("alert has not received explicit local approval")]
+    #[error("alert has not received explicit approval for this exact draft")]
     NotApproved,
     #[error("live posting requires --confirm")]
     NotConfirmed,
@@ -53,21 +61,22 @@ pub fn draft(alert: &Alert, canonical_base_url: &str) -> Result<Draft, XError> {
     {
         return Err(XError::MissingCitation);
     }
-    if contains_sensitive_data(&alert.summary) || contains_sensitive_data(&alert.title) {
-        return Err(XError::SensitiveData);
-    }
-    let evidence_url = format!(
-        "{}/evidence/{}.html",
+    pnull_publish::validate_public_text(&alert.summary).map_err(|_| XError::SensitiveData)?;
+    pnull_publish::validate_public_text(&alert.title).map_err(|_| XError::SensitiveData)?;
+    let alert_url = format!(
+        "{}/alerts/{}.html",
         canonical_base_url.trim_end_matches('/'),
-        safe_id(&alert.evidence_id)
+        safe_id(&alert.id)
     );
     let text = format!(
-        "COLORADO SURVEILLANCE ALERT · AUTOMATED\n\n{} — current procurement state: {}.\n\nDetected change: {}\n\nSource documents, archived hashes, and exact citations:\n{}\n\nPublic power must remain publicly visible.",
+        "COLORADO SURVEILLANCE ALERT · AUTOMATED\n\n{} — monitored matter: {}\n\nCurrent public-record state: {}. This state does not by itself establish a vendor purchase.\n\nDetected change: {}\n\nSource documents, archived hashes, and exact citations:\n{}\n\nPublic power must remain publicly visible.",
         alert.jurisdiction,
+        alert.title,
         alert.state.label(),
         alert.summary,
-        evidence_url
+        alert_url
     );
+    pnull_publish::validate_public_text(&text).map_err(|_| XError::SensitiveData)?;
     let posts = split_thread(&text)?;
     if posts
         .iter()
@@ -150,18 +159,6 @@ fn split_words(paragraph: &str, target: usize, output: &mut Vec<String>) -> Resu
     Ok(())
 }
 
-fn contains_sensitive_data(text: &str) -> bool {
-    let uppercase = text.to_uppercase();
-    uppercase.contains("PLATE:")
-        || uppercase.contains("LICENSE PLATE NUMBER:")
-        || text.split_whitespace().any(|word| {
-            let mut pieces = word.split('@');
-            pieces.next().is_some_and(|piece| !piece.is_empty())
-                && pieces.next().is_some_and(|piece| piece.contains('.'))
-                && pieces.next().is_none()
-        })
-}
-
 fn safe_id(id: &str) -> String {
     id.chars()
         .map(|character| {
@@ -188,16 +185,18 @@ pub fn post_approved<T: XTransport>(
     if !confirmed {
         return Err(XError::NotConfirmed);
     }
-    if !store.is_approved(&draft.alert_id)? {
+    if store.approved_draft_digest(&draft.alert_id)?.as_deref() != Some(draft.digest().as_str()) {
         return Err(XError::NotApproved);
     }
     if store.is_posted(&draft.alert_id)? || !store.reserve_post(&draft.alert_id)? {
         return Err(XError::AlreadyPosted);
     }
     let mut remote_ids = Vec::new();
-    for post in &draft.posts {
+    for (index, post) in draft.posts.iter().enumerate() {
         let reply_to = remote_ids.last().map(String::as_str);
-        remote_ids.push(transport.submit(post, reply_to)?);
+        let remote_id = transport.submit(post, reply_to)?;
+        store.record_post_segment(&draft.alert_id, index, &remote_id)?;
+        remote_ids.push(remote_id);
     }
     store.mark_posted(&draft.alert_id, &remote_ids, posted_at)?;
     Ok(remote_ids)
@@ -334,15 +333,21 @@ mod tests {
         Alert {
             id: "alert:test".to_owned(),
             jurisdiction: "Colorado Springs, Colorado".to_owned(),
-            evidence_id: "evidence:test".to_owned(),
+            evidence_id:
+                "evidence:0000000000000000000000000000000000000000000000000000000000000000"
+                    .to_owned(),
             previous_evidence_id: None,
             title: "Police technology agenda item".to_owned(),
             state: FindingState::Approved,
             summary: summary.to_owned(),
             publication_date: "2025-11-25".to_owned(),
             rule_ids: vec!["vendor.axon".to_owned()],
+            rules_version: 1,
+            rules_digest: "test-rules-digest".to_owned(),
             citations: vec![Citation {
-                evidence_id: "evidence:test".to_owned(),
+                evidence_id:
+                    "evidence:0000000000000000000000000000000000000000000000000000000000000000"
+                        .to_owned(),
                 source_url: "https://example.invalid/source".to_owned(),
                 locator: Locator {
                     kind: "line".to_owned(),
@@ -417,8 +422,14 @@ mod tests {
             Err(XError::NotApproved)
         ));
         store
-            .approve(&alert.id, "2025-11-26T00:00:00Z")
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
             .expect("approval");
+        let mut tampered = draft.clone();
+        tampered.posts[0].push_str(" unsupported addition");
+        assert!(matches!(
+            post_approved(&store, &tampered, true, "2025-11-26T00:00:00Z", &mut fake),
+            Err(XError::NotApproved)
+        ));
         assert!(matches!(
             post_approved(&store, &draft, false, "2025-11-26T00:00:00Z", &mut fake),
             Err(XError::NotConfirmed)

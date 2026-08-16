@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
-use pnull_core::{Alert, EvidenceDiff, Finding, SourceType, Store, stable_id};
+use pnull_core::{
+    Alert, EvidenceDiff, ExtractionStatus, Finding, SourceType, Store, sha256_hex, stable_id,
+};
 use pnull_detect::{build_alert, classify_document, compare, load_rules, scan};
 use pnull_ingest::{DEFAULT_MAX_BYTES, IngestRequest, fetch_public_source, ingest_bytes};
 use pnull_publish::{SiteConfig, build_site};
@@ -122,6 +124,7 @@ struct DemoDocument {
     retrieval_timestamp: String,
     source_type: String,
     mime_type: String,
+    sha256: String,
 }
 
 fn main() -> Result<()> {
@@ -196,9 +199,22 @@ fn live_ingest(data_dir: &Path, config: &StateConfig, args: &IngestArgs) -> Resu
             "live retrieval refused: current robots directives must be reviewed first; rerun only after review with --robots-reviewed"
         );
     }
-    let bytes = fetch_public_source(&source.url, source.maximum_bytes)?;
     let store = Store::open(data_dir)?;
-    let timestamp = OffsetDateTime::now_utc().format(&Rfc3339)?;
+    let now = OffsetDateTime::now_utc();
+    if !store.source_fetch_allowed(
+        &source.id,
+        source.minimum_interval_seconds,
+        now.unix_timestamp(),
+    )? {
+        bail!(
+            "rate limit: source {} was fetched within the configured {}-second interval",
+            source.id,
+            source.minimum_interval_seconds
+        );
+    }
+    let bytes = fetch_public_source(&source.url, source.maximum_bytes)?;
+    store.record_source_fetch(&source.id, now.unix_timestamp())?;
+    let timestamp = now.format(&Rfc3339)?;
     let request = IngestRequest {
         jurisdiction: config.jurisdiction.clone(),
         source_url: source.url.clone(),
@@ -214,6 +230,17 @@ fn live_ingest(data_dir: &Path, config: &StateConfig, args: &IngestArgs) -> Resu
         max_bytes: source.maximum_bytes,
     };
     let outcome = ingest_bytes(&store, &request, &bytes)?;
+    if !matches!(
+        outcome.record.extraction_status,
+        ExtractionStatus::Complete | ExtractionStatus::CompleteWithOcr
+    ) {
+        let detail = outcome
+            .record
+            .extraction_error
+            .as_ref()
+            .map_or("unknown extraction failure", |error| error.code.as_str());
+        bail!("source was preserved but extraction failed: {detail}");
+    }
     println!(
         "{} evidence {} ({})",
         if outcome.inserted {
@@ -240,6 +267,9 @@ fn scan_all(data_dir: &Path) -> Result<()> {
             store.update_evidence_annotations(&record, &text)?;
             if store.insert_finding(&finding)? {
                 count += 1;
+            }
+            if let Some(alert) = build_alert(&record, &finding, None) {
+                store.insert_alert(&alert)?;
             }
             println!(
                 "{} — {} — {}",
@@ -326,8 +356,10 @@ fn x_command(data_dir: &Path, config: &StateConfig, command: XCommand) -> Result
             println!("DRY RUN: no network transport was created.");
         }
         XCommand::Approve { alert_id } => {
+            let alert = store.alert(&alert_id)?;
+            let generated = draft(&alert, &config.canonical_base_url)?;
             let timestamp = OffsetDateTime::now_utc().format(&Rfc3339)?;
-            let inserted = store.approve(&alert_id, &timestamp)?;
+            let inserted = store.approve(&alert_id, &generated.digest(), &timestamp)?;
             println!(
                 "{} {}",
                 if inserted {
@@ -341,6 +373,15 @@ fn x_command(data_dir: &Path, config: &StateConfig, command: XCommand) -> Result
         XCommand::Post { alert_id, confirm } => {
             if !confirm {
                 bail!("live posting requires --confirm");
+            }
+            let canonical = url::Url::parse(&config.canonical_base_url)?;
+            if canonical
+                .host_str()
+                .is_none_or(|host| host.ends_with(".invalid"))
+            {
+                bail!(
+                    "live posting refused: configure a real public canonical_base_url before approval and posting"
+                );
             }
             let alert = store.alert(&alert_id)?;
             let generated = draft(&alert, &config.canonical_base_url)?;
@@ -468,6 +509,7 @@ fn persist_demo_alert(
                 &signed.record.id,
                 state.label(),
                 &support_finding.matched_rule_ids.join(","),
+                &support_finding.rules_digest,
             ],
         ),
         evidence_id: signed.record.id.clone(),
@@ -476,6 +518,8 @@ fn persist_demo_alert(
         classification_reason: format!(
             "{reason} Surveillance relevance is established separately by the linked official presentation citations."
         ),
+        rules_version: support_finding.rules_version,
+        rules_digest: support_finding.rules_digest.clone(),
         matched_rule_ids: support_finding.matched_rule_ids.clone(),
         citations,
     };
@@ -511,6 +555,15 @@ fn ingest_demo_document(
 ) -> Result<pnull_ingest::IngestOutcome> {
     let bytes = fs::read(&document.path)
         .with_context(|| format!("read fixture {}", document.path.display()))?;
+    let observed_digest = sha256_hex(&bytes);
+    if observed_digest != document.sha256 {
+        bail!(
+            "fixture digest mismatch for {}: expected {}, observed {}",
+            document.id,
+            document.sha256,
+            observed_digest
+        );
+    }
     let original_filename = document
         .path
         .file_name()

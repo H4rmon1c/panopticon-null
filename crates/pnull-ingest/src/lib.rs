@@ -22,7 +22,8 @@ use wait_timeout::ChildExt;
 
 pub const DEFAULT_MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_PDF_PAGES: u32 = 100;
-const MAX_OCR_PAGES: u32 = 20;
+const MAX_OCR_PAGES: u32 = 5;
+const MAX_EXTRACTED_BYTES: usize = 5 * 1024 * 1024;
 const EXTRACT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug)]
@@ -72,15 +73,48 @@ struct Extraction {
     error: Option<StructuredError>,
 }
 
+fn is_forbidden_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") || host.ends_with(".localhost") {
+        return true;
+    }
+    host.parse::<std::net::IpAddr>()
+        .is_ok_and(|address| match address {
+            std::net::IpAddr::V4(value) => {
+                value.is_private()
+                    || value.is_loopback()
+                    || value.is_link_local()
+                    || value.is_broadcast()
+                    || value.is_unspecified()
+            }
+            std::net::IpAddr::V6(value) => {
+                value.is_loopback() || value.is_unspecified() || value.is_unique_local()
+            }
+        })
+}
+
 pub fn fetch_public_source(source_url: &str, max_bytes: usize) -> Result<Vec<u8>, IngestError> {
     let url = Url::parse(source_url).map_err(|error| IngestError::Metadata(error.to_string()))?;
-    if url.scheme() != "https" || url.host_str().is_none() {
+    let source_host = url.host_str().ok_or(IngestError::InsecureUrl)?.to_owned();
+    if url.scheme() != "https" || is_forbidden_host(&source_host) {
         return Err(IngestError::InsecureUrl);
     }
+    let redirect_host = source_host.clone();
+    let redirect_policy = reqwest::redirect::Policy::custom(move |attempt| {
+        let next = attempt.url();
+        if attempt.previous().len() >= 5
+            || next.scheme() != "https"
+            || next.host_str() != Some(redirect_host.as_str())
+            || next.host_str().is_some_and(is_forbidden_host)
+        {
+            attempt.error("redirect target violates the public same-host HTTPS policy")
+        } else {
+            attempt.follow()
+        }
+    });
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::limited(5))
+        .redirect(redirect_policy)
         .user_agent(concat!(
             "PanopticonNull/",
             env!("CARGO_PKG_VERSION"),
@@ -219,7 +253,9 @@ fn validate_request(request: &IngestRequest) -> Result<(), IngestError> {
 }
 
 fn persist_content(store: &Store, digest: &str, bytes: &[u8]) -> Result<(), std::io::Error> {
-    let path = store.content_path(digest);
+    let path = store
+        .content_path(digest)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::other("content path has no parent"))?;
@@ -229,7 +265,14 @@ fn persist_content(store: &Store, digest: &str, bytes: &[u8]) -> Result<(), std:
             file.write_all(bytes)?;
             file.sync_all()?;
         }
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = fs::read(&path)?;
+            if sha256_hex(&existing) != digest {
+                return Err(std::io::Error::other(
+                    "existing content-addressed blob failed digest verification",
+                ));
+            }
+        }
         Err(error) => return Err(error),
     }
     Ok(())
@@ -246,6 +289,19 @@ fn extract(bytes: &[u8], mime_type: &str, enable_ocr: bool, ocr_language: &str) 
             format!("unsupported MIME type: {other}"),
         )),
     };
+    let result = result.and_then(|(text, method, status)| {
+        if text.len() > MAX_EXTRACTED_BYTES {
+            Err((
+                "extracted_text_limit",
+                format!(
+                    "extracted text is {} bytes; limit is {MAX_EXTRACTED_BYTES}",
+                    text.len()
+                ),
+            ))
+        } else {
+            Ok((text, method, status))
+        }
+    });
     match result {
         Ok((text, method, status)) => Extraction {
             text,
@@ -317,19 +373,18 @@ fn extract_legistar_json(
         ));
     }
     let mut lines = Vec::new();
-    push_json_field(&mut lines, &value, "EventDate", "Meeting date");
-    push_json_field(&mut lines, &value, "EventAgendaStatusName", "Agenda status");
-    let items = value.get("EventItems").and_then(Value::as_array).ok_or((
-        "unsupported_json_shape",
-        "expected a Legistar event or matter-text response".to_owned(),
-    ))?;
-    for item in items {
-        push_json_field(&mut lines, item, "EventItemMatterFile", "Matter file");
-        push_json_field(&mut lines, item, "EventItemTitle", "Title");
-        push_json_field(&mut lines, item, "EventItemActionName", "Action");
-        push_json_field(&mut lines, item, "EventItemActionText", "Vote record");
-        if let Some(notes) = item.get("EventItemMinutesNote").and_then(Value::as_str) {
-            lines.push(format!("Minutes: {}", strip_rtf(notes)));
+    match &value {
+        Value::Array(events) => {
+            for event in events {
+                extract_event(event, &mut lines)?;
+            }
+        }
+        Value::Object(_) => extract_event(&value, &mut lines)?,
+        _ => {
+            return Err((
+                "unsupported_json_shape",
+                "expected a Legistar event collection, event, or matter-text response".to_owned(),
+            ));
         }
     }
     Ok((
@@ -337,6 +392,25 @@ fn extract_legistar_json(
         "legistar_event_json".to_owned(),
         ExtractionStatus::Complete,
     ))
+}
+
+fn extract_event(event: &Value, lines: &mut Vec<String>) -> Result<(), (&'static str, String)> {
+    push_json_field(lines, event, "EventDate", "Meeting date");
+    push_json_field(lines, event, "EventAgendaStatusName", "Agenda status");
+    let items = event.get("EventItems").and_then(Value::as_array).ok_or((
+        "unsupported_json_shape",
+        "a Legistar event did not include expanded EventItems".to_owned(),
+    ))?;
+    for item in items {
+        push_json_field(lines, item, "EventItemMatterFile", "Matter file");
+        push_json_field(lines, item, "EventItemTitle", "Title");
+        push_json_field(lines, item, "EventItemActionName", "Action");
+        push_json_field(lines, item, "EventItemActionText", "Vote record");
+        if let Some(notes) = item.get("EventItemMinutesNote").and_then(Value::as_str) {
+            lines.push(format!("Minutes: {}", strip_rtf(notes)));
+        }
+    }
+    Ok(())
 }
 
 fn push_json_field(lines: &mut Vec<String>, value: &Value, key: &str, label: &str) {
@@ -419,12 +493,19 @@ fn ocr_pdf(
     }
     let directory = TempDir::new().map_err(external_io)?;
     let prefix = directory.path().join("page");
+    let last_page = pages.to_string();
     run_limited(
         "pdftoppm",
         &[
             std::ffi::OsStr::new("-png"),
             std::ffi::OsStr::new("-r"),
             std::ffi::OsStr::new("200"),
+            std::ffi::OsStr::new("-f"),
+            std::ffi::OsStr::new("1"),
+            std::ffi::OsStr::new("-l"),
+            std::ffi::OsStr::new(&last_page),
+            std::ffi::OsStr::new("-scale-to"),
+            std::ffi::OsStr::new("4000"),
             input.as_os_str(),
             prefix.as_os_str(),
         ],
@@ -576,6 +657,22 @@ mod tests {
     }
 
     #[test]
+    fn live_fetch_rejects_private_and_insecure_targets() {
+        assert!(matches!(
+            fetch_public_source("http://example.test", 1024),
+            Err(IngestError::InsecureUrl)
+        ));
+        assert!(matches!(
+            fetch_public_source("https://127.0.0.1/private", 1024),
+            Err(IngestError::InsecureUrl)
+        ));
+        assert!(matches!(
+            fetch_public_source("https://localhost/private", 1024),
+            Err(IngestError::InsecureUrl)
+        ));
+    }
+
+    #[test]
     fn duplicate_ingestion_is_idempotent() {
         let dir = tempdir().expect("temporary directory");
         let store = Store::open(dir.path()).expect("store");
@@ -703,6 +800,17 @@ mod tests {
         let outcome = ingest_bytes(&store, &json_request, &bytes).expect("JSON ingestion");
         assert!(outcome.extracted_text.contains("Meeting date: 2025-11-25"));
         assert!(outcome.extracted_text.contains("Action: finally passed"));
+
+        let collection = [b"[".as_slice(), bytes.as_slice(), b"]".as_slice()].concat();
+        let mut collection_request = json_request;
+        collection_request.source_url = "https://example.test/events".to_owned();
+        let collection_outcome =
+            ingest_bytes(&store, &collection_request, &collection).expect("collection ingestion");
+        assert!(
+            collection_outcome
+                .extracted_text
+                .contains("Action: finally passed")
+        );
     }
 
     #[test]

@@ -1,14 +1,14 @@
 state_code = "CO"
 state_name = "Colorado"
 jurisdiction = "Colorado Springs, Colorado"
-canonical_base_url = "https://panopticon-null.example/alerts/co"
+canonical_base_url = "https://panopticon-null.invalid/co"
 x_feed_label = "Colorado surveillance alerts"
 default_dry_run = true
 
 [[sources]]
 id = "colorado-springs-legistar-events"
 name = "Colorado Springs City Council Legistar events"
-url = "https://webapi.legistar.com/v1/coloradosprings/events?$filter=EventDate%20ge%20datetime%272025-01-01%27&$orderby=EventDate%20desc&$top=100"
+url = "https://webapi.legistar.com/v1/coloradosprings/events?$filter=EventDate%20ge%20datetime%272025-01-01%27&$orderby=EventDate%20desc&$top=100&EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1"
 source_type = "official_api"
 documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
 official_discovery_url = "https://coloradosprings.gov/city-council-meetings"
@@ -26,6 +26,7 @@ publication_date = "2025-10-20"
 retrieval_timestamp = "2026-08-16T09:33:58Z"
 source_type = "agenda"
 mime_type = "application/pdf"
+sha256 = "badda12921d29bf2fc2d86b274efc9544fa339db82de830ba460eaa9c6bbd2e4"
 
 [[demo_documents]]
 id = "supporting-presentation"
@@ -36,6 +37,7 @@ publication_date = "2025-10-20"
 retrieval_timestamp = "2026-08-16T09:35:00Z"
 source_type = "agenda"
 mime_type = "application/pdf"
+sha256 = "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8"
 
 [[demo_documents]]
 id = "ordinance-signed"
@@ -46,3 +48,4 @@ publication_date = "2025-11-25"
 retrieval_timestamp = "2026-08-16T09:33:59Z"
 source_type = "agenda"
 mime_type = "application/pdf"
+sha256 = "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb"
