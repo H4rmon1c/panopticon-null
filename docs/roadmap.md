@@ -4,19 +4,38 @@
 
 One Colorado Springs vertical slice: official Legistar ingestion, preserved evidence, deterministic taxonomy, cautious classifications, meaningful version changes, SQLite, static publication, Atom, and citation-bound dry-run X drafts.
 
-## Recommended 0.0.2 scope
+## 0.0.2 (shipped: "The Verifiable Receipt")
 
-Stay in Colorado. Do not expand to fifty states.
+Stay in Colorado. The 0.0.2 scope proposed in the 0.0.1 roadmap was delivered:
 
-1. Add page/section coordinates and quoted bounding boxes for PDFs.
-2. Add an operating-system sandbox and one aggregate extraction/OCR job budget.
-3. Resolve and validate DNS targets, persist redirect/header/ETag provenance, and use conditional requests.
-4. Persist robots/terms review snapshots and add an explicit review command.
-5. Add bounded Legistar pagination and per-matter attachment discovery without automating restricted procurement portals.
-6. Model actions and subjects explicitly so ordinance, policy, solicitation, award, and vendor states cannot be conflated.
-7. Add structured publication allowlists and a review queue for every citation.
-8. Add reconciliation commands for uncertain partial X threads.
-9. Record native extractor versions and source revision in immutable processing-run records.
-10. Seek a second Colorado Springs matter with genuine contract/amendment changes, then validate against a live source under reviewed terms.
+1. Page/section coordinates and quoted bounding boxes for PDFs (page-accurate citations via `pnull-geometry`).
+2. An operating-system sandbox (bubblewrap) and aggregate extraction/OCR job budgets.
+3. DNS resolution and validation, persisted redirect/header/ETag provenance, and conditional requests (DNS-safe HTTP).
+4. Persistent robots/terms review snapshots and an explicit review command workflow.
+5. Bounded Legistar pagination and per-matter attachment discovery without automating restricted procurement portals.
+6. Explicit subjects and actions so ordinance, policy, solicitation, award, and vendor states cannot be conflated.
+7. Structured publication allowlists and a human citation-review queue.
+8. Reconciliation commands for uncertain partial X threads.
+9. Immutable processing-run records with native extractor versions, source revision, budgets, and actual consumption.
+10. A second Colorado Springs matter (Ordinance No. 15-84, matter 15-00663) with genuine legislative change, validated against the preserved official source.
 
-Only after those controls are proven should the project consider a second Colorado jurisdiction or state-specific account.
+## Honest limitations at 0.0.2
+
+- **Not comprehensive procurement coverage.** The reviewed Legistar source is a meeting system, not a complete procurement ledger. No separate vendor contract or award for Axon or Flock was located in the reviewed source, so none is asserted.
+- **D10 is limited to two matters.** The system demonstrates two preserved Colorado Springs matters; it does not cover the full corpus of city business.
+- **No legal compliance guarantee.** The project makes no legal conclusions and offers no guarantee that any republication or data-handling practice is lawful in every jurisdiction.
+- **No perfect privacy detection.** Pattern checks cannot reliably catch every sensitive value; human review remains a required boundary.
+- **No proof beyond the preserved records.** The project asserts only what the preserved public record proves.
+- **No automated restricted portals.** BidNet and other registration/auth-required portals are not automated.
+- **No live X transport in tests or demos.** The demo produces only dry-run drafts and zero network posts.
+
+## Future directions
+
+Only after the 0.0.2 controls are proven should the project consider a second Colorado jurisdiction or state-specific account. Likely next steps:
+
+- Expand the number of preserved matters and validated live-source runs under reviewed terms.
+- Consider a kernel-level sandbox (VM/microVM) as a stronger boundary than bubblewrap.
+- Consider a formal DNS rebinding policy (for example, resolving and validating before and after connect).
+- Continue to grow the reviewed taxonomy and rules as new matters are preserved.
+
+Any expansion must keep the same boundaries: no legal-intent inference, no private-person dossiers, no target ranking, and no automated access to restricted portals.

@@ -2,7 +2,7 @@
 
 ## Selected jurisdiction
 
-Version 0.0.1 monitors **Colorado Springs, Colorado**. The City directs users seeking recent agendas and minutes to its Legistar portal:
+Panopticon Null monitors **Colorado Springs, Colorado**. The City directs users seeking recent agendas and minutes to its Legistar portal:
 
 - City discovery: <https://coloradosprings.gov/city-council-meetings>
 - City document guidance: <https://coloradosprings.gov/citydocs>
@@ -10,17 +10,53 @@ Version 0.0.1 monitors **Colorado Springs, Colorado**. The City directs users se
 - Documented API: <https://webapi.legistar.com/Help/Api/GET-v1-Client-Events>
 - Configured collection: the URL in `configs/states/co.toml`, using documented OData filtering, ordering, a bounded top count, and expanded event items.
 
-Colorado Springs was selected because the City officially links a stable, ID-addressable, structured public meeting system and because official matter 25-581 includes concrete surveillance-system references. The official City solicitation index is informational and points to BidNet as authoritative; BidNet may require registration and has restrictive terms, so v0.0.1 does not automate it.
+Colorado Springs was selected because the City officially links a stable, ID-addressable, structured public meeting system and because official matters 25-581 (v0.0.1) and 15-00663 (v0.0.2) include concrete surveillance-related references. The official City solicitation index is informational and points to BidNet as authoritative; BidNet may require registration and has restrictive terms, so Panopticon Null does not automate it.
 
-## Adapter behavior
+## DNS-safe HTTP layer
 
-The JSON adapter accepts a Legistar event collection, one expanded event object, or a matter-text object. It extracts event date, agenda status, matter file/title, action, vote text, and statically stripped minutes RTF. Missing expanded `EventItems` is a structured extraction failure.
+`pnull-http` governs all live retrieval. Every request and redirect persists provenance: requested URL, resolved public IPs, retrieval timestamp, method, status code, redirect target, final URL, allowlisted headers, content type, content length, ETag, Last-Modified, response-body digest, and structured errors. Cookies, authorization headers, and bearer tokens are never persisted.
 
-Live retrieval requires `--robots-reviewed`, permits one same-host HTTPS redirect chain of at most five responses, limits bytes and time, and persists a 24-hour source interval. The current robots body could not be independently verified through the research browser on 2026-08-16. The documented API was manually retrieved at a conservative one-request-at-a-time rate. No API-specific quota or affirmative bulk-use terms were found. Production operators must re-check before retrieval.
+- Rejects loopback, private, link-local, multicast, unspecified, documentation, and non-public addresses; fails closed on mixed public + prohibited DNS answers.
+- Requires HTTPS; certificate validation cannot be disabled.
+- Conditional requests use `If-None-Match` / `If-Modified-Since`; a 304 creates a fetch observation referencing previous preserved evidence, never a new blob.
+- The resolver and transport are abstractions so CI tests stay offline.
 
-## Preserved demonstration matter
+## Persistent robots/terms review
 
-File 25-581 / Matter API ID 12913 concerns a Police Department Technology Surcharge. Fixtures preserve:
+Live retrieval requires a persistent, expiring source review rather than an ephemeral flag. The review workflow:
+
+- `pnull source review capture <id>` — snapshot current robots/terms state.
+- `pnull source review record <id> --reviewer <name> --note <text> --expires <date>` — record an immutable review artifact (source ID, source-config digest, reviewed hosts, robots URL + snapshot digest + provenance, terms URLs, reviewer, note, review/expiration timestamps, minimum request interval, restrictions, superseded review).
+- `pnull source review show <id>` — display the current review.
+- `pnull source review verify <id>` — verify the review is current and applicable.
+
+Live retrieval refuses when: there is no review, the review is expired, the source configuration changed, allowed hosts changed, the endpoint is outside the reviewed scope, or a prior restriction requires renewed review.
+
+The ephemeral `--robots-reviewed` flag is deprecated and is no longer the primary authorization.
+
+## Bounded Legistar pagination and attachment discovery
+
+The Legistar adapter pages through the documented API one request at a time with:
+
+- a configurable page size and a hard maximum number of pages;
+- maximum total events, maximum matters, and maximum attachments per matter;
+- aggregate byte and time budgets;
+- deduplication by official identifiers;
+- repeated-page / non-progressing detection;
+- deterministic ordering;
+- conditional requests and cached observations;
+- fail-closed behavior on malformed identifiers or unknown hosts.
+
+Attachment discovery proceeds only through documented official fields and reviewed hosts. Commands:
+
+- `pnull ingest --source colorado-springs-legistar-events`
+- `pnull matter list`
+- `pnull matter show <id>`
+- `pnull matter attachments <id>`
+
+## Preserved demonstration matters
+
+**Matter 25-581 / Matter API ID 12913** (v0.0.1) concerns a Police Department Technology Surcharge, later enacted as Ordinance 25-93. Fixtures preserve:
 
 - draft ordinance attachment `14876734`;
 - supporting presentation `14876735`;
@@ -28,8 +64,15 @@ File 25-581 / Matter API ID 12913 concerns a Police Department Technology Surcha
 - work-session event `2654`;
 - final-vote event `2660`.
 
-Exact URLs and hashes are in `fixtures/README.md` and `fixtures/co/SHA256SUMS`.
+**Matter 15-00663** (v0.0.2) is Ordinance No. 15-84 (2015), which established the municipal court Information Technology Surcharge that Ordinance 25-93 amends. Fixtures preserve:
+
+- `fixtures/co2/matter-15-00663-ordinance-15-84.json`;
+- `fixtures/co2/event-1109-2015-11-24.json`.
+
+The surveillance-technology link (Axon body cameras/evidence systems/AI transcription, Flock vehicle-intelligence cameras) is documented in the preserved 2025 presentation as supporting evidence, not asserted by the 2015 action itself. No separate vendor contract or award for Axon or Flock was located in the reviewed Legistar source, so no such procurement is asserted.
+
+Exact URLs and hashes are in `fixtures/README.md`, `fixtures/co/SHA256SUMS`, and `fixtures/co2/SHA256SUMS`.
 
 ## Limitations
 
-The API is a meeting source, not a complete procurement ledger. Some contracts and amendments may appear only in attachments, the City document system, BidNet, or a Colorado Open Records Act response. Absence from this feed proves nothing. v0.0.1 does not paginate beyond the configured bounded query, schedule itself, or monitor BidNet.
+The API is a meeting source, not a complete procurement ledger. Some contracts and amendments may appear only in attachments, the City document system, BidNet, or a Colorado Open Records Act response. Absence from this feed proves nothing. The reviewed source covers two matters; it is not comprehensive procurement coverage. Panopticon Null does not schedule itself, monitor BidNet, or claim to have located every vendor contract or award.

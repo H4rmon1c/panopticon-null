@@ -7,3 +7,7 @@ The software provides no capability or instructions to damage, disable, evade, i
 A finding reports source text and a deterministic classification. A diff reports a textual change. Neither is a legal opinion. The system may identify a possible rule or policy discrepancy for human review, but it does not declare conduct unlawful, unconstitutional, abusive, corrupt, or malicious.
 
 Operators are responsible for reviewing current terms, robots directives, public-record restrictions, copyright, privacy obligations, and publication risk in their jurisdiction. Configuration is not legal advice.
+
+## v0.0.2 note
+
+Version 0.0.2 strengthens these boundaries. Live retrieval is gated by a persistent, expiring robots/terms review (`pnull source review capture/record/show/verify`); retrieval refuses when there is no review, the review is expired, the source configuration changed, hosts changed, the endpoint is outside scope, or a prior restriction requires renewed review. No registration- or auth-required portal (for example BidNet) is automated. Publication is gated by a human citation-review queue and structured allowlists; no citation or image excerpt is published without an approved review bound to exact content digests, and the project makes no legal conclusions about any preserved matter.
