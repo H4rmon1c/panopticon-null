@@ -260,7 +260,10 @@ pub struct LocatorRange {
 
 impl PageCitation {
     pub fn id_for(evidence_id: &str, quote_digest: &str, page: u32) -> String {
-        stable_id("page_citation", &[evidence_id, quote_digest, &page.to_string()])
+        stable_id(
+            "page_citation",
+            &[evidence_id, quote_digest, &page.to_string()],
+        )
     }
 }
 

@@ -14,10 +14,10 @@ pub mod types;
 
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use types::{
-    Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation, LocatorRange,
-    MapWord, Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation, ProcessingRun,
-    PublicationAllowlist, ReviewBinding, ReviewDecision, ReviewState, SourceReview, Subject,
-    SubjectKind, TextMap, XAttempt, XReconciliation, XSegment,
+    Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
+    LocatorRange, MapWord, Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation,
+    ProcessingRun, PublicationAllowlist, ReviewBinding, ReviewDecision, ReviewState, SourceReview,
+    Subject, SubjectKind, TextMap, XAttempt, XReconciliation, XSegment,
 };
 
 pub const PROCESSING_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -582,7 +582,10 @@ impl Store {
     }
 
     pub fn matters(&self) -> Result<Vec<Matter>, CoreError> {
-        self.read_json_rows("SELECT matter_json FROM matters ORDER BY official_matter_id", &[])
+        self.read_json_rows(
+            "SELECT matter_json FROM matters ORDER BY official_matter_id",
+            &[],
+        )
     }
 
     pub fn insert_attachment(&self, attachment: &MatterAttachment) -> Result<bool, CoreError> {
@@ -599,7 +602,7 @@ impl Store {
 
     pub fn attachments(&self, matter_id: &str) -> Result<Vec<MatterAttachment>, CoreError> {
         self.read_json_rows(
-            "SELECT attachment_json FROM matter_attachments WHERE matter_id = ?1 ORDER BY name",
+            "SELECT attachment_json FROM matter_attachments WHERE matter_id = ?1 ORDER BY json_extract(attachment_json, '$.name')",
             &[matter_id],
         )
     }
@@ -617,7 +620,7 @@ impl Store {
 
     pub fn subjects(&self, matter_id: &str) -> Result<Vec<Subject>, CoreError> {
         self.read_json_rows(
-            "SELECT subject_json FROM subjects WHERE matter_id = ?1 ORDER BY kind, name",
+            "SELECT subject_json FROM subjects WHERE matter_id = ?1 ORDER BY json_extract(subject_json, '$.kind'), json_extract(subject_json, '$.name')",
             &[matter_id],
         )
     }
@@ -651,7 +654,7 @@ impl Store {
 
     pub fn text_maps(&self, evidence_id: &str) -> Result<Vec<TextMap>, CoreError> {
         self.read_json_rows(
-            "SELECT text_map_json FROM text_maps WHERE evidence_id = ?1 ORDER BY page_number",
+            "SELECT text_map_json FROM text_maps WHERE evidence_id = ?1 ORDER BY json_extract(text_map_json, '$.page_number')",
             &[evidence_id],
         )
     }
@@ -674,7 +677,7 @@ impl Store {
 
     pub fn page_citations(&self, evidence_id: &str) -> Result<Vec<PageCitation>, CoreError> {
         self.read_json_rows(
-            "SELECT page_citation_json FROM page_citations WHERE evidence_id = ?1 ORDER BY page_number, id",
+            "SELECT page_citation_json FROM page_citations WHERE evidence_id = ?1 ORDER BY json_extract(page_citation_json, '$.page_number'), id",
             &[evidence_id],
         )
     }
@@ -698,16 +701,19 @@ impl Store {
         )? == 1)
     }
 
-    pub fn reviews_for_citation(&self, citation_id: &str) -> Result<Vec<ReviewDecision>, CoreError> {
+    pub fn reviews_for_citation(
+        &self,
+        citation_id: &str,
+    ) -> Result<Vec<ReviewDecision>, CoreError> {
         self.read_json_rows(
-            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY decided_at",
+            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY id",
             &[citation_id],
         )
     }
 
     pub fn all_reviews(&self) -> Result<Vec<ReviewDecision>, CoreError> {
         self.read_json_rows(
-            "SELECT decision_json FROM review_decisions ORDER BY decided_at",
+            "SELECT decision_json FROM review_decisions ORDER BY id",
             &[],
         )
     }
@@ -725,7 +731,10 @@ impl Store {
     }
 
     pub fn processing_runs(&self) -> Result<Vec<ProcessingRun>, CoreError> {
-        self.read_json_rows("SELECT run_json FROM processing_runs ORDER BY started_at", &[])
+        self.read_json_rows(
+            "SELECT run_json FROM processing_runs ORDER BY json_extract(run_json, '$.started_at')",
+            &[],
+        )
     }
 
     pub fn insert_source_review(&self, review: &SourceReview) -> Result<bool, CoreError> {
@@ -737,16 +746,22 @@ impl Store {
 
     pub fn source_reviews(&self, source_id: &str) -> Result<Vec<SourceReview>, CoreError> {
         self.read_json_rows(
-            "SELECT review_json FROM source_reviews WHERE source_id = ?1 ORDER BY reviewed_at",
+            "SELECT review_json FROM source_reviews WHERE source_id = ?1 ORDER BY json_extract(review_json, '$.reviewed_at')",
             &[source_id],
         )
     }
 
-    pub fn current_source_review(&self, source_id: &str) -> Result<Option<SourceReview>, CoreError> {
+    pub fn current_source_review(
+        &self,
+        source_id: &str,
+    ) -> Result<Option<SourceReview>, CoreError> {
         Ok(self.source_reviews(source_id)?.into_iter().last())
     }
 
-    pub fn insert_fetch_observation(&self, observation: &FetchObservation) -> Result<bool, CoreError> {
+    pub fn insert_fetch_observation(
+        &self,
+        observation: &FetchObservation,
+    ) -> Result<bool, CoreError> {
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO fetch_observations(id, source_id, observation_json)
              VALUES (?1, ?2, ?3)",
@@ -760,7 +775,7 @@ impl Store {
 
     pub fn fetch_observations(&self, source_id: &str) -> Result<Vec<FetchObservation>, CoreError> {
         self.read_json_rows(
-            "SELECT observation_json FROM fetch_observations WHERE source_id = ?1 ORDER BY retrieved_at",
+            "SELECT observation_json FROM fetch_observations WHERE source_id = ?1 ORDER BY json_extract(observation_json, '$.retrieved_at')",
             &[source_id],
         )
     }
@@ -768,7 +783,11 @@ impl Store {
     pub fn insert_x_attempt(&self, attempt: &XAttempt) -> Result<bool, CoreError> {
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO x_attempts(id, alert_id, attempt_json) VALUES (?1, ?2, ?3)",
-            params![attempt.id, attempt.alert_id, serde_json::to_string(attempt)?],
+            params![
+                attempt.id,
+                attempt.alert_id,
+                serde_json::to_string(attempt)?
+            ],
         )? == 1)
     }
 
@@ -777,12 +796,15 @@ impl Store {
     }
 
     pub fn x_attempts(&self) -> Result<Vec<XAttempt>, CoreError> {
-        self.read_json_rows("SELECT attempt_json FROM x_attempts ORDER BY started_at", &[])
+        self.read_json_rows(
+            "SELECT attempt_json FROM x_attempts ORDER BY json_extract(attempt_json, '$.started_at')",
+            &[],
+        )
     }
 
     pub fn x_attempts_for_alert(&self, alert_id: &str) -> Result<Vec<XAttempt>, CoreError> {
         self.read_json_rows(
-            "SELECT attempt_json FROM x_attempts WHERE alert_id = ?1 ORDER BY started_at",
+            "SELECT attempt_json FROM x_attempts WHERE alert_id = ?1 ORDER BY json_extract(attempt_json, '$.started_at')",
             &[alert_id],
         )
     }
@@ -797,12 +819,15 @@ impl Store {
 
     pub fn x_reconciliations(&self, attempt_id: &str) -> Result<Vec<XReconciliation>, CoreError> {
         self.read_json_rows(
-            "SELECT reconciliation_json FROM x_reconciliations WHERE attempt_id = ?1 ORDER BY decided_at",
+            "SELECT reconciliation_json FROM x_reconciliations WHERE attempt_id = ?1 ORDER BY json_extract(reconciliation_json, '$.decided_at')",
             &[attempt_id],
         )
     }
 
-    pub fn insert_publication_allowlist(&self, item: &PublicationAllowlist) -> Result<bool, CoreError> {
+    pub fn insert_publication_allowlist(
+        &self,
+        item: &PublicationAllowlist,
+    ) -> Result<bool, CoreError> {
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO publication_allowlists(id, allowlist_json) VALUES (?1, ?2)",
             params![item.id, serde_json::to_string(item)?],
@@ -811,7 +836,7 @@ impl Store {
 
     pub fn publication_allowlists(&self) -> Result<Vec<PublicationAllowlist>, CoreError> {
         self.read_json_rows(
-            "SELECT allowlist_json FROM publication_allowlists ORDER BY created_at",
+            "SELECT allowlist_json FROM publication_allowlists ORDER BY id",
             &[],
         )
     }
@@ -912,5 +937,141 @@ mod tests {
             sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn json_backed_list_queries_round_trip_and_are_ordered() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = Store::open(dir.path()).expect("store");
+
+        // Subjects and attachments are stored as JSON; the read-back queries
+        // order by fields embedded in that JSON, so a bare-column ORDER BY
+        // would fail. This test guards those queries.
+        store
+            .insert_matter(&Matter {
+                id: "matter:1".to_owned(),
+                source_id: "co".to_owned(),
+                official_matter_id: "25-1".to_owned(),
+                title: "Test matter".to_owned(),
+                status: "passed".to_owned(),
+                url: "https://example.test/m".to_owned(),
+                document_role: DocumentRole::Ordinance,
+            })
+            .expect("insert matter");
+        store
+            .insert_subject(&Subject {
+                id: Subject::id_for("matter:1", "b"),
+                matter_id: "matter:1".to_owned(),
+                kind: SubjectKind::Ordinance,
+                name: "b".to_owned(),
+                detail: String::new(),
+                citations: Vec::new(),
+                known: true,
+            })
+            .expect("insert subject b");
+        store
+            .insert_subject(&Subject {
+                id: Subject::id_for("matter:1", "a"),
+                matter_id: "matter:1".to_owned(),
+                kind: SubjectKind::Policy,
+                name: "a".to_owned(),
+                detail: String::new(),
+                citations: Vec::new(),
+                known: true,
+            })
+            .expect("insert subject a");
+        let subjects = store.subjects("matter:1").expect("subjects query");
+        assert_eq!(subjects.len(), 2);
+        // Ordered by kind ("Ordinance" < "Policy") then name.
+        assert_eq!(subjects[0].name, "b");
+        assert_eq!(subjects[1].name, "a");
+
+        store
+            .insert_attachment(&MatterAttachment {
+                id: "attachment:1".to_owned(),
+                matter_id: "matter:1".to_owned(),
+                official_id: "o1".to_owned(),
+                name: "b.pdf".to_owned(),
+                url: "https://example.test/b.pdf".to_owned(),
+                evidence_id: None,
+            })
+            .expect("insert attachment");
+        let attachments = store.attachments("matter:1").expect("attachments query");
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0].name, "b.pdf");
+
+        store
+            .insert_processing_run(&ProcessingRun {
+                id: "run:1".to_owned(),
+                schema_version: 1,
+                pnull_version: "0.0.2".to_owned(),
+                source_revision: "rev".to_owned(),
+                rules_digest: "rules".to_owned(),
+                state_config_digest: "cfg".to_owned(),
+                input_evidence_ids: Vec::new(),
+                native_tools: Vec::new(),
+                sandbox_backend: "bubblewrap".to_owned(),
+                sandbox_version: "0.9.0".to_owned(),
+                resource_budgets: serde_json::json!({}),
+                resource_consumption: serde_json::json!({}),
+                started_at: "2026-08-16T00:00:00Z".to_owned(),
+                completed_at: "2026-08-16T00:00:01Z".to_owned(),
+                outcome: "complete".to_owned(),
+                errors: Vec::new(),
+                output_artifacts: Vec::new(),
+            })
+            .expect("insert processing run");
+        let runs = store.processing_runs().expect("processing runs query");
+        assert_eq!(runs.len(), 1);
+
+        store
+            .insert_source_review(&SourceReview {
+                id: "source-review:1".to_owned(),
+                source_id: "co".to_owned(),
+                source_config_digest: "cfg".to_owned(),
+                reviewed_hosts: vec!["example.test".to_owned()],
+                endpoint_patterns: Vec::new(),
+                robots_url: "https://example.test/robots.txt".to_owned(),
+                robots_snapshot_digest: String::new(),
+                robots_provenance: None,
+                terms_urls: Vec::new(),
+                terms_snapshot_digests: Vec::new(),
+                reviewer: "operator".to_owned(),
+                note: "demo".to_owned(),
+                reviewed_at: "2026-08-16T00:00:00Z".to_owned(),
+                expires_at: "2026-08-17T00:00:00Z".to_owned(),
+                minimum_interval_seconds: 86400,
+                restrictions: Vec::new(),
+                supersedes: None,
+            })
+            .expect("insert source review");
+        let reviews = store.source_reviews("co").expect("source reviews query");
+        assert_eq!(reviews.len(), 1);
+
+        store
+            .insert_fetch_observation(&FetchObservation {
+                id: "fetch:1".to_owned(),
+                source_id: Some("co".to_owned()),
+                requested_url: "https://example.test/robots.txt".to_owned(),
+                resolved_ips: Vec::new(),
+                retrieved_at: "2026-08-16T00:00:00Z".to_owned(),
+                method: "GET".to_owned(),
+                status_code: 200,
+                redirect_target: None,
+                final_url: "https://example.test/robots.txt".to_owned(),
+                allowlisted_headers: Vec::new(),
+                content_type: None,
+                content_length: None,
+                etag: None,
+                last_modified: None,
+                body_digest: None,
+                error: None,
+            })
+            .expect("insert fetch observation");
+        let observations = store
+            .fetch_observations("co")
+            .expect("fetch observations query");
+        assert_eq!(observations.len(), 1);
     }
 }

@@ -15,7 +15,9 @@ pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 1;
 pub enum MigrationError {
     #[error("SQLite migration failed: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    #[error("data directory uses unsupported schema version {0}; this build supports up to {MAX_SUPPORTED_SCHEMA_VERSION}")]
+    #[error(
+        "data directory uses unsupported schema version {0}; this build supports up to {MAX_SUPPORTED_SCHEMA_VERSION}"
+    )]
     UnsupportedVersion(u32),
 }
 
@@ -126,50 +128,28 @@ fn apply_v1(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
 mod tests {
     use super::*;
     use rusqlite::Connection;
+    use std::path::Path;
     use tempfile::tempdir;
 
-    fn v01_schema(connection: &Connection) {
-        connection
-            .execute_batch(
-                "CREATE TABLE evidence (
-                   id TEXT PRIMARY KEY,
-                   sha256 TEXT NOT NULL,
-                   source_url TEXT NOT NULL,
-                   record_json TEXT NOT NULL,
-                   extracted_text TEXT NOT NULL
-                 );
-                 CREATE TABLE findings (
-                   id TEXT PRIMARY KEY,
-                   evidence_id TEXT NOT NULL REFERENCES evidence(id),
-                   finding_json TEXT NOT NULL
-                 );
-                 CREATE TABLE alerts (
-                   id TEXT PRIMARY KEY,
-                   evidence_id TEXT NOT NULL REFERENCES evidence(id),
-                   alert_json TEXT NOT NULL
-                 );
-                 CREATE TABLE approvals (
-                   alert_id TEXT PRIMARY KEY REFERENCES alerts(id),
-                   draft_digest TEXT NOT NULL,
-                   approved_at TEXT NOT NULL
-                 );
-                 CREATE TABLE posts (
-                   alert_id TEXT PRIMARY KEY REFERENCES alerts(id),
-                   remote_ids_json TEXT NOT NULL,
-                   posted_at TEXT NOT NULL
-                 );
-                 CREATE TABLE source_fetches (
-                   source_id TEXT PRIMARY KEY,
-                   fetched_at_unix INTEGER NOT NULL
-                 );
-                 CREATE TABLE post_segments (
-                   alert_id TEXT NOT NULL REFERENCES posts(alert_id),
-                   segment_index INTEGER NOT NULL,
-                   remote_id TEXT NOT NULL,
-                   PRIMARY KEY(alert_id, segment_index)
-                 );",
-            )
-            .expect("v0.0.1 schema");
+    type EvidenceRow = (String, String, String, String, String);
+
+    fn read_evidence(connection: &Connection) -> Vec<EvidenceRow> {
+        let mut statement = connection
+            .prepare("SELECT id, sha256, source_url, record_json, extracted_text FROM evidence")
+            .expect("prepare");
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .expect("read evidence")
+            .collect::<Result<_, _>>()
+            .expect("collect evidence")
     }
 
     #[test]
@@ -177,33 +157,75 @@ mod tests {
         let dir = tempdir().expect("temp dir");
         let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
         migrate(&mut connection).expect("migrate fresh");
-        assert_eq!(current_version(&connection).expect("version"), SCHEMA_VERSION);
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
     }
 
     #[test]
     fn v01_database_upgrades_without_reinterpreting_records() {
+        // Load the committed minimal v0.0.1 fixture database.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.1-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.1 fixture");
+
         let dir = tempdir().expect("temp dir");
         let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
-        v01_schema(&connection);
-        connection
-            .execute(
-                "INSERT INTO evidence(id, sha256, source_url, record_json, extracted_text)
-                 VALUES ('evidence:abc', 'aa', 'https://example.test', '{}', 'text')",
-                [],
-            )
-            .expect("seed evidence");
+        connection.execute_batch(&sql).expect("load v0.0.1 fixture");
+
+        let before = read_evidence(&connection);
+
         migrate(&mut connection).expect("migrate v0.0.1");
-        assert_eq!(current_version(&connection).expect("version"), SCHEMA_VERSION);
-        let count: i64 = connection
-            .query_row("SELECT COUNT(*) FROM evidence", [], |row| row.get(0))
-            .expect("count");
-        assert_eq!(count, 1);
-        let row: String = connection
-            .query_row("SELECT record_json FROM evidence WHERE id='evidence:abc'", [], |row| {
-                row.get(0)
-            })
-            .expect("record");
-        assert_eq!(row, "{}");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+
+        // Every canonical record survives byte-for-byte unchanged.
+        let after = read_evidence(&connection);
+        assert_eq!(
+            before, after,
+            "evidence records must survive migration unchanged"
+        );
+
+        let findings: i64 = connection
+            .query_row("SELECT COUNT(*) FROM findings", [], |row| row.get(0))
+            .expect("findings count");
+        assert_eq!(findings, 1);
+        let alerts: i64 = connection
+            .query_row("SELECT COUNT(*) FROM alerts", [], |row| row.get(0))
+            .expect("alerts count");
+        assert_eq!(alerts, 1);
+        let approvals: i64 = connection
+            .query_row("SELECT COUNT(*) FROM approvals", [], |row| row.get(0))
+            .expect("approvals count");
+        assert_eq!(approvals, 1);
+        let posts: i64 = connection
+            .query_row("SELECT COUNT(*) FROM posts", [], |row| row.get(0))
+            .expect("posts count");
+        assert_eq!(posts, 1);
+        let segments: i64 = connection
+            .query_row("SELECT COUNT(*) FROM post_segments", [], |row| row.get(0))
+            .expect("segments count");
+        assert_eq!(segments, 2);
+        let fetches: i64 = connection
+            .query_row("SELECT COUNT(*) FROM source_fetches", [], |row| row.get(0))
+            .expect("fetches count");
+        assert_eq!(fetches, 1);
+
+        // Original content digest and evidence ID remain stable.
+        let original: String = connection
+            .query_row(
+                "SELECT sha256 FROM evidence WHERE id='evidence:0136f043bcf653166033290ffa1522d406360e7b6345b4852af92e1739c584c3'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("digest");
+        assert_eq!(
+            original,
+            "badda12921d29bf2fc2d86b274efc9544fa339db82de830ba460eaa9c6bbd2e4"
+        );
     }
 
     #[test]
@@ -212,7 +234,10 @@ mod tests {
         let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
         migrate(&mut connection).expect("first migrate");
         migrate(&mut connection).expect("second migrate");
-        assert_eq!(current_version(&connection).expect("version"), SCHEMA_VERSION);
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
     }
 
     #[test]
