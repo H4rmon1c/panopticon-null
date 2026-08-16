@@ -5,6 +5,8 @@ members = [
   "crates/pnull-detect",
   "crates/pnull-publish",
   "crates/pnull-x",
+  "crates/pnull-http",
+  "crates/pnull-geometry",
   "crates/pnull-cli",
 ]
 resolver = "2"

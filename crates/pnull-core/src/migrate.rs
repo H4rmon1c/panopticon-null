@@ -1,4 +1,4 @@
-//! SQLite schema versioning and transactional migrations.
+//! `SQLite` schema versioning and transactional migrations.
 //!
 //! v0.0.1 databases carry no `user_version` (treated as 0). v0.0.2 introduces
 //! `user_version = 1` and adds supplemental tables without rewriting canonical

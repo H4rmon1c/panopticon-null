@@ -14,8 +14,8 @@ pub mod types;
 
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use types::{
-    Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation, MapWord,
-    Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation, ProcessingRun,
+    Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation, LocatorRange,
+    MapWord, Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation, ProcessingRun,
     PublicationAllowlist, ReviewBinding, ReviewDecision, ReviewState, SourceReview, Subject,
     SubjectKind, TextMap, XAttempt, XReconciliation, XSegment,
 };
