@@ -49,3 +49,33 @@ retrieval_timestamp = "2026-08-16T09:33:59Z"
 source_type = "agenda"
 mime_type = "application/pdf"
 sha256 = "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb"
+
+# Second genuine matter: Ordinance No. 15-84 (2015) establishing the municipal
+# court Information Technology Surcharge, the predecessor of the Police
+# Technology Surcharge that Ordinance 25-93 amends. Preserved from the reviewed
+# Legistar matters API (matter 2971). The surcharge funds surveillance
+# technology (Axon body cameras and evidence systems; Flock vehicle-intelligence
+# cameras) per the preserved 2025 presentation.
+[[demo_documents]]
+id = "matter-ordinance-15-84"
+path = "fixtures/co2/matter-15-00663-ordinance-15-84.json"
+url = "https://webapi.legistar.com/v1/coloradosprings/matters/2971?MatterAttachments=1&MatterSponsors=1&MatterHistory=1"
+title = "Ordinance No. 15-84 — Information Technology Surcharge (2015)"
+publication_date = "2015-11-24"
+retrieval_timestamp = "2026-08-16T11:40:00Z"
+source_type = "official_api"
+mime_type = "application/json"
+sha256 = "a6406503183deeb82d660b6e1c82b4f812200f2e375ca96a1587f19e40899d73"
+
+# Event that finally passed Ordinance 15-84 (2015-11-24, City Council). Its
+# item action name records the explicit "finally passed" institutional action.
+[[demo_documents]]
+id = "event-ordinance-15-84-final-vote"
+path = "fixtures/co2/event-1109-2015-11-24.json"
+url = "https://webapi.legistar.com/v1/coloradosprings/events/1109?EventItems=1&EventItemAttachments=1"
+title = "City Council meeting of 2015-11-24 — Ordinance 15-84 final vote"
+publication_date = "2015-11-24"
+retrieval_timestamp = "2026-08-16T11:41:00Z"
+source_type = "official_api"
+mime_type = "application/json"
+sha256 = "c019d02d7f2da00fa9aebbc4c4d3f37c98c051bc1d028db4c215fa30a70739b0"
