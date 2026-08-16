@@ -11,9 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use pnull_core::{
-    BoundingRect, MapWord, PageCitation, TextMap, sha256_hex,
-};
+use pnull_core::{BoundingRect, MapWord, PageCitation, TextMap, sha256_hex};
 use thiserror::Error;
 use url::Url;
 
@@ -75,7 +73,11 @@ impl PageSpec {
 }
 
 /// Validates a bounding rectangle against page dimensions.
-pub fn validate_rect(rect: &BoundingRect, page_width: f64, page_height: f64) -> Result<(), GeometryError> {
+pub fn validate_rect(
+    rect: &BoundingRect,
+    page_width: f64,
+    page_height: f64,
+) -> Result<(), GeometryError> {
     if !rect.x_min.is_finite()
         || !rect.y_min.is_finite()
         || !rect.x_max.is_finite()
@@ -87,7 +89,9 @@ pub fn validate_rect(rect: &BoundingRect, page_width: f64, page_height: f64) -> 
         return Err(GeometryError::Invalid("negative coordinate".to_owned()));
     }
     if rect.x_max <= rect.x_min || rect.y_max <= rect.y_min {
-        return Err(GeometryError::Invalid("inverted or empty rectangle".to_owned()));
+        return Err(GeometryError::Invalid(
+            "inverted or empty rectangle".to_owned(),
+        ));
     }
     if rect.x_max > page_width || rect.y_max > page_height {
         return Err(GeometryError::Invalid("rectangle outside page".to_owned()));
@@ -100,10 +104,7 @@ pub fn validate_rect(rect: &BoundingRect, page_width: f64, page_height: f64) -> 
 /// `xml` should be the `<page>` element content (or the full document; only
 /// the first `<page>` is read). Coordinates are PDF user-space points with
 /// origin at the bottom-left.
-pub fn parse_bbox_layout(
-    xml: &str,
-    spec: &PageSpec,
-) -> Result<TextMap, GeometryError> {
+pub fn parse_bbox_layout(xml: &str, spec: &PageSpec) -> Result<TextMap, GeometryError> {
     let mut reader = quick_xml::Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buffer = Vec::new();
@@ -125,10 +126,26 @@ pub fn parse_bbox_layout(
                         let key = attribute.key.as_ref();
                         let value = String::from_utf8_lossy(attribute.value.as_ref()).to_string();
                         match key {
-                            b"xMin" => x_min = value.parse().map_err(|_| GeometryError::Malformed("xMin".to_owned()))?,
-                            b"yMin" => y_min = value.parse().map_err(|_| GeometryError::Malformed("yMin".to_owned()))?,
-                            b"xMax" => x_max = value.parse().map_err(|_| GeometryError::Malformed("xMax".to_owned()))?,
-                            b"yMax" => y_max = value.parse().map_err(|_| GeometryError::Malformed("yMax".to_owned()))?,
+                            b"xMin" => {
+                                x_min = value
+                                    .parse()
+                                    .map_err(|_| GeometryError::Malformed("xMin".to_owned()))?;
+                            }
+                            b"yMin" => {
+                                y_min = value
+                                    .parse()
+                                    .map_err(|_| GeometryError::Malformed("yMin".to_owned()))?;
+                            }
+                            b"xMax" => {
+                                x_max = value
+                                    .parse()
+                                    .map_err(|_| GeometryError::Malformed("xMax".to_owned()))?;
+                            }
+                            b"yMax" => {
+                                y_max = value
+                                    .parse()
+                                    .map_err(|_| GeometryError::Malformed("yMax".to_owned()))?;
+                            }
                             _ => {}
                         }
                     }
@@ -177,7 +194,9 @@ fn parse_word_element(
     loop {
         match reader.read_event_into(&mut buffer) {
             Ok(quick_xml::events::Event::Text(value)) => {
-                let decoded = value.decode().map_err(|e| GeometryError::Malformed(e.to_string()))?;
+                let decoded = value
+                    .decode()
+                    .map_err(|e| GeometryError::Malformed(e.to_string()))?;
                 let unescaped = quick_xml::escape::unescape(&decoded)
                     .map_err(|e| GeometryError::Malformed(e.to_string()))?;
                 text.push_str(&unescaped);
@@ -216,7 +235,9 @@ pub fn parse_ocr_tsv(
     let mut words = Vec::new();
     let mut lines = tsv.lines();
     // Header row.
-    let header = lines.next().ok_or_else(|| GeometryError::Malformed("empty TSV".to_owned()))?;
+    let header = lines
+        .next()
+        .ok_or_else(|| GeometryError::Malformed("empty TSV".to_owned()))?;
     let columns: Vec<&str> = header.split('\t').collect();
     let idx = |name: &str| -> Result<usize, GeometryError> {
         columns
@@ -379,13 +400,14 @@ pub fn build_page_citation(
 ) -> Result<PageCitation, GeometryError> {
     validate_text_map(map)?;
     let occurrences = find_occurrences(map, quote);
-    let rects = occurrences
-        .get(occurrence_index)
-        .cloned()
-        .ok_or_else(|| GeometryError::QuoteNotFound {
-            page: map.page_number,
-            quote: quote.to_owned(),
-        })?;
+    let rects =
+        occurrences
+            .get(occurrence_index)
+            .cloned()
+            .ok_or_else(|| GeometryError::QuoteNotFound {
+                page: map.page_number,
+                quote: quote.to_owned(),
+            })?;
     if rects.is_empty() {
         return Err(GeometryError::QuoteMismatch {
             page: map.page_number,
@@ -482,10 +504,18 @@ fn draw_highlight(
     for y in y0..=y1 {
         for x in x0..=x1 {
             let pixel = image.get_pixel_mut(x, y);
-            // Translucent yellow highlight.
-            pixel[0] = pixel[0].saturating_add((255 - pixel[0]) * 3 / 4);
-            pixel[1] = pixel[1].saturating_add((255 - pixel[1]) * 3 / 4);
-            pixel[2] = pixel[2].saturating_sub(pixel[2] / 2);
+            // Translucent yellow highlight. Blend in wider arithmetic so the
+            // per-channel "move toward fully lit" math cannot overflow u8.
+            let r = u32::from(pixel[0]);
+            let g = u32::from(pixel[1]);
+            let b = u32::from(pixel[2]);
+            pixel[0] = (r + (255 - r) * 3 / 4).min(255) as u8;
+            pixel[1] = (g + (255 - g) * 3 / 4).min(255) as u8;
+            // Truncation is safe here: each channel result is bounded to u8.
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                pixel[2] = (b - b / 2) as u8;
+            }
             pixel[3] = 255;
         }
     }
@@ -514,7 +544,10 @@ pub fn normalized_range(map: &TextMap, quote: &str) -> Option<(u32, u32)> {
     let target = normalized(quote);
     let start_char = norm_text.find(&target)?;
     let end_char = start_char + target.chars().count();
-    Some((u32::try_from(start_char).unwrap_or(u32::MAX), u32::try_from(end_char).unwrap_or(u32::MAX)))
+    Some((
+        u32::try_from(start_char).unwrap_or(u32::MAX),
+        u32::try_from(end_char).unwrap_or(u32::MAX),
+    ))
 }
 
 /// Extracts the page dimensions from a `pdfinfo` output string.
@@ -544,7 +577,9 @@ pub fn parse_page_rotation(info: &str) -> Option<i32> {
 pub fn require_https(source_url: &str) -> Result<(), GeometryError> {
     let url = Url::parse(source_url).map_err(|e| GeometryError::Invalid(e.to_string()))?;
     if url.scheme() != "https" {
-        return Err(GeometryError::Invalid("source URL must be HTTPS".to_owned()));
+        return Err(GeometryError::Invalid(
+            "source URL must be HTTPS".to_owned(),
+        ));
     }
     Ok(())
 }
@@ -561,7 +596,11 @@ mod tests {
           <word xMin="72" yMin="700" xMax="120" yMax="712">Ordinance</word>
           <word xMin="124" yMin="700" xMax="160" yMax="712">25-93</word>
         </page>"#;
-        parse_bbox_layout(xml, &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src")).expect("map")
+        parse_bbox_layout(
+            xml,
+            &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src"),
+        )
+        .expect("map")
     }
 
     #[test]
@@ -587,7 +626,11 @@ mod tests {
           <word xMin="72" yMin="720" xMax="100" yMax="732">Axon</word>
           <word xMin="104" yMin="720" xMax="140" yMax="732">Axon</word>
         </page>"#;
-        let map = parse_bbox_layout(xml, &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src")).expect("map");
+        let map = parse_bbox_layout(
+            xml,
+            &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src"),
+        )
+        .expect("map");
         let occurrences = find_occurrences(&map, "Axon");
         assert_eq!(occurrences.len(), 2);
     }
@@ -598,26 +641,45 @@ mod tests {
           <word xMin="72" yMin="720" xMax="100" yMax="732">surveil-</word>
           <word xMin="104" yMin="720" xMax="140" yMax="732">lance</word>
         </page>"#;
-        let map = parse_bbox_layout(xml, &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src")).expect("map");
+        let map = parse_bbox_layout(
+            xml,
+            &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src"),
+        )
+        .expect("map");
         let occurrences = find_occurrences(&map, "surveillance");
         assert_eq!(occurrences.len(), 1);
     }
 
     #[test]
     fn rejects_negative_coordinates() {
-        let rect = BoundingRect { x_min: -1.0, y_min: 0.0, x_max: 10.0, y_max: 10.0 };
+        let rect = BoundingRect {
+            x_min: -1.0,
+            y_min: 0.0,
+            x_max: 10.0,
+            y_max: 10.0,
+        };
         assert!(validate_rect(&rect, 612.0, 792.0).is_err());
     }
 
     #[test]
     fn rejects_inverted_rectangles() {
-        let rect = BoundingRect { x_min: 20.0, y_min: 0.0, x_max: 10.0, y_max: 10.0 };
+        let rect = BoundingRect {
+            x_min: 20.0,
+            y_min: 0.0,
+            x_max: 10.0,
+            y_max: 10.0,
+        };
         assert!(validate_rect(&rect, 612.0, 792.0).is_err());
     }
 
     #[test]
     fn rejects_out_of_bounds() {
-        let rect = BoundingRect { x_min: 0.0, y_min: 0.0, x_max: 1000.0, y_max: 10.0 };
+        let rect = BoundingRect {
+            x_min: 0.0,
+            y_min: 0.0,
+            x_max: 1000.0,
+            y_max: 10.0,
+        };
         assert!(validate_rect(&rect, 612.0, 792.0).is_err());
     }
 
@@ -631,7 +693,13 @@ mod tests {
     #[test]
     fn parses_ocr_tsv_deterministically() {
         let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n5\t1\t1\t1\t1\t1\t10\t20\t50\t12\t95\tAxon\n5\t1\t1\t1\t1\t2\t60\t20\t40\t12\t90\tbody\n";
-        let map = parse_ocr_tsv(tsv, &PageSpec::new("evidence:e", 1, 400.0, 200.0, 0, "5.0", "src"), 200, 100).expect("map");
+        let map = parse_ocr_tsv(
+            tsv,
+            &PageSpec::new("evidence:e", 1, 400.0, 200.0, 0, "5.0", "src"),
+            200,
+            100,
+        )
+        .expect("map");
         assert_eq!(map.words.len(), 2);
         // Pixel (10,20,50,12) -> PDF user-space at scale 2.0.
         assert!((map.words[0].rect.x_min - 20.0).abs() < 0.001);
@@ -642,7 +710,10 @@ mod tests {
 
     #[test]
     fn malformed_bbox_fails_closed() {
-        let result = parse_bbox_layout("<page", &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src"));
+        let result = parse_bbox_layout(
+            "<page",
+            &PageSpec::new("evidence:e", 1, 612.0, 792.0, 0, "1.0", "src"),
+        );
         assert!(result.is_err() || result.unwrap().words.is_empty());
     }
 }
