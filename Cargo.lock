@@ -1104,6 +1104,8 @@ dependencies = [
  "clap",
  "pnull-core",
  "pnull-detect",
+ "pnull-geometry",
+ "pnull-http",
  "pnull-ingest",
  "pnull-publish",
  "pnull-x",
@@ -1171,13 +1173,20 @@ dependencies = [
 name = "pnull-ingest"
 version = "0.0.2"
 dependencies = [
+ "image",
  "pnull-core",
+ "pnull-geometry",
+ "pnull-http",
+ "quick-xml",
  "regex",
  "reqwest",
  "scraper",
+ "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror",
+ "time",
  "url",
  "wait-timeout",
 ]
@@ -1199,6 +1208,7 @@ dependencies = [
  "pnull-core",
  "pnull-publish",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

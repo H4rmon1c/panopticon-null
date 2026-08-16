@@ -23,13 +23,13 @@
           latestPkgs = import nixpkgs-unstable { inherit system; };
           rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           rustPlatform = pkgs.makeRustPlatform { cargo = rust; rustc = rust; };
-          nativeTools = with pkgs; [ pkg-config poppler_utils tesseract util-linux ];
+          nativeTools = with pkgs; [ pkg-config poppler_utils tesseract util-linux bubblewrap ];
           cargoDeny = latestPkgs.cargo-deny;
           cargoLock = { lockFile = ./Cargo.lock; };
           source = ./.;
           mkCargoCheck = name: command: rustPlatform.buildRustPackage {
             pname = "panopticon-null-${name}";
-            version = "0.0.1";
+            version = "0.0.2";
             src = source;
             inherit cargoLock;
             nativeBuildInputs = nativeTools ++ [ cargoDeny pkgs.git ];
@@ -46,7 +46,7 @@
           };
           package = rustPlatform.buildRustPackage {
             pname = "panopticon-null";
-            version = "0.0.1";
+            version = "0.0.2";
             src = source;
             inherit cargoLock;
             nativeBuildInputs = nativeTools;
