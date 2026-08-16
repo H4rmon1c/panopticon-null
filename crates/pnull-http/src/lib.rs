@@ -13,9 +13,7 @@
 
 use std::net::{IpAddr, ToSocketAddrs};
 
-use pnull_core::{
-    ConditionalResult, FetchObservation, StructuredError, sha256_hex,
-};
+use pnull_core::{ConditionalResult, FetchObservation, StructuredError, sha256_hex};
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
 use thiserror::Error;
@@ -135,7 +133,10 @@ impl Transport for ReqwestTransport {
                     .map(|text| (name.as_str().to_owned(), text.to_owned()))
             })
             .collect();
-        let body = response.bytes().map(|bytes| bytes.to_vec()).map_err(|_| HttpError::Transport)?;
+        let body = response
+            .bytes()
+            .map(|bytes| bytes.to_vec())
+            .map_err(|_| HttpError::Transport)?;
         Ok(TransportResponse {
             status_code,
             headers,
@@ -173,7 +174,10 @@ pub fn validate_resolved(host: &str, addresses: &[IpAddr]) -> Result<(), HttpErr
     if addresses.is_empty() {
         return Err(HttpError::Resolution(host.to_owned()));
     }
-    let public = addresses.iter().filter(|ip| is_public_address(**ip)).count();
+    let public = addresses
+        .iter()
+        .filter(|ip| is_public_address(**ip))
+        .count();
     if public == 0 {
         return Err(HttpError::NonPublicAddress(host.to_owned()));
     }
@@ -266,14 +270,12 @@ pub fn provenance_fetch(
     transport: &dyn Transport,
     request: &FetchRequest,
 ) -> Result<FetchResult, HttpError> {
-    let url = Url::parse(&request.requested_url).map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
+    let url =
+        Url::parse(&request.requested_url).map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
     if url.scheme() != "https" {
         return Err(HttpError::InsecureUrl);
     }
-    let host = url
-        .host_str()
-        .ok_or(HttpError::InsecureUrl)?
-        .to_owned();
+    let host = url.host_str().ok_or(HttpError::InsecureUrl)?.to_owned();
     if !config.allows_host(&host) {
         return Err(HttpError::UnreviewedRedirect(host));
     }
@@ -370,8 +372,8 @@ fn build_observation(
     allowlisted: &[(String, String)],
 ) -> FetchObservation {
     let content_type = header_value(allowlisted, "content-type").map(str::to_owned);
-    let content_length = header_value(allowlisted, "content-length")
-        .and_then(|value| value.parse::<u64>().ok());
+    let content_length =
+        header_value(allowlisted, "content-length").and_then(|value| value.parse::<u64>().ok());
     FetchObservation {
         id: FetchObservation::id_for(current_url.as_str(), retrieved_at, response.status_code),
         source_id: source_id.map(str::to_owned),
@@ -405,10 +407,7 @@ fn follow_redirect(
     if next.scheme() != "https" {
         return Err(HttpError::InsecureUrl);
     }
-    let next_host = next
-        .host_str()
-        .ok_or(HttpError::InsecureUrl)?
-        .to_owned();
+    let next_host = next.host_str().ok_or(HttpError::InsecureUrl)?.to_owned();
     if !config.allows_host(&next_host) {
         return Err(HttpError::UnreviewedRedirect(next_host));
     }
@@ -523,7 +522,10 @@ mod tests {
             headers: vec![
                 ("content-type".to_owned(), "text/plain".to_owned()),
                 ("etag".to_owned(), "\"abc\"".to_owned()),
-                ("last-modified".to_owned(), "Tue, 15 Nov 1994 12:45:26 GMT".to_owned()),
+                (
+                    "last-modified".to_owned(),
+                    "Tue, 15 Nov 1994 12:45:26 GMT".to_owned(),
+                ),
                 ("set-cookie".to_owned(), "secret=value".to_owned()),
                 ("authorization".to_owned(), "Bearer secret".to_owned()),
             ],
@@ -569,7 +571,10 @@ mod tests {
         assert!(matches!(
             validate_resolved(
                 "example.test",
-                &["93.184.216.34".parse().unwrap(), "10.0.0.1".parse().unwrap()]
+                &[
+                    "93.184.216.34".parse().unwrap(),
+                    "10.0.0.1".parse().unwrap()
+                ]
             ),
             Err(HttpError::MixedAnswers(_))
         ));
@@ -588,14 +593,18 @@ mod tests {
         )
         .expect("fetch");
         let observation = result.observations.last().expect("observation");
-        assert!(observation
-            .allowlisted_headers
-            .iter()
-            .all(|(name, _)| name != "set-cookie" && name != "authorization"));
-        assert!(observation
-            .allowlisted_headers
-            .iter()
-            .any(|(name, _)| name == "etag"));
+        assert!(
+            observation
+                .allowlisted_headers
+                .iter()
+                .all(|(name, _)| name != "set-cookie" && name != "authorization")
+        );
+        assert!(
+            observation
+                .allowlisted_headers
+                .iter()
+                .any(|(name, _)| name == "etag")
+        );
         assert_eq!(
             observation.body_digest.as_deref(),
             Some(sha256_hex(b"hello").as_str())
