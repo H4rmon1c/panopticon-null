@@ -7,12 +7,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-pnull-core = { path = "../pnull-core" }
-quick-xml.workspace = true
-serde_json.workspace = true
+pnull-core = { path = "../pnull-core", version = "=0.0.1" }
 thiserror.workspace = true
 
 [dev-dependencies]
+quick-xml.workspace = true
 tempfile.workspace = true
 
 [lints]

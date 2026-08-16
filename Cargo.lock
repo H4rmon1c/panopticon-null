@@ -991,7 +991,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "pnull-cli"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1001,7 +1001,6 @@ dependencies = [
  "pnull-publish",
  "pnull-x",
  "serde",
- "serde_json",
  "tempfile",
  "time",
  "toml",
@@ -1010,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-core"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "hex",
  "rusqlite",
@@ -1019,13 +1018,11 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
- "time",
- "url",
 ]
 
 [[package]]
 name = "pnull-detect"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "pnull-core",
  "regex",
@@ -1038,37 +1035,32 @@ dependencies = [
 
 [[package]]
 name = "pnull-ingest"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
- "hex",
  "pnull-core",
  "regex",
  "reqwest",
  "scraper",
- "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror",
- "time",
  "url",
  "wait-timeout",
 ]
 
 [[package]]
 name = "pnull-publish"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "pnull-core",
  "quick-xml",
- "serde_json",
  "tempfile",
  "thiserror",
 ]
 
 [[package]]
 name = "pnull-x"
-version = "0.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "pnull-core",
  "pnull-publish",
@@ -1111,9 +1103,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
 ]

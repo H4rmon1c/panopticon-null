@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-pnull-core = { path = "../pnull-core" }
+pnull-core = { path = "../pnull-core", version = "=0.0.1" }
 regex.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true

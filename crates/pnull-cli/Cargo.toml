@@ -13,13 +13,12 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-pnull-core = { path = "../pnull-core" }
-pnull-detect = { path = "../pnull-detect" }
-pnull-ingest = { path = "../pnull-ingest" }
-pnull-publish = { path = "../pnull-publish" }
-pnull-x = { path = "../pnull-x" }
+pnull-core = { path = "../pnull-core", version = "=0.0.1" }
+pnull-detect = { path = "../pnull-detect", version = "=0.0.1" }
+pnull-ingest = { path = "../pnull-ingest", version = "=0.0.1" }
+pnull-publish = { path = "../pnull-publish", version = "=0.0.1" }
+pnull-x = { path = "../pnull-x", version = "=0.0.1" }
 serde.workspace = true
-serde_json.workspace = true
 time.workspace = true
 toml.workspace = true
 url.workspace = true

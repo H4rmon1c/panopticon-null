@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rustsec-advisory-db = {
@@ -11,7 +12,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, rust-overlay, rustsec-advisory-db }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, rust-overlay, rustsec-advisory-db }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -19,9 +20,11 @@
         let
           overlays = [ (import rust-overlay) ];
           pkgs = import nixpkgs { inherit system overlays; };
+          latestPkgs = import nixpkgs-unstable { inherit system; };
           rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           rustPlatform = pkgs.makeRustPlatform { cargo = rust; rustc = rust; };
           nativeTools = with pkgs; [ pkg-config poppler_utils tesseract util-linux ];
+          cargoDeny = latestPkgs.cargo-deny;
           cargoLock = { lockFile = ./Cargo.lock; };
           source = ./.;
           mkCargoCheck = name: command: rustPlatform.buildRustPackage {
@@ -29,7 +32,7 @@
             version = "0.0.1";
             src = source;
             inherit cargoLock;
-            nativeBuildInputs = nativeTools ++ [ pkgs.cargo-deny ];
+            nativeBuildInputs = nativeTools ++ [ cargoDeny pkgs.git ];
             buildPhase = ''
               runHook preBuild
               ${command}
@@ -55,7 +58,7 @@
             '';
           };
         in {
-          inherit pkgs rust package mkCargoCheck;
+          inherit pkgs rust package mkCargoCheck cargoDeny;
           advisoryDb = rustsec-advisory-db;
           nativeTools = nativeTools;
         };
@@ -75,8 +78,15 @@
           dependency-policy = value.mkCargoCheck "dependency-policy" ''
             export CARGO_HOME=$TMPDIR/cargo-home
             mkdir -p "$CARGO_HOME/advisory-dbs"
-            ln -s ${value.advisoryDb} "$CARGO_HOME/advisory-dbs/advisory-db-3157b0e258782691"
-            cargo deny check --disable-fetch
+            cp -r ${value.advisoryDb} "$TMPDIR/advisory-db"
+            chmod -R u+w "$TMPDIR/advisory-db"
+            git -C "$TMPDIR/advisory-db" init --quiet
+            git -C "$TMPDIR/advisory-db" add .
+            GIT_AUTHOR_DATE=2026-08-12T00:00:00Z GIT_COMMITTER_DATE=2026-08-12T00:00:00Z \
+              git -C "$TMPDIR/advisory-db" -c user.name=RustSec -c user.email=noreply@localhost \
+              commit --quiet --no-gpg-sign -m pinned
+            ln -s "$TMPDIR/advisory-db" "$CARGO_HOME/advisory-dbs/advisory-db-3157b0e258782691"
+            cargo deny --offline check
           '';
           offline-demo = value.pkgs.runCommand "panopticon-null-offline-demo" {
             nativeBuildInputs = value.nativeTools;
@@ -99,7 +109,7 @@
             packages = value.nativeTools ++ (with value.pkgs; [
               value.rust
               rust-analyzer
-              cargo-deny
+              value.cargoDeny
               sqlite
             ]);
             RUST_SRC_PATH = "${value.rust}/lib/rustlib/src/rust/library";
