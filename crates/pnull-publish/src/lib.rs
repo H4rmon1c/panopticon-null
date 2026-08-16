@@ -5,7 +5,10 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pnull_core::{Alert, Citation, CoreError, EvidenceRecord, Store};
+use pnull_core::{
+    Alert, Citation, CoreError, EvidenceRecord, Matter, PageCitation, ReviewBinding, ReviewState,
+    Store, sha256_hex, stable_id,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -18,6 +21,8 @@ pub enum PublishError {
     Sensitive(String),
     #[error("public output contains a broken evidence reference: {0}")]
     BrokenReference(String),
+    #[error("public claim depends on a citation without a current Approved review: {0}")]
+    Review(String),
 }
 
 pub struct SiteConfig<'a> {
@@ -57,6 +62,12 @@ fn build_site_in(
     let alerts = store.alerts()?;
     let evidence = store.all_evidence()?;
     validate_references(&alerts, &evidence)?;
+    // Fail closed: only alerts whose line citations are all currently
+    // approved may be published. Unapproved alerts are skipped, not fatal.
+    let approved_alerts: Vec<&Alert> = alerts
+        .iter()
+        .filter(|alert| assert_citations_approved(store, &alert.citations).is_ok())
+        .collect();
     let mut written = Vec::new();
     write_public(
         output_dir.join("style.css"),
@@ -65,20 +76,20 @@ fn build_site_in(
     )?;
     write_public(
         output_dir.join("index.html"),
-        &page("Current alerts", &alerts_index(&alerts, false), ""),
+        &page("Current alerts", &alerts_index(&approved_alerts, false), ""),
         &mut written,
     )?;
     write_public(
         output_dir.join("history.html"),
-        &page("Alert history", &alerts_index(&alerts, true), ""),
+        &page("Alert history", &alerts_index(&approved_alerts, true), ""),
         &mut written,
     )?;
-    for alert in &alerts {
+    for alert in &approved_alerts {
         write_public(
             output_dir
                 .join("alerts")
                 .join(format!("{}.html", safe_id(&alert.id))),
-            &page(&alert.title, &alert_page(alert), "../"),
+            &page(&alert.title, &alert_page(alert, store), "../"),
             &mut written,
         )?;
         if let Some(diff) = &alert.diff {
@@ -111,13 +122,126 @@ fn build_site_in(
             output_dir
                 .join("evidence")
                 .join(format!("{}.html", safe_id(&record.id))),
-            &page(&record.document_title, &evidence_page(record), "../"),
+            &page(&record.document_title, &evidence_page(record, store), "../"),
             &mut written,
         )?;
     }
-    write_root_documents(output_dir, config, &alerts, &mut written)?;
+    write_root_documents(output_dir, config, &approved_alerts, &mut written)?;
     written.sort();
     Ok(written)
+}
+
+/// Stable id for a line-based [`Citation`]. Matches the ingest scheme of
+/// keying reviews by a content-derived citation id so the same physical
+/// citation can be reviewed and gated consistently across crates.
+pub fn citation_id(citation: &Citation) -> String {
+    stable_id(
+        "citation",
+        &[
+            &citation.evidence_id,
+            &citation.quote,
+            &citation.locator.label,
+        ],
+    )
+}
+
+/// The `ReviewBinding` an approval must bind for a line-based [`Citation`].
+/// Fields a `Citation` cannot express (rule digest, processing artifact,
+/// public fields) take stable empty/default values so the binding is a pure,
+/// reproducible function of the citation; any change to the cited content
+/// (evidence, source URL, locator, or quote) changes the digest and voids a
+/// stale approval.
+pub fn citation_review_binding(citation: &Citation) -> ReviewBinding {
+    ReviewBinding {
+        evidence_id: citation.evidence_id.clone(),
+        source_digest: sha256_hex(citation.source_url.as_bytes()),
+        locator_or_geometry: citation.locator.label.clone(),
+        quote: citation.quote.clone(),
+        quote_digest: sha256_hex(citation.quote.as_bytes()),
+        rule_digest: String::new(),
+        processing_artifact_digest: String::new(),
+        proposed_public_fields: "quote,locator".to_owned(),
+    }
+}
+
+/// Fail closed: every citation must have a current `Approved` review whose
+/// `bound_digest` matches a freshly computed binding. A missing review, a
+/// non-Approved state, or a stale binding (content changed after approval)
+/// all refuse publication.
+pub fn assert_citations_approved(
+    store: &Store,
+    citations: &[Citation],
+) -> Result<(), PublishError> {
+    for citation in citations {
+        let id = citation_id(citation);
+        let decision = store.current_review(&id)?;
+        let Some(decision) = decision else {
+            return Err(PublishError::Review(format!(
+                "citation {id} has no review decision"
+            )));
+        };
+        if decision.state != ReviewState::Approved {
+            return Err(PublishError::Review(format!(
+                "citation {id} review state is {:?}, not Approved",
+                decision.state
+            )));
+        }
+        let binding = citation_review_binding(citation);
+        if decision.bound_digest != binding.digest() {
+            return Err(PublishError::Review(format!(
+                "citation {id} approval is stale: bound digest no longer matches content"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Whether any publication allowlist actively permits the given field
+/// category. An allowlist is not automatic approval (that is handled by the
+/// citation review gate); with no matching allowlist the category is refused.
+pub fn publication_allowlist_allows(store: &Store, category: &str) -> Result<bool, PublishError> {
+    Ok(store.publication_allowlists()?.iter().any(|allowlist| {
+        allowlist
+            .field_categories
+            .iter()
+            .any(|item| item == category)
+    }))
+}
+
+/// Whether the current review for a citation id is `Approved`.
+fn citation_id_approved(store: &Store, id: &str) -> Result<bool, PublishError> {
+    Ok(match store.current_review(id)? {
+        Some(decision) => decision.state == ReviewState::Approved,
+        None => false,
+    })
+}
+
+/// Page citations for an evidence id whose current review is `Approved`.
+fn approved_page_citations(
+    store: &Store,
+    evidence_id: &str,
+) -> Result<Vec<PageCitation>, PublishError> {
+    let mut approved = Vec::new();
+    for citation in store.page_citations(evidence_id)? {
+        if citation_id_approved(store, &citation.id)? {
+            approved.push(citation);
+        }
+    }
+    Ok(approved)
+}
+
+/// Matters whose attachments reference the given evidence id.
+fn matters_for_evidence(store: &Store, evidence_id: &str) -> Result<Vec<Matter>, PublishError> {
+    let mut matters = Vec::new();
+    for matter in store.matters()? {
+        for attachment in store.attachments(&matter.id)? {
+            if attachment.evidence_id.as_deref() == Some(evidence_id) {
+                matters.push(matter);
+                break;
+            }
+        }
+    }
+    Ok(matters)
 }
 
 fn validate_references(
@@ -151,7 +275,7 @@ fn validate_references(
 fn write_root_documents(
     output_dir: &Path,
     config: &SiteConfig<'_>,
-    alerts: &[Alert],
+    alerts: &[&Alert],
     written: &mut Vec<PathBuf>,
 ) -> Result<(), PublishError> {
     for (filename, title, body) in [
@@ -306,7 +430,7 @@ fn page(title: &str, body: &str, prefix: &str) -> String {
     )
 }
 
-fn alerts_index(alerts: &[Alert], history: bool) -> String {
+fn alerts_index(alerts: &[&Alert], history: bool) -> String {
     let mut body = String::from(
         "<p class=\"declaration\">The machinery of mass surveillance depends on invisibility. This project records what is purchased, what is promised, what changes, and who authorized it.</p>",
     );
@@ -325,7 +449,7 @@ fn alerts_index(alerts: &[Alert], history: bool) -> String {
     body
 }
 
-fn alert_page(alert: &Alert) -> String {
+fn alert_page(alert: &Alert, store: &Store) -> String {
     let mut body = format!(
         "<p class=\"state\">{}</p><p>{}</p><dl><dt>Jurisdiction</dt><dd>{}</dd><dt>Date</dt><dd>{}</dd><dt>Rules</dt><dd>{}</dd><dt>Rule-set provenance</dt><dd>version {} · <code>{}</code></dd></dl><h2>Exact citations</h2>{}",
         escape(alert.state.label()),
@@ -351,8 +475,164 @@ fn alert_page(alert: &Alert) -> String {
         )
         .expect("string write");
     }
+    body.push_str(&page_citations_section(store, alert));
+    body.push_str(&subjects_actions_section(store, alert));
     body.push_str("<p><strong>Constraint:</strong> this alert reports what the cited source says. It does not establish legality, implementation beyond the record, or effects not documented by the source.</p>");
     body
+}
+
+/// "Page-accurate citations": approved page citations for the alert's own
+/// evidence and for every evidence its line citations reference.
+fn page_citations_section(store: &Store, alert: &Alert) -> String {
+    let mut evidence_ids: Vec<String> = alert
+        .citations
+        .iter()
+        .map(|citation| citation.evidence_id.clone())
+        .collect();
+    if !evidence_ids.contains(&alert.evidence_id) {
+        evidence_ids.push(alert.evidence_id.clone());
+    }
+    evidence_ids.sort();
+    evidence_ids.dedup();
+    let mut sections = String::new();
+    for evidence_id in evidence_ids {
+        let approved = match approved_page_citations(store, &evidence_id) {
+            Ok(list) => list,
+            Err(error) => {
+                write!(
+                    sections,
+                    "<h2>Page-accurate citations</h2><p>Not rendered: {}.</p>",
+                    escape(&error.to_string())
+                )
+                .expect("string write");
+                continue;
+            }
+        };
+        if approved.is_empty() {
+            continue;
+        }
+        sections.push_str("<h2>Page-accurate citations</h2><ol class=\"page-citations\">");
+        for citation in approved {
+            let rects = citation
+                .rects
+                .iter()
+                .map(|rect| {
+                    format!(
+                        "[{:.1},{:.1} → {:.1},{:.1}]",
+                        rect.x_min, rect.y_min, rect.x_max, rect.y_max
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                sections,
+                "<li><blockquote>{}</blockquote><p>Page {}</p><p>Bounding rects: {}</p><p>Text-map digest <code>{}</code> · evidence digest <code>{}</code></p></li>",
+                escape(&citation.quote),
+                citation.page_number,
+                escape(&rects),
+                escape(&citation.text_map_digest),
+                escape(&citation.evidence_digest)
+            )
+            .expect("string write");
+        }
+        sections.push_str("</ol>");
+    }
+    sections
+}
+
+/// "Subjects and actions" for matters tied to the alert's evidence, gated by
+/// the `subject_action` allowlist and by approval of the underlying citations.
+fn subjects_actions_section(store: &Store, alert: &Alert) -> String {
+    let allowed = match publication_allowlist_allows(store, "subject_action") {
+        Ok(allowed) => allowed,
+        Err(error) => {
+            return format!(
+                "<h2>Subjects and actions</h2><p>Not rendered: {}.</p>",
+                escape(&error.to_string())
+            );
+        }
+    };
+    if !allowed {
+        return String::new();
+    }
+    let matters = match matters_for_evidence(store, &alert.evidence_id) {
+        Ok(list) => list,
+        Err(error) => {
+            return format!(
+                "<h2>Subjects and actions</h2><p>Not rendered: {}.</p>",
+                escape(&error.to_string())
+            );
+        }
+    };
+    if matters.is_empty() {
+        return String::new();
+    }
+    let mut body = String::from("<h2>Subjects and actions</h2>");
+    for matter in matters {
+        writeln!(body, "<h3>{}</h3>", escape(&matter.title)).expect("string write");
+        let subjects = match store.subjects(&matter.id) {
+            Ok(list) => list,
+            Err(error) => {
+                write!(
+                    body,
+                    "<p>Subjects not rendered: {}.</p>",
+                    escape(&error.to_string())
+                )
+                .expect("string write");
+                continue;
+            }
+        };
+        for subject in subjects {
+            if !citations_approved(store, &subject.citations) {
+                continue;
+            }
+            let known = if subject.known { "known" } else { "unknown" };
+            writeln!(
+                body,
+                "<p><strong>{}</strong> {} — {} ({})</p>",
+                subject.kind.label(),
+                escape(&subject.name),
+                escape(&subject.detail),
+                known
+            )
+            .expect("string write");
+        }
+        let actions = match store.actions(&matter.id) {
+            Ok(list) => list,
+            Err(error) => {
+                write!(
+                    body,
+                    "<p>Actions not rendered: {}.</p>",
+                    escape(&error.to_string())
+                )
+                .expect("string write");
+                continue;
+            }
+        };
+        for action in actions {
+            if !citations_approved(store, &action.citations) {
+                continue;
+            }
+            let known = if action.known { "known" } else { "unknown" };
+            writeln!(
+                body,
+                "<p><strong>{}</strong> {} ({})</p>",
+                action.kind.label(),
+                escape(&action.summary),
+                known
+            )
+            .expect("string write");
+        }
+    }
+    body.push_str("<p><em>This reports the subject and action stated in the preserved source; it does not assert legality or an unrecorded relationship.</em></p>");
+    body
+}
+
+/// Whether every referenced citation id has a current `Approved` review.
+fn citations_approved(store: &Store, citation_ids: &[String]) -> bool {
+    citation_ids
+        .iter()
+        .all(|id| citation_id_approved(store, id).unwrap_or(false))
 }
 
 fn citations_html(citations: &[Citation]) -> String {
@@ -364,12 +644,22 @@ fn citations_html(citations: &[Citation]) -> String {
     body
 }
 
-fn evidence_page(record: &EvidenceRecord) -> String {
+fn evidence_page(record: &EvidenceRecord, store: &Store) -> String {
     let supersedes = record.supersedes.as_ref().map_or_else(
         || "None".to_owned(),
         |id| format!("<a href=\"{}.html\">{}</a>", safe_id(id), escape(id)),
     );
-    format!(
+    let page_citations = match approved_page_citations(store, &record.id) {
+        Ok(list) => list,
+        Err(error) => {
+            return format!(
+                "<dl><dt>Stable evidence identifier</dt><dd><code>{}</code></dd></dl><h2>Page citations</h2><p>Not rendered: {}.</p>",
+                escape(&record.id),
+                escape(&error.to_string())
+            );
+        }
+    };
+    let mut body = format!(
         "<dl><dt>Stable evidence identifier</dt><dd><code>{}</code></dd><dt>Jurisdiction</dt><dd>{}</dd><dt>Official source</dt><dd><a rel=\"external nofollow\" href=\"{}\">{}</a></dd><dt>Source type</dt><dd>{:?}</dd><dt>Publication date</dt><dd>{}</dd><dt>Retrieval timestamp</dt><dd>{}</dd><dt>MIME type</dt><dd>{}</dd><dt>SHA-256 of original bytes</dt><dd><code>{}</code></dd><dt>Original filename</dt><dd>{}</dd><dt>Extraction</dt><dd>{} ({:?})</dd><dt>Supersedes</dt><dd>{}</dd><dt>Processing version</dt><dd>{}</dd></dl><p>The original is retained locally by content digest. Public output omits raw documents when republication would expose unnecessary personal data.</p>",
         escape(&record.id),
         escape(&record.jurisdiction),
@@ -385,10 +675,27 @@ fn evidence_page(record: &EvidenceRecord) -> String {
         record.extraction_status,
         supersedes,
         escape(&record.processing_version)
-    )
+    );
+    if page_citations.is_empty() {
+        return body;
+    }
+    body.push_str("<h2>Page citations</h2><ol class=\"page-citations\">");
+    for citation in page_citations {
+        writeln!(
+            body,
+            "<li><blockquote>{}</blockquote><p>Page {}</p><p>Text-map digest <code>{}</code> · evidence digest <code>{}</code> · review status: approved</p></li>",
+            escape(&citation.quote),
+            citation.page_number,
+            escape(&citation.text_map_digest),
+            escape(&citation.evidence_digest)
+        )
+        .expect("string write");
+    }
+    body.push_str("</ol>");
+    body
 }
 
-fn atom_feed(alerts: &[Alert], base_url: &str) -> String {
+fn atom_feed(alerts: &[&Alert], base_url: &str) -> String {
     let base = base_url.trim_end_matches('/');
     let updated = alerts
         .first()
@@ -444,7 +751,127 @@ const LEGAL: &str = r"<p>Lawfully dismantle the global surveillance panopticon b
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pnull_core::{
+        FindingState, Locator, PublicationAllowlist, ReviewDecision, ReviewState, SourceType,
+    };
     use quick_xml::Reader;
+    use tempfile::tempdir;
+
+    /// A valid evidence id (`evidence:<sha256>`), as required by the store.
+    fn evid(seed: &str) -> String {
+        format!("evidence:{}", sha256_hex(seed.as_bytes()))
+    }
+
+    fn test_citation(evidence_id: &str, quote: &str, label: &str) -> Citation {
+        Citation {
+            evidence_id: evidence_id.to_owned(),
+            source_url: format!("https://example.test/{evidence_id}"),
+            locator: Locator {
+                kind: "line".to_owned(),
+                start: 1,
+                end: 2,
+                label: label.to_owned(),
+            },
+            quote: quote.to_owned(),
+        }
+    }
+
+    fn test_evidence(id: &str) -> EvidenceRecord {
+        EvidenceRecord {
+            id: id.to_owned(),
+            jurisdiction: "Colorado Springs, Colorado".to_owned(),
+            source_url: format!("https://example.test/{id}"),
+            source_type: SourceType::Agenda,
+            document_title: "Agenda".to_owned(),
+            publication_date: Some("2025-01-01".to_owned()),
+            retrieval_timestamp: "2025-01-01T00:00:00Z".to_owned(),
+            mime_type: "text/plain".to_owned(),
+            sha256: "00".repeat(32),
+            original_filename: "agenda.txt".to_owned(),
+            extraction_method: "test".to_owned(),
+            extraction_status: pnull_core::ExtractionStatus::Complete,
+            extraction_error: None,
+            locators: Vec::new(),
+            matched_rule_ids: Vec::new(),
+            quoted_source_spans: Vec::new(),
+            supersedes: None,
+            processing_version: "test".to_owned(),
+        }
+    }
+
+    fn test_alert(id: &str, evidence_id: &str, citations: Vec<Citation>) -> Alert {
+        Alert {
+            id: id.to_owned(),
+            jurisdiction: "Colorado Springs, Colorado".to_owned(),
+            evidence_id: evidence_id.to_owned(),
+            previous_evidence_id: None,
+            title: format!("Alert {id}"),
+            state: FindingState::MentionDetected,
+            summary: "A purchase was mentioned.".to_owned(),
+            publication_date: "2025-01-01".to_owned(),
+            rule_ids: vec!["vendor.axon".to_owned()],
+            rules_version: 1,
+            rules_digest: "rules".to_owned(),
+            citations,
+            diff: None,
+        }
+    }
+
+    /// Seeds a current `Approved` review for a citation using the same binding
+    /// `assert_citations_approved` computes.
+    fn approve(store: &Store, citation: &Citation) {
+        let id = citation_id(citation);
+        let decision = ReviewDecision {
+            id: ReviewDecision::id_for(&id, "2025-01-01T00:00:00Z"),
+            citation_id: id.clone(),
+            state: ReviewState::Approved,
+            reviewer: "test-reviewer".to_owned(),
+            note: String::new(),
+            bound_digest: citation_review_binding(citation).digest(),
+            decision_digest: String::new(),
+            decided_at: "2025-01-01T00:00:00Z".to_owned(),
+            supersedes: None,
+        };
+        assert!(store.insert_review(&decision).expect("insert review"));
+    }
+
+    fn config() -> SiteConfig<'static> {
+        SiteConfig {
+            canonical_base_url: "https://example.invalid/pnull",
+            rules_yaml: "version: 1\nrules: []\n",
+        }
+    }
+
+    fn seed_site() -> (tempfile::TempDir, Store) {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("store");
+        let a = evid("a");
+        let b = evid("b");
+        store
+            .insert_evidence(&test_evidence(&a), "text a")
+            .expect("evidence a");
+        store
+            .insert_evidence(&test_evidence(&b), "text b")
+            .expect("evidence b");
+        let approved = test_alert(
+            "alert:approved",
+            &a,
+            vec![test_citation(&a, "quote a", "L1")],
+        );
+        let unapproved = test_alert(
+            "alert:unapproved",
+            &b,
+            vec![test_citation(&b, "quote b", "L1")],
+        );
+        approve(&store, &approved.citations[0]);
+        store
+            .insert_alert(&approved)
+            .expect("insert approved alert");
+        store
+            .insert_alert(&unapproved)
+            .expect("insert unapproved alert");
+        (dir, store)
+    }
 
     #[test]
     fn sensitive_identifiers_are_rejected() {
@@ -473,5 +900,108 @@ mod tests {
             }
             buffer.clear();
         }
+    }
+
+    #[test]
+    fn unreviewed_citation_is_refused_for_publication() {
+        let (_dir, store) = seed_site();
+        // A citation with no review decision must fail the gate.
+        let citation = test_citation(&evid("unreviewed"), "never reviewed quote", "L1");
+        assert!(assert_citations_approved(&store, &[citation]).is_err());
+    }
+
+    #[test]
+    fn approved_citation_passes_gate() {
+        let (_dir, store) = seed_site();
+        // seed_site already approved "quote a"; the gate must pass for it.
+        let citation = test_citation(&evid("a"), "quote a", "L1");
+        assert!(assert_citations_approved(&store, &[citation]).is_ok());
+    }
+
+    #[test]
+    fn changed_content_invalidates_approval() {
+        let (_dir, store) = seed_site();
+        let original = test_citation(&evid("a"), "original quote", "L1");
+        approve(&store, &original);
+        let changed = test_citation(&evid("a"), "changed quote", "L1");
+        assert!(assert_citations_approved(&store, &[changed]).is_err());
+    }
+
+    #[test]
+    fn build_site_skips_alerts_without_approved_citations() {
+        let (_dir, store) = seed_site();
+        let out = tempdir().expect("tempdir");
+        let paths = build_site(&store, out.path(), &config()).expect("build succeeds");
+        assert!(out.path().join("alerts/alert_approved.html").exists());
+        assert!(!out.path().join("alerts/alert_unapproved.html").exists());
+        assert!(
+            paths
+                .iter()
+                .any(|path| path.ends_with("alerts/alert_approved.html"))
+        );
+        assert!(
+            !paths
+                .iter()
+                .any(|path| path.ends_with("alerts/alert_unapproved.html"))
+        );
+    }
+
+    #[test]
+    fn atom_feed_omits_unapproved_alerts() {
+        let (_dir, store) = seed_site();
+        let out = tempdir().expect("tempdir");
+        build_site(&store, out.path(), &config()).expect("build succeeds");
+        let xml = fs::read_to_string(out.path().join("atom.xml")).expect("read atom");
+        assert!(xml.contains("Alert alert:approved"));
+        assert!(!xml.contains("Alert alert:unapproved"));
+    }
+
+    #[test]
+    fn no_script_in_public_output() {
+        let (_dir, store) = seed_site();
+        let out = tempdir().expect("tempdir");
+        build_site(&store, out.path(), &config()).expect("build succeeds");
+        for entry in walkdir_files(out.path()) {
+            let content = fs::read_to_string(&entry).expect("read file");
+            assert!(
+                !content.contains("<script"),
+                "file {} contains a script element",
+                entry.display()
+            );
+        }
+    }
+
+    fn walkdir_files(root: &Path) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir).expect("read dir") {
+                let entry = entry.expect("dir entry");
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        files
+    }
+
+    #[test]
+    fn publication_allowlist_gates_categories() {
+        let (_dir, store) = seed_site();
+        assert!(!publication_allowlist_allows(&store, "subject_action").unwrap());
+        let allowlist = PublicationAllowlist {
+            id: "allowlist:1".to_owned(),
+            field_categories: vec!["subject_action".to_owned()],
+            created_at: "2025-01-01T00:00:00Z".to_owned(),
+            note: String::new(),
+        };
+        store
+            .insert_publication_allowlist(&allowlist)
+            .expect("insert allowlist");
+        assert!(publication_allowlist_allows(&store, "subject_action").unwrap());
+        assert!(!publication_allowlist_allows(&store, "page_citation").unwrap());
     }
 }
