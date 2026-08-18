@@ -1457,6 +1457,82 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
         format!("{network_posts}\n"),
     )?;
     println!("8. Network posts performed: {network_posts}. No X transport was constructed.");
+
+    // The Procurement Chain (v0.0.3): reproduce the full offline demonstration
+    // from committed fixtures with no network access.
+    let fixtures_dir = std::path::Path::new("fixtures/procurement");
+    pnull_procurement::verify_fixture_digests(fixtures_dir)
+        .map_err(|e| anyhow!(e))?;
+    println!("9. Verified procurement fixture SHA-256 digests.");
+
+    let procurement_out = output.join("procurement");
+    let demo_result = pnull_procurement::run_demo(&store, fixtures_dir, &procurement_out)
+        .map_err(|e| anyhow!(e))?;
+    println!(
+        "10. Ingested {} solicitation mirror record(s) and {} contract-award row(s) offline.",
+        demo_result.solicitation_records, demo_result.award_rows
+    );
+    println!(
+        "11. Built matters: {} ({} events, {} identifiers, {} orgs, {} review items) and {} ({} events, {} identifiers, {} review items).",
+        demo_result.transit_fare_matter_id,
+        demo_result.transit_fare_events,
+        demo_result.transit_fare_identifiers,
+        demo_result.transit_fare_organizations,
+        demo_result.transit_fare_reconciliation,
+        demo_result.control_matter_id,
+        demo_result.control_events,
+        demo_result.control_identifiers,
+        demo_result.control_reconciliation,
+    );
+    let transit_case = pnull_procurement::build_content(&store, pnull_procurement::TRANSIT_FARE_MATTER_ID)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let transit_json = pnull_procurement::render_case_json(&transit_case);
+    let transit_md = pnull_procurement::render_case_markdown(&transit_case);
+    fs::create_dir_all(procurement_out.join("transit-fare"))?;
+    fs::write(
+        procurement_out.join("transit-fare").join("case-file.json"),
+        &transit_json,
+    )?;
+    fs::write(
+        procurement_out.join("transit-fare").join("case-file.md"),
+        &transit_md,
+    )?;
+    println!(
+        "12. Wrote transit-fare case file ({} JSON, {} MD bytes) to {}.",
+        transit_json.len(),
+        transit_md.len(),
+        procurement_out.join("transit-fare").display()
+    );
+    // A CORA draft from the transit-fare matter's unresolved gaps.
+    let transit_matter = store.procurement_matter(pnull_procurement::TRANSIT_FARE_MATTER_ID)?;
+    let transit_ids = store.procurement_identifiers(pnull_procurement::TRANSIT_FARE_MATTER_ID)?;
+    let missing = vec![
+        "executed contract",
+        "award notice",
+        "vendor-level expenditure evidence",
+    ];
+    let sources_checked = vec![
+        "colorado-springs-contract-awards",
+        "colorado-springs-solicitation-mirror",
+        "openbook-cos",
+    ];
+    let cora = pnull_procurement::build_cora_draft(
+        &transit_matter,
+        &transit_ids,
+        &missing,
+        Some((Some("2025-12-01".to_owned()), Some("2026-08-17".to_owned()))),
+        Some("Next-Generation Transit Fare Collection System"),
+        &sources_checked,
+    );
+    store.insert_cora_draft(&cora)?;
+    fs::create_dir_all(procurement_out.join("transit-fare"))?;
+    fs::write(
+        procurement_out.join("transit-fare").join("cora-draft.md"),
+        &cora.markdown,
+    )?;
+    println!("13. Wrote CORA draft (local, unsent) to {}.", procurement_out.join("transit-fare").display());
+    println!("OpenBook finding: {}", demo_result.openbook_finding);
+
     println!("Alert ID: {}", alert.id);
     Ok(())
 }

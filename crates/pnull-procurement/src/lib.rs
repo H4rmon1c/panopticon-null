@@ -9,6 +9,7 @@ pub mod awards;
 pub mod casefile;
 pub mod coverage;
 pub mod cora;
+pub mod demo;
 pub mod import;
 pub mod openbook;
 pub mod reconcile;
@@ -24,6 +25,9 @@ pub use casefile::{
 };
 pub use coverage::{
     NOT_OBSERVED_PHRASING, absence_phrasing, can_support_negative_claim, default_state, summarize,
+};
+pub use demo::{
+    CONTROL_MATTER_ID, DemoResult, TRANSIT_FARE_MATTER_ID, run_demo, verify_fixture_digests,
 };
 pub use cora::{
     CITY_DEPARTMENT, REVIEW_REQUIRED, build_draft as build_cora_draft,

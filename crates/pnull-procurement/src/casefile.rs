@@ -8,7 +8,7 @@
 use pnull_core::{
     CaseFile, CaseFileState, CoverageEntry, CoverageState, MoneyValue, ProcurementEvent,
     ProcurementEventKind, ProcurementIdentifier, ProcurementMatter, ProcurementOrganization,
-    SourceAuthority, sha256_hex,
+    ReconciliationKind, SourceAuthority, sha256_hex,
 };
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -107,6 +107,34 @@ pub fn build_content(
         }
     }
 
+    // Missing expected documents and contradictions come from the immutable
+    // reconciliation-review queue. They are surfaced here as explicit gaps,
+    // never as invented facts.
+    let mut missing_documents = Vec::new();
+    let mut reconciliation_gaps = Vec::new();
+    for item in store.all_reconciliation_items()? {
+        if item.matter_id != matter_id {
+            continue;
+        }
+        match item.kind {
+            ReconciliationKind::MissingDocument => {
+                missing_documents.push(item.summary.clone());
+            }
+            ReconciliationKind::ConflictingAwardAmount
+            | ReconciliationKind::ConflictingDate
+            | ReconciliationKind::DuplicateOrRevisedRow
+            | ReconciliationKind::VanishedRecord => {
+                reconciliation_gaps.push(item.summary.clone());
+            }
+            _ => {}
+        }
+    }
+    missing_documents.sort();
+    missing_documents.dedup();
+    reconciliation_gaps.sort();
+    reconciliation_gaps.dedup();
+    contradictions.extend(reconciliation_gaps);
+
     let limitations = default_limitations();
 
     Ok(CaseFileContent {
@@ -116,7 +144,7 @@ pub fn build_content(
         organizations,
         coverage,
         contradictions,
-        missing_documents: Vec::new(),
+        missing_documents,
         coverage_summary,
         provenance,
         limitations,
