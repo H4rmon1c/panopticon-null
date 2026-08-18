@@ -10,9 +10,18 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub mod migrate;
+pub mod procurement;
 pub mod types;
 
 pub use migrate::{SCHEMA_VERSION, migrate};
+pub use procurement::{
+    CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
+    MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
+    ProcurementMatter, ProcurementOrganization, RecordChange, ReconciliationDecision,
+    ReconciliationItem, ReconciliationKind, SnapshotDiff, SnapshotRevision, SourceAuthority,
+    SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
+    organization_exact_match, parse_money, sha256_manifest,
+};
 pub use types::{
     Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
     LocatorRange, MapWord, Matter, MatterAttachment, NativeTool, OutputArtifact, PageCitation,
@@ -855,6 +864,238 @@ impl Store {
         Ok(serde_json::from_str(&json.ok_or_else(|| {
             CoreError::NotFound("record".to_owned())
         })?)?)
+    }
+}
+
+impl Store {
+    /// Inserts a procurement matter, ignoring duplicates.
+    pub fn insert_procurement_matter(&self, matter: &ProcurementMatter) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_matters(id, official_title, matter_json) VALUES (?1, ?2, ?3)",
+            params![matter.id, matter.title, serde_json::to_string(matter)?],
+        )? == 1)
+    }
+
+    pub fn procurement_matter(&self, id: &str) -> Result<ProcurementMatter, CoreError> {
+        self.read_json_row(
+            "SELECT matter_json FROM procurement_matters WHERE id = ?1",
+            &[id],
+        )
+    }
+
+    pub fn procurement_matters(&self) -> Result<Vec<ProcurementMatter>, CoreError> {
+        self.read_json_rows(
+            "SELECT matter_json FROM procurement_matters ORDER BY title",
+            &[],
+        )
+    }
+
+    pub fn insert_procurement_event(&self, event: &ProcurementEvent) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_events(id, matter_id, event_json) VALUES (?1, ?2, ?3)",
+            params![event.id, event.matter_id, serde_json::to_string(event)?],
+        )? == 1)
+    }
+
+    pub fn procurement_events(&self, matter_id: &str) -> Result<Vec<ProcurementEvent>, CoreError> {
+        self.read_json_rows(
+            "SELECT event_json FROM procurement_events WHERE matter_id = ?1 ORDER BY json_extract(event_json, '$.date'), id",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_procurement_identifier(
+        &self,
+        identifier: &ProcurementIdentifier,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_identifiers(id, matter_id, identifier_json) VALUES (?1, ?2, ?3)",
+            params![identifier.id, identifier.matter_id, serde_json::to_string(identifier)?],
+        )? == 1)
+    }
+
+    pub fn procurement_identifiers(
+        &self,
+        matter_id: &str,
+    ) -> Result<Vec<ProcurementIdentifier>, CoreError> {
+        self.read_json_rows(
+            "SELECT identifier_json FROM procurement_identifiers WHERE matter_id = ?1 ORDER BY json_extract(identifier_json, '$.kind'), id",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_procurement_organization(
+        &self,
+        org: &ProcurementOrganization,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_organizations(id, matter_id, organization_json) VALUES (?1, ?2, ?3)",
+            params![org.id, org.matter_id, serde_json::to_string(org)?],
+        )? == 1)
+    }
+
+    pub fn procurement_organizations(
+        &self,
+        matter_id: &str,
+    ) -> Result<Vec<ProcurementOrganization>, CoreError> {
+        self.read_json_rows(
+            "SELECT organization_json FROM procurement_organizations WHERE matter_id = ?1 ORDER BY json_extract(organization_json, '$.role'), id",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_coverage_entry(&self, entry: &CoverageEntry) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO coverage_ledger(id, source_id, entry_json) VALUES (?1, ?2, ?3)",
+            params![entry.id, entry.source_id, serde_json::to_string(entry)?],
+        )? == 1)
+    }
+
+    pub fn coverage_entries(&self, source_id: &str) -> Result<Vec<CoverageEntry>, CoreError> {
+        self.read_json_rows(
+            "SELECT entry_json FROM coverage_ledger WHERE source_id = ?1 ORDER BY json_extract(entry_json, '$.retrieved_at')",
+            &[source_id],
+        )
+    }
+
+    pub fn all_coverage_entries(&self) -> Result<Vec<CoverageEntry>, CoreError> {
+        self.read_json_rows(
+            "SELECT entry_json FROM coverage_ledger ORDER BY json_extract(entry_json, '$.retrieved_at'), source_id",
+            &[],
+        )
+    }
+
+    pub fn insert_source_snapshot(&self, snapshot: &SourceSnapshot) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO source_snapshots(id, source_id, snapshot_json) VALUES (?1, ?2, ?3)",
+            params![snapshot.id, snapshot.source_id, serde_json::to_string(snapshot)?],
+        )? == 1)
+    }
+
+    pub fn source_snapshot(&self, id: &str) -> Result<SourceSnapshot, CoreError> {
+        self.read_json_row(
+            "SELECT snapshot_json FROM source_snapshots WHERE id = ?1",
+            &[id],
+        )
+    }
+
+    pub fn source_snapshots(&self, source_id: &str) -> Result<Vec<SourceSnapshot>, CoreError> {
+        self.read_json_rows(
+            "SELECT snapshot_json FROM source_snapshots WHERE source_id = ?1 ORDER BY json_extract(snapshot_json, '$.retrieved_at')",
+            &[source_id],
+        )
+    }
+
+    pub fn insert_snapshot_revision(&self, revision: &SnapshotRevision) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO snapshot_revisions(id, snapshot_id, revision_json) VALUES (?1, ?2, ?3)",
+            params![revision.id, revision.snapshot_id, serde_json::to_string(revision)?],
+        )? == 1)
+    }
+
+    pub fn snapshot_revisions(&self, snapshot_id: &str) -> Result<Vec<SnapshotRevision>, CoreError> {
+        self.read_json_rows(
+            "SELECT revision_json FROM snapshot_revisions WHERE snapshot_id = ?1 ORDER BY json_extract(revision_json, '$.recorded_at')",
+            &[snapshot_id],
+        )
+    }
+
+    pub fn insert_snapshot_diff(&self, diff: &SnapshotDiff) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO snapshot_diffs(id, old_snapshot_id, new_snapshot_id, diff_json) VALUES (?1, ?2, ?3, ?4)",
+            params![diff.id, diff.old_snapshot_id, diff.new_snapshot_id, serde_json::to_string(diff)?],
+        )? == 1)
+    }
+
+    pub fn snapshot_diff(&self, old: &str, new: &str) -> Result<Option<SnapshotDiff>, CoreError> {
+        let json: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT diff_json FROM snapshot_diffs WHERE old_snapshot_id = ?1 AND new_snapshot_id = ?2",
+                params![old, new],
+                |row| row.get(0),
+            )
+            .optional()?;
+        json.map(|j| serde_json::from_str(&j)).transpose().map_err(CoreError::from)
+    }
+
+    pub fn insert_reconciliation_item(&self, item: &ReconciliationItem) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO reconciliation_items(id, matter_id, item_json) VALUES (?1, ?2, ?3)",
+            params![item.id, item.matter_id, serde_json::to_string(item)?],
+        )? == 1)
+    }
+
+    pub fn reconciliation_items(
+        &self,
+        matter_id: &str,
+    ) -> Result<Vec<ReconciliationItem>, CoreError> {
+        self.read_json_rows(
+            "SELECT item_json FROM reconciliation_items WHERE matter_id = ?1 ORDER BY json_extract(item_json, '$.created_at'), id",
+            &[matter_id],
+        )
+    }
+
+    pub fn all_reconciliation_items(&self) -> Result<Vec<ReconciliationItem>, CoreError> {
+        self.read_json_rows(
+            "SELECT item_json FROM reconciliation_items ORDER BY json_extract(item_json, '$.created_at'), matter_id",
+            &[],
+        )
+    }
+
+    pub fn insert_reconciliation_decision(
+        &self,
+        decision: &ReconciliationDecision,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO reconciliation_decisions(id, item_id, decision_json) VALUES (?1, ?2, ?3)",
+            params![decision.id, decision.item_id, serde_json::to_string(decision)?],
+        )? == 1)
+    }
+
+    pub fn reconciliation_decisions(
+        &self,
+        item_id: &str,
+    ) -> Result<Vec<ReconciliationDecision>, CoreError> {
+        self.read_json_rows(
+            "SELECT decision_json FROM reconciliation_decisions WHERE item_id = ?1 ORDER BY json_extract(decision_json, '$.decided_at')",
+            &[item_id],
+        )
+    }
+
+    pub fn current_reconciliation_decision(
+        &self,
+        item_id: &str,
+    ) -> Result<Option<ReconciliationDecision>, CoreError> {
+        Ok(self.reconciliation_decisions(item_id)?.into_iter().last())
+    }
+
+    pub fn insert_case_file(&self, case_file: &CaseFile) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO case_files(id, matter_id, case_file_json) VALUES (?1, ?2, ?3)",
+            params![case_file.id, case_file.matter_id, serde_json::to_string(case_file)?],
+        )? == 1)
+    }
+
+    pub fn case_files(&self, matter_id: &str) -> Result<Vec<CaseFile>, CoreError> {
+        self.read_json_rows(
+            "SELECT case_file_json FROM case_files WHERE matter_id = ?1 ORDER BY json_extract(case_file_json, '$.built_at')",
+            &[matter_id],
+        )
+    }
+
+    pub fn insert_cora_draft(&self, draft: &CoraDraft) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO cora_drafts(id, matter_id, draft_json) VALUES (?1, ?2, ?3)",
+            params![draft.id, draft.matter_id, serde_json::to_string(draft)?],
+        )? == 1)
+    }
+
+    pub fn cora_drafts(&self, matter_id: &str) -> Result<Vec<CoraDraft>, CoreError> {
+        self.read_json_rows(
+            "SELECT draft_json FROM cora_drafts WHERE matter_id = ?1 ORDER BY json_extract(draft_json, '$.created_at')",
+            &[matter_id],
+        )
     }
 }
 

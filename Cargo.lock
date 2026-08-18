@@ -1192,6 +1192,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pnull-procurement"
+version = "0.0.2"
+dependencies = [
+ "pnull-core",
+ "pnull-ingest",
+ "regex",
+ "scraper",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "time",
+ "url",
+]
+
+[[package]]
 name = "pnull-publish"
 version = "0.0.2"
 dependencies = [

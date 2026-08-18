@@ -3,13 +3,17 @@
 //! v0.0.1 databases carry no `user_version` (treated as 0). v0.0.2 introduces
 //! `user_version = 1` and adds supplemental tables without rewriting canonical
 //! v0.0.1 evidence, findings, alerts, approvals, posts, or source-fetch history.
+//! v0.0.3 introduces `user_version = 2` and adds the procurement domain tables
+//! (matters, events, identifiers, organizations, coverage ledger, immutable
+//! snapshots and revisions, coverage diffs, reconciliation, case files, and CORA
+//! drafts) without rewriting any prior canonical rows.
 
 use rusqlite::{Connection, Transaction};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 /// The highest schema version this build understands.
-pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 1;
+pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -40,9 +44,14 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     if version > MAX_SUPPORTED_SCHEMA_VERSION {
         return Err(MigrationError::UnsupportedVersion(version));
     }
-    // version is 0 (v0.0.1) here.
+    // version is 0 (v0.0.1) or 1 (v0.0.2) here.
     let transaction = connection.transaction()?;
-    apply_v1(&transaction)?;
+    if version < 1 {
+        apply_v1(&transaction)?;
+    }
+    if version < 2 {
+        apply_v2(&transaction)?;
+    }
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
     Ok(())
@@ -121,6 +130,86 @@ fn apply_v1(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS idx_sr_source ON source_reviews(source_id);
          CREATE INDEX IF NOT EXISTS idx_fo_source ON fetch_observations(source_id);
          CREATE INDEX IF NOT EXISTS idx_xa_alert ON x_attempts(alert_id);",
+    )
+}
+
+/// Creates the v0.0.3 procurement-domain tables. This is additive only: it never
+/// rewrites canonical v0.0.1/v0.0.2 evidence, findings, alerts, or reviews.
+fn apply_v2(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS procurement_matters (
+           id TEXT PRIMARY KEY,
+           official_title TEXT NOT NULL,
+           matter_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS procurement_events (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           event_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS procurement_identifiers (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           identifier_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS procurement_organizations (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           organization_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS coverage_ledger (
+           id TEXT PRIMARY KEY,
+           source_id TEXT NOT NULL,
+           entry_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS source_snapshots (
+           id TEXT PRIMARY KEY,
+           source_id TEXT NOT NULL,
+           snapshot_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS snapshot_revisions (
+           id TEXT PRIMARY KEY,
+           snapshot_id TEXT NOT NULL,
+           revision_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS snapshot_diffs (
+           id TEXT PRIMARY KEY,
+           old_snapshot_id TEXT NOT NULL,
+           new_snapshot_id TEXT NOT NULL,
+           diff_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS reconciliation_items (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           item_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS reconciliation_decisions (
+           id TEXT PRIMARY KEY,
+           item_id TEXT NOT NULL,
+           decision_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS case_files (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           case_file_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS cora_drafts (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           draft_json TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_pe_matter ON procurement_events(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_pid_matter ON procurement_identifiers(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_porg_matter ON procurement_organizations(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_cl_source ON coverage_ledger(source_id);
+         CREATE INDEX IF NOT EXISTS idx_ss_source ON source_snapshots(source_id);
+         CREATE INDEX IF NOT EXISTS idx_sr_snapshot ON snapshot_revisions(snapshot_id);
+         CREATE INDEX IF NOT EXISTS idx_sd_old ON snapshot_diffs(old_snapshot_id);
+         CREATE INDEX IF NOT EXISTS idx_sd_new ON snapshot_diffs(new_snapshot_id);
+         CREATE INDEX IF NOT EXISTS idx_ri_matter ON reconciliation_items(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_rd_item ON reconciliation_decisions(item_id);
+         CREATE INDEX IF NOT EXISTS idx_cf_matter ON case_files(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_cora_matter ON cora_drafts(matter_id);",
     )
 }
 
@@ -238,6 +327,125 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
+    }
+
+    /// Counts rows in a set of v0.0.2 tables as a byte-for-byte preservation check.
+    fn count_table(connection: &Connection, table: &str) -> i64 {
+        connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+            .expect("count")
+    }
+
+    /// Reads every row of a table as opaque JSON-ish strings for equality checks.
+    fn rows_of(connection: &Connection, table: &str, columns: usize) -> Vec<Vec<String>> {
+        let mut statement = connection
+            .prepare(&format!("SELECT * FROM {table}"))
+            .expect("prepare");
+        let rows = statement
+            .query_map([], |row| {
+                let mut values = Vec::with_capacity(columns);
+                for i in 0..columns {
+                    values.push(row.get::<_, String>(i).unwrap_or_default());
+                }
+                Ok(values)
+            })
+            .expect("query");
+        rows.collect::<Result<_, _>>().expect("collect")
+    }
+
+    #[test]
+    fn v02_database_upgrades_to_v03_preserving_all_rows() {
+        // Load the committed minimal v0.0.2 (schema version 1) fixture database.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.2-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.2 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.2 fixture");
+
+        assert_eq!(current_version(&connection).expect("version"), 1);
+        let evidence_before = read_evidence(&connection);
+        let matters_before = rows_of(&connection, "matters", 4);
+        let reviews_before = rows_of(&connection, "review_decisions", 3);
+        let runs_before = rows_of(&connection, "processing_runs", 2);
+        let xrec_before = rows_of(&connection, "x_reconciliations", 3);
+
+        migrate(&mut connection).expect("migrate v0.0.2 -> v0.0.3");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+        assert_eq!(SCHEMA_VERSION, 2);
+
+        // Every canonical v0.0.1 and v0.0.2 row survives byte-for-byte.
+        assert_eq!(read_evidence(&connection), evidence_before);
+        assert_eq!(rows_of(&connection, "matters", 4), matters_before);
+        assert_eq!(rows_of(&connection, "review_decisions", 3), reviews_before);
+        assert_eq!(rows_of(&connection, "processing_runs", 2), runs_before);
+        assert_eq!(rows_of(&connection, "x_reconciliations", 3), xrec_before);
+
+        // The v0.0.3 procurement tables now exist and are empty.
+        for table in [
+            "procurement_matters",
+            "procurement_events",
+            "procurement_identifiers",
+            "procurement_organizations",
+            "coverage_ledger",
+            "source_snapshots",
+            "snapshot_revisions",
+            "snapshot_diffs",
+            "reconciliation_items",
+            "reconciliation_decisions",
+            "case_files",
+            "cora_drafts",
+        ] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
+    }
+
+    #[test]
+    fn migration_failure_rolls_back_atomically() {
+        // Load a real v0.0.2 fixture, then sabotage the migration by occupying an
+        // index name with a table. The CREATE INDEX in apply_v2 will fail, which
+        // must roll back the entire transaction: user_version stays at 1 and no
+        // partial v0.0.3 table survives.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.2-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.2 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.2 fixture");
+        // Sabotage: a table now claims the index name idx_pe_matter.
+        connection
+            .execute_batch(
+                "CREATE TABLE idx_pe_matter (x TEXT);
+                 INSERT INTO idx_pe_matter VALUES ('sabotage');",
+            )
+            .expect("sabotage schema");
+
+        assert!(migrate(&mut connection).is_err(), "migration must fail");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            1,
+            "user_version must roll back to 1 on failure"
+        );
+        // No v0.0.3 table may persist.
+        let exists: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name IN
+                 ('procurement_matters','coverage_ledger','source_snapshots','case_files')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("check partial tables");
+        assert_eq!(exists, 0, "no partial v0.0.3 tables may remain");
+        // Canonical rows untouched.
+        assert_eq!(count_table(&connection, "matters"), 1);
+        assert_eq!(count_table(&connection, "evidence"), 1);
+        // Sabotage object still present (so the failure was genuinely injected).
+        assert_eq!(count_table(&connection, "idx_pe_matter"), 1);
     }
 
     #[test]
