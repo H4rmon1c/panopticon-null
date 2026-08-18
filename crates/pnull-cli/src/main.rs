@@ -26,6 +26,8 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+mod procurement_cmd;
+
 const CONFIG_PATH: &str = "configs/states/co.toml";
 const RULES_PATH: &str = "rules/surveillance.yml";
 
@@ -81,6 +83,94 @@ enum Command {
     Demo {
         #[arg(long, default_value = "demo-output")]
         output: PathBuf,
+    },
+    Procurement {
+        #[command(subcommand)]
+        command: ProcurementCommand,
+    },
+    Coverage {
+        #[command(subcommand)]
+        command: CoverageCommand,
+    },
+    Case {
+        #[command(subcommand)]
+        command: CaseCommand,
+    },
+    Cora {
+        #[command(subcommand)]
+        command: CoraCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProcurementCommand {
+    Ingest {
+        #[command(subcommand)]
+        command: ProcurementIngestCommand,
+    },
+    Import {
+        path: String,
+        #[arg(long)]
+        source_or_request_id: String,
+        #[arg(long)]
+        acquisition_date: String,
+        #[arg(long)]
+        role: String,
+        #[arg(long)]
+        operator: String,
+        #[arg(long)]
+        digest: String,
+    },
+    Reconcile {
+        matter: String,
+    },
+    Show {
+        matter: String,
+    },
+    Gaps {
+        matter: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProcurementIngestCommand {
+    Solicitations {
+        #[arg(long, default_value = "")]
+        source: String,
+        #[arg(long)]
+        live: bool,
+    },
+    Awards {
+        #[arg(long, default_value = "")]
+        source: String,
+        #[arg(long)]
+        live: bool,
+    },
+    Openbook,
+}
+
+#[derive(Subcommand)]
+enum CoverageCommand {
+    Show,
+    Diff {
+        old_snapshot: String,
+        new_snapshot: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum CaseCommand {
+    Build {
+        matter: String,
+        #[arg(long, default_value = "case-output")]
+        output: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum CoraCommand {
+    Draft {
+        matter: String,
     },
 }
 
@@ -286,6 +376,68 @@ fn run(cli: Cli) -> Result<()> {
         Command::X { command } => x_command(&cli.data_dir, &config, command),
         Command::Verify { evidence_id } => verify(&cli.data_dir, &evidence_id),
         Command::Demo { output } => run_demo(&output, &config),
+        Command::Procurement { command } => procurement_command(&cli.data_dir, command),
+        Command::Coverage { command } => coverage_command(&cli.data_dir, command),
+        Command::Case { command } => case_command(&cli.data_dir, command),
+        Command::Cora { command } => cora_command(&cli.data_dir, command),
+    }
+}
+
+fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    match command {
+        ProcurementCommand::Ingest {
+            command: ProcurementIngestCommand::Solicitations { source, live },
+        } => procurement_cmd::ingest_solicitations(&store, &source, live),
+        ProcurementCommand::Ingest {
+            command: ProcurementIngestCommand::Awards { source, live },
+        } => procurement_cmd::ingest_awards(&store, &source, live),
+        ProcurementCommand::Ingest {
+            command: ProcurementIngestCommand::Openbook,
+        } => procurement_cmd::ingest_openbook(&store),
+        ProcurementCommand::Import {
+            path,
+            source_or_request_id,
+            acquisition_date,
+            role,
+            operator,
+            digest,
+        } => procurement_cmd::import_record(
+            data_dir,
+            &path,
+            &source_or_request_id,
+            &acquisition_date,
+            &role,
+            &operator,
+            &digest,
+        ),
+        ProcurementCommand::Reconcile { matter } => procurement_cmd::gaps(&store, &matter),
+        ProcurementCommand::Show { matter } => procurement_cmd::show_matter(&store, &matter),
+        ProcurementCommand::Gaps { matter } => procurement_cmd::gaps(&store, &matter),
+    }
+}
+
+fn coverage_command(data_dir: &Path, command: CoverageCommand) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    match command {
+        CoverageCommand::Show => procurement_cmd::coverage_show(&store),
+        CoverageCommand::Diff { old_snapshot, new_snapshot } => {
+            procurement_cmd::coverage_diff(&store, &old_snapshot, &new_snapshot)
+        }
+    }
+}
+
+fn case_command(data_dir: &Path, command: CaseCommand) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    match command {
+        CaseCommand::Build { matter, output } => procurement_cmd::case_build(&store, &matter, &output),
+    }
+}
+
+fn cora_command(data_dir: &Path, command: CoraCommand) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    match command {
+        CoraCommand::Draft { matter } => procurement_cmd::cora_draft(&store, &matter),
     }
 }
 

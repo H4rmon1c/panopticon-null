@@ -1107,6 +1107,7 @@ dependencies = [
  "pnull-geometry",
  "pnull-http",
  "pnull-ingest",
+ "pnull-procurement",
  "pnull-publish",
  "pnull-x",
  "serde",

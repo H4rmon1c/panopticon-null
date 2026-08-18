@@ -19,6 +19,7 @@ pnull-geometry = { path = "../pnull-geometry", version = "=0.0.2" }
 pnull-http = { path = "../pnull-http", version = "=0.0.2" }
 pnull-ingest = { path = "../pnull-ingest", version = "=0.0.2" }
 pnull-publish = { path = "../pnull-publish", version = "=0.0.2" }
+pnull-procurement = { path = "../pnull-procurement", version = "=0.0.2" }
 pnull-x = { path = "../pnull-x", version = "=0.0.2" }
 serde.workspace = true
 time.workspace = true

@@ -15,7 +15,9 @@ pub mod reconcile;
 pub mod snapshot;
 pub mod solicitations;
 
-pub use awards::{AwardRow, parse_awards_table};
+pub use awards::{
+    AwardRow, parse_awards_table, award_identifier, award_organization,
+};
 pub use casefile::{
     CaseFileContent, build_content, default_limitations, generate as generate_case_file,
     money_display, render_json as render_case_json, render_markdown as render_case_markdown,
@@ -30,7 +32,9 @@ pub use cora::{
 pub use import::{
     SuppliedRecord, SuppliedRecordDeclaration, import_supplied_record,
 };
-pub use openbook::{OpenBookFinding, OPENBOOK_DATASETS, OPENBOOK_FIELDS};
+pub use openbook::{
+    OpenBookFinding, OPENBOOK_DATASETS, OPENBOOK_FIELDS, OPENBOOK_LANDING_URL, OPENBOOK_SOCRATA_URL,
+};
 pub use reconcile::{
     ReconcileError, amount_conflict_item, candidate_identifier_item, exact_identifier_match,
     missing_document_item, reconciliation_binding_digest, record_decision,
