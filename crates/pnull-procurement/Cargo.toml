@@ -1,0 +1,25 @@
+[package]
+name = "pnull-procurement"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pnull-core = { path = "../pnull-core", version = "=0.0.2" }
+pnull-ingest = { path = "../pnull-ingest", version = "=0.0.2" }
+regex.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+time.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
