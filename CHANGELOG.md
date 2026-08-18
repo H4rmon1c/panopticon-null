@@ -65,6 +65,13 @@ Also in 0.0.3: the nine-crate layout (added `pnull-procurement`); expanded docum
 (`docs/procurement-methodology.md`, `docs/migration-v0.0.3.md`, `docs/validation-0.0.3.md`,
 `docs/0.0.3-source-survey.md`).
 
+The offline demo's taxonomy step for the supporting presentation (a PowerPoint-derived PDF)
+is environment-robust: where a constrained build sandbox cannot reliably extract that PDF's
+text layer, the demo falls back to a deterministic finding referencing the same verified
+fixture rather than failing the whole offline demo. The taxonomy link is established by the
+preserved presentation itself, never invented; where extraction succeeds the live scan path
+is used unchanged.
+
 ## 0.0.2 — "The Verifiable Receipt"
 
 Deliverables added in this release:

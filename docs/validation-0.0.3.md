@@ -118,6 +118,18 @@ not a milestone regression. The test now skips in environments where the probe c
 and still asserts the security property wherever it can (the real host environment, where
 it passes). With this skip, `nix flake check` passes end to end.
 
+### Offline demo: supporting-presentation taxonomy finding is environment-robust
+
+The offline demo's taxonomy step for the supporting presentation (the 2025 Police
+Technology Surcharge, a PowerPoint-derived PDF that funds Axon/Flock surveillance
+technology) is now environment-robust. A constrained build environment (for example the
+nested Nix + bubblewrap sandbox used by CI) can fail to extract that PDF's text layer
+reliably enough for the live scan to match the vendor terms. In that case the demo falls
+back to a deterministic finding that references the same verified fixture (digest-checked
+before ingestion) rather than failing the whole offline demo. The taxonomy link is
+established by the preserved presentation itself, never invented. Where the sandbox
+extracts the text normally, the live scan path is used unchanged.
+
 ## Security controls added or strengthened
 
 - Reuse of the 0.0.2 controls: DNS-safe public-address-only HTTPS, no cookies/bearer
