@@ -5,9 +5,7 @@
 //! versions. Every record produced here carries that warning and never claims to
 //! represent every solicitation.
 
-use pnull_core::{
-    CoverageState, IdentifierKind, ProcurementIdentifier, SourceAuthority,
-};
+use pnull_core::{CoverageState, IdentifierKind, ProcurementIdentifier, SourceAuthority};
 use regex::Regex;
 use scraper::{Html, Selector};
 use thiserror::Error;
@@ -48,7 +46,10 @@ pub struct SolicitationRecord {
 ///
 /// The `snapshot_digest` binds each record to the immutable snapshot it came
 /// from. Embedded links are recorded but never automatically followed.
-pub fn parse_solicitations(html: &str, snapshot_digest: &str) -> Result<Vec<SolicitationRecord>, SolicitationError> {
+pub fn parse_solicitations(
+    html: &str,
+    snapshot_digest: &str,
+) -> Result<Vec<SolicitationRecord>, SolicitationError> {
     let document = Html::parse_document(html);
     let identifier_re = Regex::new(r"(?i)\b(rfp|rfq|ifb|r|q|b)?-?\s?[0-9]{2}-[0-9]{3}[a-z]{0,3}\b")
         .expect("constant identifier regex");
@@ -155,11 +156,7 @@ pub fn solicitation_identifier(
         None => (None, None),
     };
     Some(ProcurementIdentifier {
-        id: ProcurementIdentifier::id_for(
-            matter_id,
-            record.identifier_kind,
-            &record.identifier,
-        ),
+        id: ProcurementIdentifier::id_for(matter_id, record.identifier_kind, &record.identifier),
         matter_id: matter_id.to_owned(),
         kind: record.identifier_kind,
         raw: record.identifier.clone(),
@@ -208,13 +205,13 @@ mod tests {
             .find(|r| r.identifier.eq_ignore_ascii_case("R26-023AB"))
             .expect("r26 record");
         assert!(r26.title.contains("Transit Fare Collection"));
-        assert!(r26
-            .linked_documents
-            .iter()
-            .any(|u| u.contains("r26-023ab")));
+        assert!(r26.linked_documents.iter().any(|u| u.contains("r26-023ab")));
         assert_eq!(r26.authority, SourceAuthority::OfficialInformationalMirror);
         assert_eq!(r26.coverage_state, CoverageState::InformationalOnly);
-        assert!(r26.incompleteness_warning.contains("may or may not be up to date"));
+        assert!(
+            r26.incompleteness_warning
+                .contains("may or may not be up to date")
+        );
     }
 
     #[test]
@@ -233,10 +230,11 @@ mod tests {
             .iter()
             .find(|r| r.identifier.eq_ignore_ascii_case("R26-023AB"))
             .expect("r26 record");
-        assert!(r26
-            .linked_documents
-            .iter()
-            .all(|u| u.starts_with("https://coloradosprings.gov")));
+        assert!(
+            r26.linked_documents
+                .iter()
+                .all(|u| u.starts_with("https://coloradosprings.gov"))
+        );
     }
 
     #[test]

@@ -13,8 +13,7 @@ pub const OPENBOOK_LANDING_URL: &str = "https://coloradosprings.gov/budget/page/
 /// The Socrata SPA that hosts the budget datasets.
 pub const OPENBOOK_SOCRATA_URL: &str = "https://coloradosprings.budget.socrata.com/";
 /// The view-data surface that claims monthly export.
-pub const OPENBOOK_VIEW_DATA_URL: &str =
-    "https://coloradosprings.budget.socrata.com/#!/view-data";
+pub const OPENBOOK_VIEW_DATA_URL: &str = "https://coloradosprings.budget.socrata.com/#!/view-data";
 
 /// The four real dataset IDs discovered from the SPA configuration.
 pub const OPENBOOK_DATASETS: &[&str] = &[

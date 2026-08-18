@@ -87,7 +87,9 @@ mod tests {
     fn only_complete_supports_negative_claim() {
         assert!(can_support_negative_claim(CoverageState::Complete));
         assert!(!can_support_negative_claim(CoverageState::Partial));
-        assert!(!can_support_negative_claim(CoverageState::InformationalOnly));
+        assert!(!can_support_negative_claim(
+            CoverageState::InformationalOnly
+        ));
         assert!(!can_support_negative_claim(CoverageState::Unknown));
         assert!(!can_support_negative_claim(CoverageState::AccessBlocked));
     }
@@ -101,11 +103,18 @@ mod tests {
     fn summary_uses_latest_entry() {
         let entries = vec![
             entry("src", CoverageState::Partial, "2026-08-01T00:00:00Z"),
-            entry("src", CoverageState::InformationalOnly, "2026-08-17T00:00:00Z"),
+            entry(
+                "src",
+                CoverageState::InformationalOnly,
+                "2026-08-17T00:00:00Z",
+            ),
         ];
         let summary = summarize(&entries);
         assert_eq!(summary.entry_count, 2);
         assert_eq!(summary.latest_state, CoverageState::InformationalOnly);
-        assert_eq!(summary.latest_retrieved_at.as_deref(), Some("2026-08-17T00:00:00Z"));
+        assert_eq!(
+            summary.latest_retrieved_at.as_deref(),
+            Some("2026-08-17T00:00:00Z")
+        );
     }
 }

@@ -2,13 +2,13 @@
 //! fixtures, with no network access.
 //!
 //! The demo ingests the informational-mirror snapshots (solicitations and
-//! contract awards) and the documented OpenBook negative finding, then builds
+//! contract awards) and the documented `OpenBook` negative finding, then builds
 //! two genuine Colorado Springs matters:
 //!
 //! - `R26-023AB` — Next-Generation Transit Fare Collection System RFI (the real
 //!   case study). This is a solicitation/RFI, not a contract or award. The demo
 //!   shows the exact evidence gaps: no executed contract, no award notice, and
-//!   no vendor-level payment evidence from OpenBook.
+//!   no vendor-level payment evidence from `OpenBook`.
 //! - a benign control matter — an ordinary, non-surveillance procurement. Its
 //!   purpose is to prove that ingestion does not automatically turn every
 //!   technology or vendor record into a surveillance accusation.
@@ -21,17 +21,15 @@ use std::fs;
 use std::path::Path;
 
 use pnull_core::{
-    CoverageEntry, CoverageState, IdentifierKind, MoneyValue, OrganizationRole,
-    ProcurementEvent, ProcurementEventKind, ProcurementIdentifier, ProcurementMatter,
-    ProcurementOrganization, ReconciliationItem, SourceAuthority, Store, parse_money, sha256_hex,
+    CoverageEntry, CoverageState, IdentifierKind, MoneyValue, OrganizationRole, ProcurementEvent,
+    ProcurementEventKind, ProcurementIdentifier, ProcurementMatter, ProcurementOrganization,
+    ReconciliationItem, SourceAuthority, Store, parse_money, sha256_hex,
 };
 
 use crate::awards::{AwardRow, parse_awards_table};
 use crate::casefile::generate as generate_case_file;
 use crate::openbook::OpenBookFinding;
-use crate::reconcile::{
-    amount_conflict_item, missing_document_item, vendor_alias_item,
-};
+use crate::reconcile::{amount_conflict_item, missing_document_item, vendor_alias_item};
 use crate::snapshot::{Acquisition, record_snapshot};
 use crate::solicitations::{SolicitationRecord, parse_solicitations};
 
@@ -76,8 +74,8 @@ pub fn run_demo(
     let awards_path = fixtures_dir.join("contract-awards.html");
 
     // 1. Ingest the solicitation mirror snapshot.
-    let solicitation_bytes = fs::read(&solicitations_path)
-        .map_err(|e| format!("read solicitations fixture: {e}"))?;
+    let solicitation_bytes =
+        fs::read(&solicitations_path).map_err(|e| format!("read solicitations fixture: {e}"))?;
     let solicitation_digest = sha256_hex(&solicitation_bytes);
     let solicitation_html = String::from_utf8_lossy(&solicitation_bytes);
     let solicitation_records = parse_solicitations(&solicitation_html, &solicitation_digest)
@@ -99,8 +97,8 @@ pub fn run_demo(
     let award_bytes = fs::read(&awards_path).map_err(|e| format!("read awards fixture: {e}"))?;
     let award_digest = sha256_hex(&award_bytes);
     let award_html = String::from_utf8_lossy(&award_bytes);
-    let award_rows = parse_awards_table(&award_html, &award_digest)
-        .map_err(|e| format!("parse awards: {e}"))?;
+    let award_rows =
+        parse_awards_table(&award_html, &award_digest).map_err(|e| format!("parse awards: {e}"))?;
 
     let award_acquisition = award_acquisition(&award_digest);
     record_snapshot(
@@ -189,12 +187,18 @@ pub fn verify_fixture_digests(fixtures_dir: &Path) -> Result<(), String> {
             continue;
         }
         let mut parts = line.split_whitespace();
-        let digest = parts.next().ok_or_else(|| "malformed SHA256SUMS line".to_owned())?;
-        let name = parts.next().ok_or_else(|| "malformed SHA256SUMS line".to_owned())?;
+        let digest = parts
+            .next()
+            .ok_or_else(|| "malformed SHA256SUMS line".to_owned())?;
+        let name = parts
+            .next()
+            .ok_or_else(|| "malformed SHA256SUMS line".to_owned())?;
         let bytes = fs::read(fixtures_dir.join(name)).map_err(|e| format!("read {name}: {e}"))?;
         let actual = sha256_hex(&bytes);
         if actual != digest {
-            return Err(format!("fixture digest mismatch for {name}: expected {digest}, got {actual}"));
+            return Err(format!(
+                "fixture digest mismatch for {name}: expected {digest}, got {actual}"
+            ));
         }
         expected += 1;
     }
@@ -226,15 +230,17 @@ fn solicitation_acquisition(digest: &str) -> Acquisition {
 fn award_acquisition(digest: &str) -> Acquisition {
     Acquisition {
         source_id: "colorado-springs-contract-awards".to_owned(),
-        source_url: "https://coloradosprings.gov/procurement-services/page/contract-award-information"
-            .to_owned(),
+        source_url:
+            "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+                .to_owned(),
         retrieved_at: OFFLINE_RETRIEVED_AT.to_owned(),
         bytes_digest: digest.to_owned(),
         content_type: Some("text/html".to_owned()),
         etag: None,
         last_modified: None,
-        final_url: "https://coloradosprings.gov/procurement-services/page/contract-award-information"
-            .to_owned(),
+        final_url:
+            "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+                .to_owned(),
         redirect_history: Vec::new(),
         parser_version: "awards-1.0".to_owned(),
         schema_version: 2,
@@ -291,7 +297,9 @@ fn build_transit_fare_matter(
         review_state: "draft".to_owned(),
         publication_state: "unpublished".to_owned(),
     };
-    store.insert_procurement_matter(&matter).map_err(|e| e.to_string())?;
+    store
+        .insert_procurement_matter(&matter)
+        .map_err(|e| e.to_string())?;
 
     // Locate the R26-023AB solicitation mirror record.
     let r26 = solicitation_records
@@ -350,7 +358,7 @@ fn build_transit_fare_matter(
             Some("2025-12-01".to_owned()),
             "Next-Generation Transit Fare Collection System RFI (R26-023AB) published on the City solicitation mirror"
                 .to_owned(),
-            &[identifier.id.clone()],
+            std::slice::from_ref(&identifier.id),
             "colorado-springs-solicitation-mirror",
         )?,
         insert_event(
@@ -360,7 +368,7 @@ fn build_transit_fare_matter(
             Some("2026-01-15".to_owned()),
             "Submitted questions and Mountain Metropolitan Transit responses published for R26-023AB"
                 .to_owned(),
-            &[identifier.id.clone()],
+            std::slice::from_ref(&identifier.id),
             "colorado-springs-solicitation-mirror",
         )?,
     ];
@@ -369,8 +377,14 @@ fn build_transit_fare_matter(
     // The linked documents are recorded as evidence pointers, never fetched.
     let _ = &r26.linked_documents;
 
-    // Reconciliation items reflecting the exact gaps. These are queued for
-    // human review, not auto-resolved.
+    seed_transit_fare_reconciliation(store, award_rows)?;
+    let _ = award_digest;
+    Ok(())
+}
+
+/// Seeds the reconciliation-review queue for the transit-fare matter. Each gap
+/// is queued for human review, never auto-resolved or converted into a fact.
+fn seed_transit_fare_reconciliation(store: &Store, award_rows: &[AwardRow]) -> Result<(), String> {
     let mut items: Vec<ReconciliationItem> = Vec::new();
     items.push(missing_document_item(
         TRANSIT_FARE_MATTER_ID,
@@ -384,13 +398,10 @@ fn build_transit_fare_matter(
         TRANSIT_FARE_MATTER_ID,
         "vendor-level expenditure evidence for R26-023AB (OpenBook provides budget-level data only)",
     ));
-    for item in &items {
-        store.insert_reconciliation_item(item).map_err(|e| e.to_string())?;
-    }
 
     // Confirm no award row references R26-023AB (RFI != award). If one ever
     // appears in a later snapshot, that is a connection to be reviewed, not
-    // assumed. Record any award-row identifier that is absent from this matter.
+    // assumed.
     for row in award_rows {
         if row.solicitation_id.eq_ignore_ascii_case("R26-023AB") {
             items.push(amount_conflict_item(
@@ -402,9 +413,10 @@ fn build_transit_fare_matter(
         }
     }
     for item in &items {
-        store.insert_reconciliation_item(item).map_err(|e| e.to_string())?;
+        store
+            .insert_reconciliation_item(item)
+            .map_err(|e| e.to_string())?;
     }
-    let _ = award_digest;
     Ok(())
 }
 
@@ -428,7 +440,9 @@ fn build_control_matter(
         review_state: "draft".to_owned(),
         publication_state: "unpublished".to_owned(),
     };
-    store.insert_procurement_matter(&matter).map_err(|e| e.to_string())?;
+    store
+        .insert_procurement_matter(&matter)
+        .map_err(|e| e.to_string())?;
 
     let identifier = ProcurementIdentifier {
         id: ProcurementIdentifier::id_for(
@@ -464,7 +478,9 @@ fn build_control_matter(
             normalized_alias: pnull_core::organization_alias_candidate(contractor),
             alias_reviewed: false,
         };
-        store.insert_procurement_organization(&org).map_err(|e| e.to_string())?;
+        store
+            .insert_procurement_organization(&org)
+            .map_err(|e| e.to_string())?;
     }
 
     // Award-announced event with the raw amount preserved as stated.
@@ -478,7 +494,7 @@ fn build_control_matter(
             "Award announced for {} (crack seal materials); raw awarded amount '{}'",
             row.solicitation_id, row.raw_amount
         ),
-        &[identifier.id.clone()],
+        std::slice::from_ref(&identifier.id),
         "colorado-springs-contract-awards",
     )?;
 
@@ -487,7 +503,9 @@ fn build_control_matter(
     for contractor in split_contractors(&row.contractor) {
         if let Some(alias) = pnull_core::organization_alias_candidate(contractor) {
             let item = vendor_alias_item(CONTROL_MATTER_ID, contractor, &alias);
-            store.insert_reconciliation_item(&item).map_err(|e| e.to_string())?;
+            store
+                .insert_reconciliation_item(&item)
+                .map_err(|e| e.to_string())?;
         }
     }
 
@@ -583,8 +601,6 @@ fn normalize_date(raw: &str) -> String {
     raw.to_owned()
 }
 
-/// Ensures a set of identifiers are all distinct (helper for hostile tests).
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -602,9 +618,7 @@ mod tests {
     fn run() -> DemoResult {
         let dir = tempdir().expect("temp");
         let store = Store::open(dir.path()).expect("store");
-        let result =
-            run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
-        result
+        run_demo(&store, &fixtures_dir(), dir.path()).expect("demo")
     }
 
     #[test]
@@ -682,8 +696,14 @@ mod tests {
 
     #[test]
     fn split_contractors_keeps_entities_separate() {
-        assert_eq!(split_contractors("Crafco & Maxwell"), vec!["Crafco", "Maxwell"]);
-        assert_eq!(split_contractors("C&D Electric and Sturgeon Electric"), vec!["C", "D Electric", "Sturgeon Electric"]);
+        assert_eq!(
+            split_contractors("Crafco & Maxwell"),
+            vec!["Crafco", "Maxwell"]
+        );
+        assert_eq!(
+            split_contractors("C&D Electric and Sturgeon Electric"),
+            vec!["C", "D Electric", "Sturgeon Electric"]
+        );
         assert_eq!(split_contractors("Optiv"), vec!["Optiv"]);
     }
 

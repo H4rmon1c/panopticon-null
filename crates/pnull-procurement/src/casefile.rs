@@ -56,7 +56,10 @@ pub fn build_content(
     let mut contradictions = Vec::new();
     let mut amounts: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for identifier in &identifiers {
-        let key = identifier.normalized.clone().unwrap_or_else(|| identifier.raw.clone());
+        let key = identifier
+            .normalized
+            .clone()
+            .unwrap_or_else(|| identifier.raw.clone());
         // Amounts live on events; here we note contradictions among raw forms.
         amounts.entry(key).or_default().push(identifier.raw.clone());
     }
@@ -171,7 +174,11 @@ pub fn render_markdown(content: &CaseFileContent) -> String {
     let _ = writeln!(out, "# Case File: {}\n", content.matter.title);
     let _ = writeln!(out, "**Jurisdiction:** {}  ", content.matter.jurisdiction);
     let _ = writeln!(out, "**Review state:** {}  ", content.matter.review_state);
-    let _ = writeln!(out, "**Publication state:** {}\n", content.matter.publication_state);
+    let _ = writeln!(
+        out,
+        "**Publication state:** {}\n",
+        content.matter.publication_state
+    );
 
     out.push_str("## Identifiers\n\n");
     if content.identifiers.is_empty() {
@@ -181,7 +188,9 @@ pub fn render_markdown(content: &CaseFileContent) -> String {
             let _ = writeln!(
                 out,
                 "- `{}` ({}; source {})",
-                identifier.raw, identifier.kind.label(), identifier.source_id
+                identifier.raw,
+                identifier.kind.label(),
+                identifier.source_id
             );
         }
         out.push('\n');
@@ -195,7 +204,9 @@ pub fn render_markdown(content: &CaseFileContent) -> String {
             let _ = writeln!(
                 out,
                 "- **{}** — {} (source {})",
-                org.raw_name, org.role.label(), org.source_id
+                org.raw_name,
+                org.role.label(),
+                org.source_id
             );
         }
         out.push('\n');
@@ -321,9 +332,7 @@ pub fn coverage_state_label(state: CoverageState) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pnull_core::{
-        IdentifierKind, OrganizationRole, ProcurementEventKind,
-    };
+    use pnull_core::{IdentifierKind, OrganizationRole, ProcurementEventKind};
 
     fn seed_matter(store: &pnull_core::Store, matter_id: &str) {
         let matter = ProcurementMatter {
@@ -364,7 +373,9 @@ mod tests {
             normalization_rule: Some("uppercase-alphanumeric-compact".to_owned()),
             known: false,
         };
-        store.insert_procurement_identifier(&identifier).expect("identifier");
+        store
+            .insert_procurement_identifier(&identifier)
+            .expect("identifier");
         let org = ProcurementOrganization {
             id: ProcurementOrganization::id_for(
                 matter_id,
@@ -387,7 +398,10 @@ mod tests {
         let store = pnull_core::Store::open(dir.path()).expect("store");
         seed_matter(&store, "matter:1");
         let content = build_content(&store, "matter:1").expect("content");
-        assert!(has_event_kind(&content, ProcurementEventKind::SolicitationPublished));
+        assert!(has_event_kind(
+            &content,
+            ProcurementEventKind::SolicitationPublished
+        ));
         let md = render_markdown(&content);
         assert!(md.contains("R26-023AB"));
         assert!(md.contains("Adarand Constructors"));

@@ -170,7 +170,8 @@ fn seed_rows(conn: &Connection) {
             "evidence:0136f043bcf653166033290ffa1522d406360e7b6345b4852af92e1739c584c3",
             "{\"kind\":\"finding\",\"state\":\"surveillance_technology\"}"
         ],
-    ).unwrap();
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO alerts(id, evidence_id, alert_json) VALUES (?1,?2,?3)",
         params![
@@ -181,16 +182,27 @@ fn seed_rows(conn: &Connection) {
     ).unwrap();
     conn.execute(
         "INSERT INTO approvals(alert_id, draft_digest, approved_at) VALUES (?1,?2,?3)",
-        params!["alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6", "demo-draft-digest", "2026-08-02T00:00:00Z"],
-    ).unwrap();
+        params![
+            "alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6",
+            "demo-draft-digest",
+            "2026-08-02T00:00:00Z"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO posts(alert_id, remote_ids_json, posted_at) VALUES (?1,?2,?3)",
-        params!["alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6", "[\"segment-1\",\"segment-2\"]", "2026-08-02T00:00:01Z"],
-    ).unwrap();
+        params![
+            "alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6",
+            "[\"segment-1\",\"segment-2\"]",
+            "2026-08-02T00:00:01Z"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO source_fetches(source_id, fetched_at_unix) VALUES (?1,?2)",
         params!["colorado-springs-legistar-events", 1_754_000_000],
-    ).unwrap();
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO post_segments(alert_id, segment_index, remote_id) VALUES (?1,?2,?3), (?1,?4,?5)",
         params!["alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6", 0, "segment-1", 1, "segment-2"],
@@ -219,22 +231,46 @@ fn seed_rows(conn: &Connection) {
     ).unwrap();
     conn.execute(
         "INSERT INTO source_reviews(id, source_id, review_json) VALUES (?1,?2,?3)",
-        params!["sr:1", "co", "{\"id\":\"sr:1\",\"source_id\":\"co\",\"reviewer\":\"operator\",\"note\":\"approved\"}"],
-    ).unwrap();
+        params![
+            "sr:1",
+            "co",
+            "{\"id\":\"sr:1\",\"source_id\":\"co\",\"reviewer\":\"operator\",\"note\":\"approved\"}"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO fetch_observations(id, source_id, observation_json) VALUES (?1,?2,?3)",
-        params!["fo:1", "co", "{\"id\":\"fo:1\",\"source_id\":\"co\",\"status_code\":200}"],
-    ).unwrap();
+        params![
+            "fo:1",
+            "co",
+            "{\"id\":\"fo:1\",\"source_id\":\"co\",\"status_code\":200}"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO x_attempts(id, alert_id, attempt_json) VALUES (?1,?2,?3)",
-        params!["xa:1", "alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6", "{\"id\":\"xa:1\",\"status\":\"posted\"}"],
-    ).unwrap();
+        params![
+            "xa:1",
+            "alert:94c9526803b6e122e8b4f31a05f21fe84535b948812d253d2817bc9f6a71b2c6",
+            "{\"id\":\"xa:1\",\"status\":\"posted\"}"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO x_reconciliations(id, attempt_id, reconciliation_json) VALUES (?1,?2,?3)",
-        params!["xr:1", "xa:1", "{\"id\":\"xr:1\",\"decision\":\"confirmed\"}"],
-    ).unwrap();
+        params![
+            "xr:1",
+            "xa:1",
+            "{\"id\":\"xr:1\",\"decision\":\"confirmed\"}"
+        ],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO publication_allowlists(id, allowlist_json) VALUES (?1,?2)",
-        params!["allow:1", "{\"id\":\"allow:1\",\"field_categories\":[\"quote\",\"locator\"]}"],
-    ).unwrap();
+        params![
+            "allow:1",
+            "{\"id\":\"allow:1\",\"field_categories\":[\"quote\",\"locator\"]}"
+        ],
+    )
+    .unwrap();
 }

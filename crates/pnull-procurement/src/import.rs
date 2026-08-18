@@ -5,9 +5,7 @@
 //! role, an operator declaration of lawful possession, and an exact file digest,
 //! and it never publishes without human review.
 
-use pnull_core::{
-    sha256_hex, stable_id,
-};
+use pnull_core::{sha256_hex, stable_id};
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
@@ -122,7 +120,10 @@ pub fn import_supplied_record(
         byte_count: bytes.len(),
         source_url,
         human_reviewed: false,
-        processing_provenance: format!("imported by {} on {}", declaration.operator, declaration.acquisition_date),
+        processing_provenance: format!(
+            "imported by {} on {}",
+            declaration.operator, declaration.acquisition_date
+        ),
     })
 }
 
@@ -193,8 +194,7 @@ mod tests {
         let f = dir.path().join("r.pdf");
         fs::write(&f, b"official record bytes").unwrap();
         let decl = valid_declaration(&f);
-        let record =
-            import_supplied_record(dir.path(), &f, &decl, 1000).expect("import");
+        let record = import_supplied_record(dir.path(), &f, &decl, 1000).expect("import");
         assert_eq!(record.observed_digest, digest(b"official record bytes"));
         assert!(!record.human_reviewed);
         assert!(record.source_url.is_some());

@@ -17,8 +17,8 @@ pub use migrate::{SCHEMA_VERSION, migrate};
 pub use procurement::{
     CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
     MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
-    ProcurementMatter, ProcurementOrganization, RecordChange, ReconciliationDecision,
-    ReconciliationItem, ReconciliationKind, SnapshotDiff, SnapshotRevision, SourceAuthority,
+    ProcurementMatter, ProcurementOrganization, ReconciliationDecision, ReconciliationItem,
+    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SourceAuthority,
     SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
     organization_exact_match, parse_money, sha256_manifest,
 };
@@ -993,7 +993,10 @@ impl Store {
         )? == 1)
     }
 
-    pub fn snapshot_revisions(&self, snapshot_id: &str) -> Result<Vec<SnapshotRevision>, CoreError> {
+    pub fn snapshot_revisions(
+        &self,
+        snapshot_id: &str,
+    ) -> Result<Vec<SnapshotRevision>, CoreError> {
         self.read_json_rows(
             "SELECT revision_json FROM snapshot_revisions WHERE snapshot_id = ?1 ORDER BY json_extract(revision_json, '$.recorded_at')",
             &[snapshot_id],
@@ -1016,7 +1019,9 @@ impl Store {
                 |row| row.get(0),
             )
             .optional()?;
-        json.map(|j| serde_json::from_str(&j)).transpose().map_err(CoreError::from)
+        json.map(|j| serde_json::from_str(&j))
+            .transpose()
+            .map_err(CoreError::from)
     }
 
     pub fn insert_reconciliation_item(&self, item: &ReconciliationItem) -> Result<bool, CoreError> {
@@ -1073,7 +1078,11 @@ impl Store {
     pub fn insert_case_file(&self, case_file: &CaseFile) -> Result<bool, CoreError> {
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO case_files(id, matter_id, case_file_json) VALUES (?1, ?2, ?3)",
-            params![case_file.id, case_file.matter_id, serde_json::to_string(case_file)?],
+            params![
+                case_file.id,
+                case_file.matter_id,
+                serde_json::to_string(case_file)?
+            ],
         )? == 1)
     }
 

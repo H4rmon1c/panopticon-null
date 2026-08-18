@@ -332,7 +332,9 @@ mod tests {
     /// Counts rows in a set of v0.0.2 tables as a byte-for-byte preservation check.
     fn count_table(connection: &Connection, table: &str) -> i64 {
         connection
-            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
             .expect("count")
     }
 

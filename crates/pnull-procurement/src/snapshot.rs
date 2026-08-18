@@ -8,8 +8,8 @@
 //! produced. Old artifacts and their derived observations are never rewritten.
 
 use pnull_core::{
-    CoverageEntry, CoverageState, FetchObservation, RecordChange, SnapshotDiff,
-    SnapshotRevision, SourceSnapshot, SourceAuthority, sha256_hex,
+    CoverageEntry, CoverageState, FetchObservation, RecordChange, SnapshotDiff, SnapshotRevision,
+    SourceAuthority, SourceSnapshot, sha256_hex,
 };
 use thiserror::Error;
 
@@ -69,7 +69,11 @@ impl Acquisition {
     }
 
     /// A source snapshot referencing the exact persisted bytes.
-    pub fn snapshot(&self, record_count: Option<u64>, supersedes: Option<String>) -> SourceSnapshot {
+    pub fn snapshot(
+        &self,
+        record_count: Option<u64>,
+        supersedes: Option<String>,
+    ) -> SourceSnapshot {
         SourceSnapshot {
             id: SourceSnapshot::id_for(&self.source_id, &self.bytes_digest),
             source_id: self.source_id.clone(),
@@ -113,14 +117,10 @@ pub fn record_diff(
     new_rows: &[RecordRow],
 ) -> SnapshotDiff {
     let mut changes = Vec::new();
-    let old_map: std::collections::BTreeMap<&str, &RecordRow> = old_rows
-        .iter()
-        .map(|row| (row.key.as_str(), row))
-        .collect();
-    let new_map: std::collections::BTreeMap<&str, &RecordRow> = new_rows
-        .iter()
-        .map(|row| (row.key.as_str(), row))
-        .collect();
+    let old_map: std::collections::BTreeMap<&str, &RecordRow> =
+        old_rows.iter().map(|row| (row.key.as_str(), row)).collect();
+    let new_map: std::collections::BTreeMap<&str, &RecordRow> =
+        new_rows.iter().map(|row| (row.key.as_str(), row)).collect();
 
     for (key, old_row) in &old_map {
         match new_map.get(key) {
@@ -129,13 +129,11 @@ pub fn record_diff(
                 row_key: (*key).to_owned(),
                 summary: format!("record {key} disappeared from the later snapshot"),
             }),
-            Some(new_row) if new_row.canonical != old_row.canonical => changes.push(
-                RecordChange {
-                    kind: "changed".to_owned(),
-                    row_key: (*key).to_owned(),
-                    summary: format!("record {key} changed between snapshots"),
-                },
-            ),
+            Some(new_row) if new_row.canonical != old_row.canonical => changes.push(RecordChange {
+                kind: "changed".to_owned(),
+                row_key: (*key).to_owned(),
+                summary: format!("record {key} changed between snapshots"),
+            }),
             _ => {}
         }
     }
@@ -282,12 +280,24 @@ mod tests {
     #[test]
     fn record_diff_detects_added_changed_removed() {
         let old = vec![
-            RecordRow { key: "A".into(), canonical: "A1".into() },
-            RecordRow { key: "B".into(), canonical: "B1".into() },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
         ];
         let new = vec![
-            RecordRow { key: "A".into(), canonical: "A2".into() },
-            RecordRow { key: "C".into(), canonical: "C1".into() },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A2".into(),
+            },
+            RecordRow {
+                key: "C".into(),
+                canonical: "C1".into(),
+            },
         ];
         let diff = record_diff("old", "new", "src", &old, &new);
         let kinds: Vec<&str> = diff.changes.iter().map(|c| c.kind.as_str()).collect();
@@ -301,12 +311,24 @@ mod tests {
     #[test]
     fn record_diff_ignores_reordering() {
         let old = vec![
-            RecordRow { key: "A".into(), canonical: "A1".into() },
-            RecordRow { key: "B".into(), canonical: "B1".into() },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
         ];
         let new = vec![
-            RecordRow { key: "B".into(), canonical: "B1".into() },
-            RecordRow { key: "A".into(), canonical: "A1".into() },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
         ];
         let diff = record_diff("old", "new", "src", &old, &new);
         assert!(diff.changes.is_empty(), "reordering is not a change");
@@ -317,8 +339,7 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
-        let (snap1, diff1) =
-            record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
+        let (snap1, diff1) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
         assert!(diff1.is_none());
         let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
         let (snap2, diff2) =
@@ -352,8 +373,7 @@ mod tests {
         let first = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T00:00:00Z");
         let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
         let unchanged = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T01:00:00Z");
-        let unchanged_flag =
-            record_unchanged(&store, &unchanged, &snap1).expect("unchanged");
+        let unchanged_flag = record_unchanged(&store, &unchanged, &snap1).expect("unchanged");
         assert!(unchanged_flag);
         // Still only one snapshot; coverage ledger gained a 304 entry.
         assert_eq!(store.source_snapshots("src").expect("list").len(), 1);

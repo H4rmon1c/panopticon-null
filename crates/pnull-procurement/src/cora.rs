@@ -9,7 +9,7 @@
 //! operator/legal review is required. It avoids requesting person-level data
 //! unless directly necessary and lawfully justified.
 
-use pnull_core::{CoraDraft, ProcurementMatter, ProcurementIdentifier};
+use pnull_core::{CoraDraft, ProcurementIdentifier, ProcurementMatter};
 use std::fmt::Write as _;
 use thiserror::Error;
 
@@ -22,8 +22,7 @@ pub enum CoraError {
 }
 
 /// The mandatory review statement appended to every draft.
-pub const REVIEW_REQUIRED: &str =
-    "This is a locally generated draft for operator and legal review. It has not been \
+pub const REVIEW_REQUIRED: &str = "This is a locally generated draft for operator and legal review. It has not been \
      submitted, and no recipient has been selected. Verify the current law, the correct \
      recipient, and the sufficiency of the request before any use.";
 
@@ -65,7 +64,10 @@ pub fn build_draft(
         matter_id: matter.id.clone(),
         institution: CITY_DEPARTMENT.to_owned(),
         identifiers: identifier_list,
-        missing_record_types: missing_record_types.iter().map(|s| (*s).to_owned()).collect(),
+        missing_record_types: missing_record_types
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect(),
         date_range,
         vendor_or_project: vendor_or_project.map(str::to_owned),
         sources_checked: sources_checked.iter().map(|s| (*s).to_owned()).collect(),
@@ -203,7 +205,10 @@ mod tests {
             &["executed contract", "award notice"],
             Some((Some("2025-06-01".to_owned()), Some("2026-01-31".to_owned()))),
             Some("Next-Generation Transit Fare Collection System"),
-            &["colorado-springs-contract-awards", "colorado-springs-solicitation-mirror"],
+            &[
+                "colorado-springs-contract-awards",
+                "colorado-springs-solicitation-mirror",
+            ],
         );
         assert!(draft.markdown.contains("not submitted"));
         assert!(draft.markdown.contains("R26-023AB"));
@@ -224,13 +229,31 @@ mod tests {
     #[test]
     fn empty_gaps_are_stated_not_invented() {
         let draft = build_draft(&matter(), &[], &[], None, None, &[]);
-        assert!(draft.markdown.contains("Not observed in the checked sources."));
+        assert!(
+            draft
+                .markdown
+                .contains("Not observed in the checked sources.")
+        );
     }
 
     #[test]
     fn draft_is_deterministic() {
-        let a = build_draft(&matter(), &[identifier()], &["award"], None, Some("X"), &["s1"]);
-        let b = build_draft(&matter(), &[identifier()], &["award"], None, Some("X"), &["s1"]);
+        let a = build_draft(
+            &matter(),
+            &[identifier()],
+            &["award"],
+            None,
+            Some("X"),
+            &["s1"],
+        );
+        let b = build_draft(
+            &matter(),
+            &[identifier()],
+            &["award"],
+            None,
+            Some("X"),
+            &["s1"],
+        );
         assert_eq!(a.markdown, b.markdown);
         assert_eq!(a.id, b.id);
     }

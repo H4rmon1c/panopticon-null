@@ -17,7 +17,8 @@ use crate::{sha256_hex, stable_id};
 #[serde(rename_all = "snake_case")]
 pub enum SourceAuthority {
     /// The controlling procurement version (e.g., `BidNet` / `Bonfire`).
-    AuthoritativeProcurementRecord,    /// City-hosted copy that is informative but explicitly not controlling.
+    AuthoritativeProcurementRecord,
+    /// City-hosted copy that is informative but explicitly not controlling.
     OfficialInformationalMirror,
     /// Official budget/expenditure data export.
     OfficialFinancialExport,
@@ -327,7 +328,12 @@ pub struct ProcurementEvent {
 }
 
 impl ProcurementEvent {
-    pub fn id_for(matter_id: &str, kind: ProcurementEventKind, date: &str, summary: &str) -> String {
+    pub fn id_for(
+        matter_id: &str,
+        kind: ProcurementEventKind,
+        date: &str,
+        summary: &str,
+    ) -> String {
         stable_id("proc-event", &[matter_id, kind.label(), date, summary])
     }
 }
@@ -793,9 +799,23 @@ mod tests {
     fn property_money_never_floats_and_round_trips() {
         // Invariant: parsing never produces a fractional cent and never panics.
         let samples = [
-            "$0", "$0.00", "N/A", "various", "$0.00 IDIQ", "$1.00", "$-1.00",
-            "$1,234,567.89", "$1.5", "1.5.5", "", "$999999999999999999999999.99",
-            "€50.00", "$300,000 each", "12,34", "1,000", "0.000",
+            "$0",
+            "$0.00",
+            "N/A",
+            "various",
+            "$0.00 IDIQ",
+            "$1.00",
+            "$-1.00",
+            "$1,234,567.89",
+            "$1.5",
+            "1.5.5",
+            "",
+            "$999999999999999999999999.99",
+            "€50.00",
+            "$300,000 each",
+            "12,34",
+            "1,000",
+            "0.000",
         ];
         for sample in samples {
             let value = parse_money(sample);
@@ -819,24 +839,42 @@ mod tests {
         let a = normalize_identifier("R26-023AB");
         let b = normalize_identifier("r26-023ab");
         assert_eq!(a, b);
-        assert_eq!(a, Some(("R26023AB".to_owned(), "uppercase-alphanumeric-compact")));
+        assert_eq!(
+            a,
+            Some(("R26023AB".to_owned(), "uppercase-alphanumeric-compact"))
+        );
     }
 
     #[test]
     fn identifiers_never_merge_different_formats_without_rule() {
         // A plain rule exists, but the system must still require an explicit
         // rule + test before treating two different raw strings as equal.
-        assert_eq!(identifier_match_key("R26-023AB"), identifier_match_key("r26-023ab"));
+        assert_eq!(
+            identifier_match_key("R26-023AB"),
+            identifier_match_key("r26-023ab")
+        );
         // Distinct identifiers must not collide under the exact rule.
-        assert_ne!(identifier_match_key("R26-023AB"), identifier_match_key("R26-023AC"));
-        assert_ne!(identifier_match_key("Q25-130ZM"), identifier_match_key("R24-T114JD"));
+        assert_ne!(
+            identifier_match_key("R26-023AB"),
+            identifier_match_key("R26-023AC")
+        );
+        assert_ne!(
+            identifier_match_key("Q25-130ZM"),
+            identifier_match_key("R24-T114JD")
+        );
     }
 
     #[test]
     fn property_identifier_keys_are_functional_and_non_colliding() {
         // Invariant: the exact-match key is a function of the identifier and
         // preserves inequality of distinct identifiers (no spurious merges).
-        let raw = ["R26-023AB", "r26-023ab", "R26-023AC", "IFB-2024-001", "ifb-2024-001"];
+        let raw = [
+            "R26-023AB",
+            "r26-023ab",
+            "R26-023AC",
+            "IFB-2024-001",
+            "ifb-2024-001",
+        ];
         let keys: Vec<Option<String>> = raw.iter().map(|s| identifier_match_key(s)).collect();
         assert_eq!(keys[0], keys[1], "case-insensitive variant must match");
         assert_eq!(keys[3], keys[4]);
@@ -847,7 +885,10 @@ mod tests {
     #[test]
     fn organization_exact_match_never_merges_non_exact() {
         // Identical raw names match exactly.
-        assert!(organization_exact_match("Adarand Constructors", "Adarand Constructors"));
+        assert!(organization_exact_match(
+            "Adarand Constructors",
+            "Adarand Constructors"
+        ));
         // Different names (even similar) are NOT auto-merged.
         assert!(!organization_exact_match("Adarand Constructors", "Adarand"));
         assert!(!organization_exact_match("Crafco & Maxwell", "Crafco"));
@@ -859,7 +900,13 @@ mod tests {
     fn property_organization_aliases_are_candidates_only() {
         // Invariant: the candidate rule is deterministic, and a non-identical
         // raw pair is never an exact match.
-        for name in ["Acme Inc.", "Acme, Inc.", "Acme LLC", "ACME", "Acme Corporation"] {
+        for name in [
+            "Acme Inc.",
+            "Acme, Inc.",
+            "Acme LLC",
+            "ACME",
+            "Acme Corporation",
+        ] {
             let _ = organization_alias_candidate(name);
         }
         assert!(!organization_exact_match("Acme Inc.", "Acme LLC"));

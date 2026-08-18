@@ -62,11 +62,7 @@ pub fn candidate_identifier_item(
 }
 
 /// Builds a reconciliation-review item for a vendor alias candidate.
-pub fn vendor_alias_item(
-    matter_id: &str,
-    name_a: &str,
-    name_b: &str,
-) -> ReconciliationItem {
+pub fn vendor_alias_item(matter_id: &str, name_a: &str, name_b: &str) -> ReconciliationItem {
     let summary = format!("vendor alias candidate: {name_a} vs {name_b}");
     ReconciliationItem {
         id: ReconciliationItem::id_for(matter_id, ReconciliationKind::VendorAlias, &summary),
@@ -107,11 +103,7 @@ pub fn amount_conflict_item(
 pub fn vanished_record_item(matter_id: &str, record_key: &str) -> ReconciliationItem {
     let summary = format!("record {record_key} vanished from a later snapshot");
     ReconciliationItem {
-        id: ReconciliationItem::id_for(
-            matter_id,
-            ReconciliationKind::VanishedRecord,
-            &summary,
-        ),
+        id: ReconciliationItem::id_for(matter_id, ReconciliationKind::VanishedRecord, &summary),
         matter_id: matter_id.to_owned(),
         kind: ReconciliationKind::VanishedRecord,
         summary,
@@ -125,11 +117,7 @@ pub fn vanished_record_item(matter_id: &str, record_key: &str) -> Reconciliation
 pub fn missing_document_item(matter_id: &str, description: &str) -> ReconciliationItem {
     let summary = format!("missing document: {description}");
     ReconciliationItem {
-        id: ReconciliationItem::id_for(
-            matter_id,
-            ReconciliationKind::MissingDocument,
-            &summary,
-        ),
+        id: ReconciliationItem::id_for(matter_id, ReconciliationKind::MissingDocument, &summary),
         matter_id: matter_id.to_owned(),
         kind: ReconciliationKind::MissingDocument,
         summary,
@@ -162,9 +150,7 @@ pub fn record_decision(
 
 /// A stable digest binding a reconciliation item to its decision history.
 pub fn reconciliation_binding_digest(item: &ReconciliationItem) -> String {
-    sha256_hex(
-        format!("{}\0{}\0{}", item.id, item.kind.label(), item.summary).as_bytes(),
-    )
+    sha256_hex(format!("{}\0{}\0{}", item.id, item.kind.label(), item.summary).as_bytes())
 }
 
 #[cfg(test)]
@@ -196,7 +182,10 @@ mod tests {
         assert_eq!(exact_identifier_match(&a, &b), Ok(true));
         // Differently formatted identifiers never auto-match.
         let c = id("m", "R26-023AC");
-        assert_eq!(exact_identifier_match(&a, &c), Err(ReconcileError::NotExactMatch));
+        assert_eq!(
+            exact_identifier_match(&a, &c),
+            Err(ReconcileError::NotExactMatch)
+        );
     }
 
     #[test]
@@ -212,7 +201,10 @@ mod tests {
             normalization_rule: None,
             ..id("m", "R26-023AB")
         };
-        assert_eq!(exact_identifier_match(&a, &b), Err(ReconcileError::NotExactMatch));
+        assert_eq!(
+            exact_identifier_match(&a, &b),
+            Err(ReconcileError::NotExactMatch)
+        );
     }
 
     #[test]
@@ -229,8 +221,15 @@ mod tests {
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let item = vendor_alias_item("m", "A", "B");
         store.insert_reconciliation_item(&item).expect("insert");
-        record_decision(&store, &item.id, "accept", "op", "confirmed alias", "2026-08-17T00:00:00Z")
-            .expect("decision");
+        record_decision(
+            &store,
+            &item.id,
+            "accept",
+            "op",
+            "confirmed alias",
+            "2026-08-17T00:00:00Z",
+        )
+        .expect("decision");
         let decisions = store.reconciliation_decisions(&item.id).expect("list");
         assert_eq!(decisions.len(), 1);
         assert_eq!(decisions[0].decision, "accept");

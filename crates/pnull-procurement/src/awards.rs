@@ -74,8 +74,8 @@ pub fn parse_awards_table(html: &str, snapshot_digest: &str) -> Result<Vec<Award
             // expected columns; anything else is a schema/layout drift we
             // refuse rather than silently shifting columns.
             header_seen = true;
-            let is_header = cells[0].eq_ignore_ascii_case("RFP/IFB Number")
-                || cells[0].contains("RFP/IFB");
+            let is_header =
+                cells[0].eq_ignore_ascii_case("RFP/IFB Number") || cells[0].contains("RFP/IFB");
             if !is_header || cells.len() != 6 {
                 return Err(AwardsError::UnexpectedColumns(cells.join(" | ")));
             }
@@ -139,10 +139,7 @@ pub fn award_organization(
 }
 
 /// Builds a procurement identifier from an award row's solicitation id.
-pub fn award_identifier(
-    matter_id: &str,
-    solicitation_id: &str,
-) -> Option<ProcurementIdentifier> {
+pub fn award_identifier(matter_id: &str, solicitation_id: &str) -> Option<ProcurementIdentifier> {
     if solicitation_id.trim().is_empty() {
         return None;
     }
@@ -270,8 +267,12 @@ mod tests {
     #[test]
     fn hostile_malformed_html_does_not_panic() {
         let cases = [
-            "<table", "<table class=table>", "<table><tr>", "<html",
-            "<td><td>", "broken</table></table>",
+            "<table",
+            "<table class=table>",
+            "<table><tr>",
+            "<html",
+            "<td><td>",
+            "broken</table></table>",
             "<table class=\"table\"><tr><td colspan=\"99\">x</td></tr></table>",
         ];
         for case in cases {
@@ -280,11 +281,60 @@ mod tests {
     }
 
     #[test]
+    fn unicode_and_hostile_vendor_names_are_preserved() {
+        // Hostile / Unicode names must parse and be preserved verbatim, never
+        // misinterpreted as column shifts or dropped. (A literal `<script>`
+        // tag is parsed as markup by the HTML parser, so the hostile name uses
+        // text that survives HTML parsing, including an RTL override.)
+        let html = html_for(&[
+            "Q25-130ZM|LogRhythm Renewal|ÅB̊Ĉ 日本語 株式会社|$42,075.00|February 1, 2026|",
+            "R24-T114JD|On-Call Guardrail|Acme & Sons \u{202e}< not-a-tag|N/A|January 1, 2025|",
+        ]);
+        let rows = parse_awards_table(&html, DIGEST).expect("parse");
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].contractor.contains("日本語"));
+        assert!(rows[1].contractor.contains("Acme & Sons"));
+        // Columns did not shift: amount is still column 4.
+        assert_eq!(rows[0].amount.state, MoneyState::Exact);
+        assert_eq!(rows[1].amount.state, MoneyState::NotApplicable);
+    }
+
+    #[test]
+    fn duplicate_rows_are_preserved_not_silently_deduped() {
+        // Two rows sharing the same solicitation id (e.g., a joint award with
+        // separate contractor lines) must both be preserved.
+        let html = html_for(&[
+            "R21-T107KK|Rental Equipment|United Rentals|$0.00 IDIQ|January 1, 2022|",
+            "R21-T107KK|Rental Equipment|Herc Rentals Inc.|$0.00 IDIQ|January 1, 2022|",
+        ]);
+        let rows = parse_awards_table(&html, DIGEST).expect("parse");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].contractor, "United Rentals");
+        assert_eq!(rows[1].contractor, "Herc Rentals Inc.");
+    }
+
+    #[test]
+    fn deeply_nested_html_does_not_panic_or_shift() {
+        // Deeply nested / malformed tables must not panic; a valid nested table
+        // is not mis-read as the award table.
+        let deep = format!(
+            "<table class=\"table\"><tr><th>RFP/IFB Number</th><th>Project Name</th>\
+             <th>Awarded Contractor</th><th>Awarded Amount</th><th>Contract Start Date</th>\
+             <th>Notes</th></tr>{}</table>",
+            "<tr><td>Q25-130ZM</td><td>X</td><td>Y</td><td>$1.00</td><td>2026</td><td>n</td></tr>"
+        );
+        let _ = parse_awards_table(&deep, DIGEST).expect("deep nested parses");
+    }
+
+    #[test]
     fn identifiers_are_classified() {
         assert_eq!(classify_identifier("RFP-2024-01"), IdentifierKind::Rfp);
         assert_eq!(classify_identifier("RFQ-2024-01"), IdentifierKind::Rfq);
         assert_eq!(classify_identifier("IFB-2024-01"), IdentifierKind::Ifb);
-        assert_eq!(classify_identifier("R26-023AB"), IdentifierKind::SolicitationNumber);
+        assert_eq!(
+            classify_identifier("R26-023AB"),
+            IdentifierKind::SolicitationNumber
+        );
         assert_eq!(classify_identifier("unknown"), IdentifierKind::Unknown);
     }
 }

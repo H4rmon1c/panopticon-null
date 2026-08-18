@@ -11,9 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
-use pnull_core::{
-    CoverageEntry, CoverageState, SourceAuthority, Store, sha256_hex,
-};
+use pnull_core::{CoverageEntry, CoverageState, SourceAuthority, Store, sha256_hex};
 use pnull_procurement::{
     Acquisition, OpenBookFinding, build_cora_draft, generate_case_file, import_supplied_record,
     parse_awards_table, parse_solicitations, record_snapshot,
@@ -27,19 +25,15 @@ const DEFAULT_SOLICITATIONS_FIXTURE: &str = "fixtures/procurement/solicitations.
 const OFFLINE_RETRIEVED_AT: &str = "2026-08-17T00:00:00Z";
 
 /// Run `procurement ingest solicitations` (offline from a fixture snapshot).
-pub fn ingest_solicitations(
-    store: &Store,
-    source_path: &str,
-    live: bool,
-) -> Result<()> {
+pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Result<()> {
     if live {
         require_review_for_live(store, "colorado-springs-solicitation-mirror")?;
     }
     let bytes = read_fixture(source_path, DEFAULT_SOLICITATIONS_FIXTURE)?;
     let digest = sha256_hex(&bytes);
     let html = String::from_utf8_lossy(&bytes);
-    let records = parse_solicitations(&html, &digest)
-        .context("parse solicitation mirror snapshot")?;
+    let records =
+        parse_solicitations(&html, &digest).context("parse solicitation mirror snapshot")?;
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-solicitation-mirror".to_owned(),
@@ -66,7 +60,8 @@ pub fn ingest_solicitations(
     )?;
 
     for record in &records {
-        if let Some(identifier) = pnull_procurement::solicitation_identifier("proc:matters", record) {
+        if let Some(identifier) = pnull_procurement::solicitation_identifier("proc:matters", record)
+        {
             store.insert_procurement_identifier(&identifier)?;
         }
     }
@@ -76,7 +71,9 @@ pub fn ingest_solicitations(
         source_path,
         digest
     );
-    println!("note: this is an informational mirror; it does not represent every solicitation. BidNet and Bonfire remain authoritative.");
+    println!(
+        "note: this is an informational mirror; it does not represent every solicitation. BidNet and Bonfire remain authoritative."
+    );
     Ok(())
 }
 
@@ -92,15 +89,17 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-contract-awards".to_owned(),
-        source_url: "https://coloradosprings.gov/procurement-services/page/contract-award-information"
-            .to_owned(),
+        source_url:
+            "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+                .to_owned(),
         retrieved_at: OFFLINE_RETRIEVED_AT.to_owned(),
         bytes_digest: digest.clone(),
         content_type: Some("text/html".to_owned()),
         etag: None,
         last_modified: None,
-        final_url: "https://coloradosprings.gov/procurement-services/page/contract-award-information"
-            .to_owned(),
+        final_url:
+            "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+                .to_owned(),
         redirect_history: Vec::new(),
         parser_version: "awards-1.0".to_owned(),
         schema_version: 2,
@@ -117,7 +116,8 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
     )?;
 
     for row in &rows {
-        if let Some(identifier) = pnull_procurement::award_identifier("proc:matters", &row.solicitation_id)
+        if let Some(identifier) =
+            pnull_procurement::award_identifier("proc:matters", &row.solicitation_id)
         {
             store.insert_procurement_identifier(&identifier)?;
         }
@@ -133,6 +133,40 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
         source_path,
         digest
     );
+    Ok(())
+}
+
+/// Run `procurement export-awards` — write a formula-neutralized CSV of the
+/// parsed contract-award rows for human review.
+pub fn export_awards(store: &Store, source_path: &str, output: &Path) -> Result<()> {
+    let bytes = read_fixture(source_path, DEFAULT_AWARDS_FIXTURE)?;
+    let html = String::from_utf8_lossy(&bytes);
+    let rows =
+        parse_awards_table(&html, &sha256_hex(&bytes)).context("parse contract-award snapshot")?;
+    let header = [
+        "RFP/IFB Number",
+        "Project Name",
+        "Awarded Contractor",
+        "Awarded Amount",
+        "Contract Start Date",
+        "Notes",
+    ];
+    let mut data = Vec::new();
+    for row in &rows {
+        data.push(vec![
+            row.solicitation_id.clone(),
+            row.project_name.clone(),
+            row.contractor.clone(),
+            row.raw_amount.clone(),
+            row.start_date.clone(),
+            row.notes.clone(),
+        ]);
+    }
+    let csv = pnull_procurement::rows_to_csv(&header, &data).map_err(|e| anyhow!(e.to_string()))?;
+    fs::write(output, csv)?;
+    println!("wrote {} award row(s) to {}", rows.len(), output.display());
+    println!("note: spreadsheet-formula injection is neutralized in the export.");
+    let _ = store;
     Ok(())
 }
 
@@ -204,19 +238,27 @@ pub fn show_matter(store: &Store, matter_id: &str) -> Result<()> {
     let matter = store.procurement_matter(matter_id)?;
     println!("matter {} ({})", matter.id, matter.title);
     println!("  jurisdiction: {}", matter.jurisdiction);
-    println!("  review: {} publication: {}", matter.review_state, matter.publication_state);
+    println!(
+        "  review: {} publication: {}",
+        matter.review_state, matter.publication_state
+    );
     let identifiers = store.procurement_identifiers(matter_id)?;
     for id in &identifiers {
         println!(
             "  identifier {} [{}] source {} normalized {:?}",
-            id.raw, id.kind.label(), id.source_id, id.normalized
+            id.raw,
+            id.kind.label(),
+            id.source_id,
+            id.normalized
         );
     }
     let orgs = store.procurement_organizations(matter_id)?;
     for org in &orgs {
         println!(
             "  organization {} [{}] source {}",
-            org.raw_name, org.role.label(), org.source_id
+            org.raw_name,
+            org.role.label(),
+            org.source_id
         );
     }
     let events = store.procurement_events(matter_id)?;
@@ -254,6 +296,54 @@ pub fn gaps(store: &Store, matter_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Run `procurement reconcile <matter>` — manage the reconciliation-review queue.
+///
+/// With no decision flags, lists every pending item and its decision state. With
+/// `--item`, `--decision`, `--operator`, and `--note`, records an immutable
+/// auditable human decision on that item.
+pub fn reconcile_matter(
+    store: &Store,
+    matter_id: &str,
+    item_id: Option<&str>,
+    decision: Option<&str>,
+    operator: Option<&str>,
+    note: Option<&str>,
+    decided_at: &str,
+) -> Result<()> {
+    let _ = store.procurement_matter(matter_id)?;
+    match (item_id, decision, operator, note) {
+        (Some(item), Some(decision), Some(operator), Some(note)) => {
+            pnull_procurement::record_decision(store, item, decision, operator, note, decided_at)
+                .map_err(|e| anyhow!(e.to_string()))?;
+            println!("recorded decision '{decision}' on {item} (operator {operator})");
+            Ok(())
+        }
+        (None, None, None, None) => {
+            let items = store.all_reconciliation_items()?;
+            let matter_items: Vec<_> = items.iter().filter(|i| i.matter_id == matter_id).collect();
+            println!("reconciliation-review queue for {matter_id}:");
+            if matter_items.is_empty() {
+                println!("  no pending reconciliation items");
+            }
+            for item in &matter_items {
+                let current = store.current_reconciliation_decision(&item.id)?;
+                println!(
+                    "  {} | {} | state {} | decision {}",
+                    item.id,
+                    item.summary,
+                    item.state,
+                    current.map_or("none".to_owned(), |d| d.decision.clone())
+                );
+            }
+            Ok(())
+        }
+        _ => bail!(
+            "reconcile requires either no flags (to list the queue) or all of \
+             --item --decision --operator --note (to record a decision)"
+        ),
+    }
+}
+
 /// Run `coverage show`.
 pub fn coverage_show(store: &Store) -> Result<()> {
     let entries = store.all_coverage_entries()?;
@@ -284,18 +374,34 @@ pub fn coverage_diff(store: &Store, old_snapshot: &str, new_snapshot: &str) -> R
     let old = store.source_snapshot(old_snapshot)?;
     let new = store.source_snapshot(new_snapshot)?;
     if old.source_id != new.source_id {
-        bail!("snapshots are from different sources: {} vs {}", old.source_id, new.source_id);
+        bail!(
+            "snapshots are from different sources: {} vs {}",
+            old.source_id,
+            new.source_id
+        );
     }
     // Deterministic placeholder rows: both snapshots store their record counts.
     let old_rows = vec![pnull_procurement::RecordRow {
         key: "snapshot".to_owned(),
-        canonical: format!("count={:?} digest={}", old.record_count, old.persisted_digest),
+        canonical: format!(
+            "count={:?} digest={}",
+            old.record_count, old.persisted_digest
+        ),
     }];
     let new_rows = vec![pnull_procurement::RecordRow {
         key: "snapshot".to_owned(),
-        canonical: format!("count={:?} digest={}", new.record_count, new.persisted_digest),
+        canonical: format!(
+            "count={:?} digest={}",
+            new.record_count, new.persisted_digest
+        ),
     }];
-    let diff = pnull_procurement::record_diff(old_snapshot, new_snapshot, &old.source_id, &old_rows, &new_rows);
+    let diff = pnull_procurement::record_diff(
+        old_snapshot,
+        new_snapshot,
+        &old.source_id,
+        &old_rows,
+        &new_rows,
+    );
     if diff.changes.is_empty() {
         println!("no record-level changes between {old_snapshot} and {new_snapshot}");
     } else {
@@ -310,7 +416,8 @@ pub fn coverage_diff(store: &Store, old_snapshot: &str, new_snapshot: &str) -> R
 pub fn case_build(store: &Store, matter_id: &str, output_dir: &Path) -> Result<()> {
     let case_file = generate_case_file(store, matter_id, OFFLINE_RETRIEVED_AT)
         .map_err(|e| anyhow!(e.to_string()))?;
-    let content = pnull_procurement::build_content(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
+    let content =
+        pnull_procurement::build_content(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
     fs::create_dir_all(output_dir)?;
     let json_path = output_dir.join("case-file.json");
     let md_path = output_dir.join("case-file.md");
@@ -318,7 +425,8 @@ pub fn case_build(store: &Store, matter_id: &str, output_dir: &Path) -> Result<(
     fs::write(&md_path, pnull_procurement::render_case_markdown(&content))?;
     println!(
         "built case file {} (state {})",
-        case_file.id, case_file.state.label()
+        case_file.id,
+        case_file.state.label()
     );
     println!("  json: {}", json_path.display());
     println!("  markdown: {}", md_path.display());
@@ -331,7 +439,11 @@ pub fn case_build(store: &Store, matter_id: &str, output_dir: &Path) -> Result<(
 pub fn cora_draft(store: &Store, matter_id: &str) -> Result<()> {
     let matter = store.procurement_matter(matter_id)?;
     let identifiers = store.procurement_identifiers(matter_id)?;
-    let missing = vec!["executed contract", "award notice", "vendor-level expenditure evidence"];
+    let missing = vec![
+        "executed contract",
+        "award notice",
+        "vendor-level expenditure evidence",
+    ];
     let sources_checked = vec![
         "colorado-springs-contract-awards",
         "colorado-springs-solicitation-mirror",
@@ -352,7 +464,11 @@ pub fn cora_draft(store: &Store, matter_id: &str) -> Result<()> {
 }
 
 fn read_fixture(source_path: &str, default: &str) -> Result<Vec<u8>> {
-    let path = if source_path.trim().is_empty() { default } else { source_path };
+    let path = if source_path.trim().is_empty() {
+        default
+    } else {
+        source_path
+    };
     fs::read(path).with_context(|| format!("read fixture {path}"))
 }
 

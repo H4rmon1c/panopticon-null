@@ -108,6 +108,12 @@ enum ProcurementCommand {
         #[command(subcommand)]
         command: ProcurementIngestCommand,
     },
+    ExportAwards {
+        #[arg(long, default_value = "")]
+        source: String,
+        #[arg(long, default_value = "awards.csv")]
+        output: PathBuf,
+    },
     Import {
         path: String,
         #[arg(long)]
@@ -123,6 +129,14 @@ enum ProcurementCommand {
     },
     Reconcile {
         matter: String,
+        #[arg(long)]
+        item: Option<String>,
+        #[arg(long)]
+        decision: Option<String>,
+        #[arg(long)]
+        operator: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
     },
     Show {
         matter: String,
@@ -169,9 +183,7 @@ enum CaseCommand {
 
 #[derive(Subcommand)]
 enum CoraCommand {
-    Draft {
-        matter: String,
-    },
+    Draft { matter: String },
 }
 
 #[derive(Subcommand)]
@@ -395,6 +407,9 @@ fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<(
         ProcurementCommand::Ingest {
             command: ProcurementIngestCommand::Openbook,
         } => procurement_cmd::ingest_openbook(&store),
+        ProcurementCommand::ExportAwards { source, output } => {
+            procurement_cmd::export_awards(&store, &source, &output)
+        }
         ProcurementCommand::Import {
             path,
             source_or_request_id,
@@ -411,7 +426,21 @@ fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<(
             &operator,
             &digest,
         ),
-        ProcurementCommand::Reconcile { matter } => procurement_cmd::gaps(&store, &matter),
+        ProcurementCommand::Reconcile {
+            matter,
+            item,
+            decision,
+            operator,
+            note,
+        } => procurement_cmd::reconcile_matter(
+            &store,
+            &matter,
+            item.as_deref(),
+            decision.as_deref(),
+            operator.as_deref(),
+            note.as_deref(),
+            "2026-08-17T00:00:00Z",
+        ),
         ProcurementCommand::Show { matter } => procurement_cmd::show_matter(&store, &matter),
         ProcurementCommand::Gaps { matter } => procurement_cmd::gaps(&store, &matter),
     }
@@ -421,16 +450,19 @@ fn coverage_command(data_dir: &Path, command: CoverageCommand) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
         CoverageCommand::Show => procurement_cmd::coverage_show(&store),
-        CoverageCommand::Diff { old_snapshot, new_snapshot } => {
-            procurement_cmd::coverage_diff(&store, &old_snapshot, &new_snapshot)
-        }
+        CoverageCommand::Diff {
+            old_snapshot,
+            new_snapshot,
+        } => procurement_cmd::coverage_diff(&store, &old_snapshot, &new_snapshot),
     }
 }
 
 fn case_command(data_dir: &Path, command: CaseCommand) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
-        CaseCommand::Build { matter, output } => procurement_cmd::case_build(&store, &matter, &output),
+        CaseCommand::Build { matter, output } => {
+            procurement_cmd::case_build(&store, &matter, &output)
+        }
     }
 }
 
@@ -1461,8 +1493,7 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
     // The Procurement Chain (v0.0.3): reproduce the full offline demonstration
     // from committed fixtures with no network access.
     let fixtures_dir = std::path::Path::new("fixtures/procurement");
-    pnull_procurement::verify_fixture_digests(fixtures_dir)
-        .map_err(|e| anyhow!(e))?;
+    pnull_procurement::verify_fixture_digests(fixtures_dir).map_err(|e| anyhow!(e))?;
     println!("9. Verified procurement fixture SHA-256 digests.");
 
     let procurement_out = output.join("procurement");
@@ -1484,8 +1515,9 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
         demo_result.control_identifiers,
         demo_result.control_reconciliation,
     );
-    let transit_case = pnull_procurement::build_content(&store, pnull_procurement::TRANSIT_FARE_MATTER_ID)
-        .map_err(|e| anyhow!(e.to_string()))?;
+    let transit_case =
+        pnull_procurement::build_content(&store, pnull_procurement::TRANSIT_FARE_MATTER_ID)
+            .map_err(|e| anyhow!(e.to_string()))?;
     let transit_json = pnull_procurement::render_case_json(&transit_case);
     let transit_md = pnull_procurement::render_case_markdown(&transit_case);
     fs::create_dir_all(procurement_out.join("transit-fare"))?;
@@ -1530,8 +1562,49 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
         procurement_out.join("transit-fare").join("cora-draft.md"),
         &cora.markdown,
     )?;
-    println!("13. Wrote CORA draft (local, unsent) to {}.", procurement_out.join("transit-fare").display());
+    println!(
+        "13. Wrote CORA draft (local, unsent) to {}.",
+        procurement_out.join("transit-fare").display()
+    );
     println!("OpenBook finding: {}", demo_result.openbook_finding);
+
+    // Formula-neutralized CSV export of the ingested award rows (step 14).
+    let award_fixture = fixtures_dir.join("contract-awards.html");
+    let award_bytes = fs::read(&award_fixture)?;
+    let award_rows = pnull_procurement::parse_awards_table(
+        &String::from_utf8_lossy(&award_bytes),
+        &sha256_hex(&award_bytes),
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
+    let award_header = [
+        "RFP/IFB Number",
+        "Project Name",
+        "Awarded Contractor",
+        "Awarded Amount",
+        "Contract Start Date",
+        "Notes",
+    ];
+    let award_data: Vec<Vec<String>> = award_rows
+        .iter()
+        .map(|row| {
+            vec![
+                row.solicitation_id.clone(),
+                row.project_name.clone(),
+                row.contractor.clone(),
+                row.raw_amount.clone(),
+                row.start_date.clone(),
+                row.notes.clone(),
+            ]
+        })
+        .collect();
+    let awards_csv = pnull_procurement::rows_to_csv(&award_header, &award_data)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    fs::write(procurement_out.join("awards.csv"), awards_csv)?;
+    println!(
+        "14. Wrote {} award row(s) as formula-neutralized CSV to {}.",
+        award_rows.len(),
+        procurement_out.join("awards.csv").display()
+    );
 
     println!("Alert ID: {}", alert.id);
     Ok(())
@@ -1801,6 +1874,25 @@ mod tests {
             snapshot(&first.join("state/records")),
             snapshot(&second.join("state/records"))
         );
+        // The procurement chain output (case files, CORA draft) is reproducible.
+        assert_eq!(
+            snapshot(&first.join("procurement")),
+            snapshot(&second.join("procurement"))
+        );
+        // The transit-fare case file is a draft with the expected gaps surfaced.
+        let transit_md =
+            fs::read(first.join("procurement/transit-fare/case-file.md")).expect("transit case md");
+        let transit_md = String::from_utf8_lossy(&transit_md);
+        assert!(transit_md.contains("not proof of absence"));
+        assert!(transit_md.contains("executed contract"));
+        assert!(transit_md.contains("draft"));
+        // The CORA draft is local and unsent, and names the checked sources.
+        let cora =
+            fs::read(first.join("procurement/transit-fare/cora-draft.md")).expect("cora draft");
+        let cora = String::from_utf8_lossy(&cora);
+        assert!(cora.contains("not submitted"));
+        assert!(cora.contains("colorado-springs-solicitation-mirror"));
+        assert!(!cora.contains("mailto:"));
         // No script element may occur in public output.
         for (path, bytes) in snapshot(&first.join("site")) {
             let content = String::from_utf8_lossy(&bytes);
