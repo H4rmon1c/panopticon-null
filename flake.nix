@@ -29,7 +29,7 @@
           source = ./.;
           mkCargoCheck = name: command: rustPlatform.buildRustPackage {
             pname = "panopticon-null-${name}";
-            version = "0.0.2";
+            version = "0.0.3";
             src = source;
             inherit cargoLock;
             nativeBuildInputs = nativeTools ++ [ cargoDeny pkgs.git ];
@@ -46,7 +46,7 @@
           };
           package = rustPlatform.buildRustPackage {
             pname = "panopticon-null";
-            version = "0.0.2";
+            version = "0.0.3";
             src = source;
             inherit cargoLock;
             nativeBuildInputs = nativeTools;

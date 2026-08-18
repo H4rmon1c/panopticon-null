@@ -3,7 +3,6 @@
 ## Selected jurisdiction
 
 Panopticon Null monitors **Colorado Springs, Colorado**. The City directs users seeking recent agendas and minutes to its Legistar portal:
-
 - City discovery: <https://coloradosprings.gov/city-council-meetings>
 - City document guidance: <https://coloradosprings.gov/citydocs>
 - Public calendar: <https://coloradosprings.legistar.com/Calendar.aspx>
@@ -72,6 +71,38 @@ Attachment discovery proceeds only through documented official fields and review
 The surveillance-technology link (Axon body cameras/evidence systems/AI transcription, Flock vehicle-intelligence cameras) is documented in the preserved 2025 presentation as supporting evidence, not asserted by the 2015 action itself. No separate vendor contract or award for Axon or Flock was located in the reviewed Legistar source, so no such procurement is asserted.
 
 Exact URLs and hashes are in `fixtures/README.md`, `fixtures/co/SHA256SUMS`, and `fixtures/co2/SHA256SUMS`.
+
+## Procurement adapters (v0.0.3)
+
+The v0.0.3 procurement surfaces are documented in `docs/0.0.3-source-survey.md`. In summary,
+each adapter records a coverage-ledger entry and preserves every fetched artifact as an
+immutable snapshot with row-level provenance.
+
+- **Colorado Springs contract-award table** (official informational mirror) — parses the
+  City-hosted contract-award table into rows with the solicitation identifier, project
+  name, awarded contractor, raw awarded amount, parsed amount state, contract start date,
+  notes, source snapshot, and row-level provenance. The parser tolerates historical
+  formatting irregularities without silently shifting columns. Money states keep `N/A`,
+  `various`, `$0.00 IDIQ`, and an omitted amount distinct.
+- **Colorado Springs solicitation mirror** (official informational mirror) — parses the
+  City-hosted informational solicitation list and linked City-hosted documents. Every
+  record carries the source's own warning that the list may be incomplete or outdated; the
+  connector never claims it represents every solicitation.
+- **OpenBook COS** (official financial export) — investigates the official downloadable or
+  directly connectable financial export. The documented finding is that OpenBook COS is a
+  budget-level export that does not provide vendor-level expenditures, so no vendor-level
+  payment relationship is invented. This negative capability finding is preserved and
+  visible. Payment evidence from this source is represented as unavailable.
+- **Operator-supplied public records** — a safe import path for public records obtained
+  manually or through CORA. Requires a declared source URL or records-request identifier,
+  acquisition date, document role, an operator declaration of lawful possession, an exact
+  file digest, processing provenance, the existing sandbox and resource limits, and human
+  review before publication. Supplied files are treated as hostile.
+
+Live retrieval of any procurement surface still requires an explicit live mode and an
+approved persistent source review; default demonstrations are fully offline. BidNet and
+Bonfire (the City's authoritative portals) are not automated because they are
+registration/terms-restricted.
 
 ## Limitations
 

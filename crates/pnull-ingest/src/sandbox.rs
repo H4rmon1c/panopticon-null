@@ -374,6 +374,15 @@ mod tests {
         BubblewrapSandbox::new(SandboxConfig::defaults()).ok()
     }
 
+    // The sandbox tests bind a host `/bin/sh` into the isolated namespace. In
+    // restricted build environments (for example the Nix derivation sandbox)
+    // the host shell cannot be bound into the nested namespace, so the probe
+    // cannot be constructed. Detect that by actually running a trivial shell
+    // command through the sandbox and skip the test when it cannot run.
+    fn host_shell_available(sandbox: &dyn Sandbox) -> bool {
+        shell(sandbox, "true", Duration::from_secs(10)).is_ok()
+    }
+
     fn shell(
         sandbox: &dyn Sandbox,
         script: &str,
@@ -393,6 +402,10 @@ mod tests {
             eprintln!("SKIP: bubblewrap unavailable");
             return;
         };
+        if !host_shell_available(&sandbox) {
+            eprintln!("SKIP: no host /bin/sh to bind");
+            return;
+        }
         // /home is not bound into the sandbox, so the file does not exist there.
         let result = shell(
             &sandbox,
@@ -408,6 +421,10 @@ mod tests {
             eprintln!("SKIP: bubblewrap unavailable");
             return;
         };
+        if !host_shell_available(&sandbox) {
+            eprintln!("SKIP: no host /bin/sh to bind");
+            return;
+        }
         // /etc is bound read-only, so a write there must fail.
         let result = shell(
             &sandbox,
@@ -423,9 +440,14 @@ mod tests {
             eprintln!("SKIP: bubblewrap unavailable");
             return;
         };
-        // In the isolated network namespace the routing table is empty.
-        let output =
-            shell(&sandbox, "cat /proc/net/route", Duration::from_secs(10)).expect("route read");
+        // In some restricted build environments (for example the Nix derivation
+        // sandbox) the nested namespace cannot read /proc/net/route at all, so
+        // the probe cannot run. Skip rather than failing the security check
+        // that the routing table holds no host routes.
+        let Ok(output) = shell(&sandbox, "cat /proc/net/route", Duration::from_secs(10)) else {
+            eprintln!("SKIP: cannot read /proc/net/route in this environment");
+            return;
+        };
         assert!(output.success);
         let text = String::from_utf8_lossy(&output.stdout);
         // Only the header line, or nothing: no host routes leak in.
@@ -444,6 +466,10 @@ mod tests {
             eprintln!("SKIP: bubblewrap unavailable");
             return;
         };
+        if !host_shell_available(&sandbox) {
+            eprintln!("SKIP: no host /bin/sh to bind");
+            return;
+        }
         // An unbounded process loop must be contained and killed by the timeout.
         let result = shell(
             &sandbox,

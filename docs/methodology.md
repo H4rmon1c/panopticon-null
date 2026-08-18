@@ -4,9 +4,11 @@
 
 Panopticon Null first preserves bytes. The original SHA-256, source URL, jurisdiction, title, source type, publication date when supplied, retrieval time, MIME type, filename, extractor, status, lineage, and processing version form the evidence record. The original is never replaced by a revision.
 
+In v0.0.3, every fetched procurement page, export, and document becomes an immutable source snapshot with a coverage-ledger entry (source identity, retrieval timestamp, persisted-byte SHA-256, HTTP provenance, parser/schema version, date range, record count, completion state, authority, failures, completeness, review state). If an official URL later serves different bytes, both snapshots are preserved and linked through a revision/supersession relationship with a deterministic record-level diff; the old artifact and its derived observations are never rewritten.
+
 Extraction normalizes line endings and horizontal whitespace to make deterministic line citations. Every ingestion and reprocessing job also records an immutable processing-run provenance record: schema version, Panopticon Null version, source revision, rules digest, state-config digest, input evidence IDs, native tool names and versions, sandbox backend and version, configured budgets, actual resource consumption, timestamps, outcome, structured errors, and output artifact IDs and digests.
 
-The core principle is: **if the public record does not prove it, Panopticon Null does not say it.** A statement is only asserted when an exact, preservable source span supports it.
+The core principle is: **if the public record does not prove it, Panopticon Null does not say it.** A statement is only asserted when an exact, preservable source span supports it. In procurement, this extends to **"follow the money without inventing the links"**: records are connected only when the evidence supports the connection.
 
 ## Page-accurate citations
 
@@ -43,6 +45,18 @@ No citation is published without a human review decision bound to exact content 
 ## Publication
 
 Public pages show the institution, state, reason, rules and rule digest, exact citations, source links, local hashes, and limitations. They do not publish the full local evidence archive. The privacy gate is deliberately conservative and human review remains mandatory before distribution.
+
+## Procurement chain
+
+The 0.0.3 procurement methodology is described in full in `docs/procurement-methodology.md`. The core disciplines:
+
+- **Source authority.** Sources carry an explicit authority classification (authoritative procurement record, official informational mirror, official financial export, official meeting/legislative record, operator-supplied, unreviewed, restricted/inaccessible). An informational mirror is not an authoritative procurement system; the City's own statement that its solicitation list may be incomplete or outdated is preserved on every record from that source.
+- **Coverage.** The coverage ledger defaults to `unknown`/`partial`. A source may be marked `complete` only with affirmative, reproducible evidence that the checked snapshot enumerates the defined population. Absence from a partial source is phrased "Not observed in the checked sources," never "No contract exists."
+- **Identifiers.** Raw identifiers and their source are preserved. Differently formatted identifiers are not assumed identical without an explicit deterministic rule and tests.
+- **Money.** Money is never floating point. Raw amount strings are preserved; `N/A`, `various`, an omitted amount, and `$0.00` are kept distinct.
+- **Organizations.** Source spelling is preserved; non-exact matches enter human review; no automatic merging of subsidiaries, parents, joint ventures, or similarly named firms.
+- **Reconciliation.** Automatic connections require exact normalized identifiers, explicit official relationships, or existing evidence-backed relationships. Similar names, titles, amounts, dates, keywords, and LLM judgment never connect records. The reconciliation-review queue and its immutable decisions make this auditable.
+- **Change detection for records.** Records that disappear from a later snapshot, are revised, or conflict in amount/date are surfaced as reconciliation items and explicit gaps, never silently merged or guessed.
 
 ## Demo interpretation
 

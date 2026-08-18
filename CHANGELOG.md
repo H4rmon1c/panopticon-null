@@ -2,6 +2,69 @@
 
 All notable changes to Panopticon Null are documented here. This project adheres to semantic versioning.
 
+## 0.0.3 — "The Procurement Chain"
+
+Turns isolated evidence receipts into a verifiable institutional money trail
+(solicitation → amendment → award → contract → expenditure). Governed by the rule
+**"follow the money without inventing the links"**: records are connected only when the
+evidence supports the connection.
+
+1. **Source-authority model and persistent coverage ledger.** Every procurement source
+   carries an authority classification (authoritative, official informational mirror,
+   official financial export, official meeting/legislative record, operator-supplied,
+   unreviewed, restricted/inaccessible). Every acquisition records source identity,
+   retrieval timestamp, persisted-byte SHA-256, HTTP provenance, parser/schema version,
+   date range, record count, completion state, authority, failures, completeness, and
+   review state. Coverage states include `complete`, `partial`, `informational_only`,
+   `access_blocked`, `terms_unreviewed`, `schema_changed`, and `unknown` (default
+   `unknown`/`partial`). Absence from a partial source is phrased "Not observed in the
+   checked sources," never "No contract exists."
+2. **Immutable source snapshots + change detection.** Every fetched page/export/document is
+   an immutable snapshot. Changed official bytes produce a second snapshot linked by
+   revision/supersession with a deterministic record-level diff; old artifacts and derived
+   observations are never rewritten. A `304` records provenance without duplicating the
+   artifact. Embedded links are never auto-followed.
+3. **Procurement domain model.** Matters, events (solicitation published, amendment,
+   award announced, contract executed, expenditure reported, record corrected/removed),
+   identifiers (never merged across differing formats without a deterministic rule +
+   tests), money (never floating point; raw strings preserved; exact/zero/N/A/various/
+   IDIQ/unknown/unparseable kept distinct), and organizations (source spelling preserved;
+   non-exact matches to human review; no auto-merging of subsidiaries/joint ventures/
+   similarly named firms).
+4. **Bounded ingestion adapters.** Contract-award table with row-level provenance;
+   solicitation mirror carrying its incompleteness warning; documented negative capability
+   finding for OpenBook COS (budget-level only, no vendor-level expenditure linkage); safe
+   operator-supplied public-record import path treating supplied files as hostile.
+5. **Reconciliation.** Automatic connections only via exact normalized identifiers,
+   explicit official relationships, or existing evidence-backed relationships. A
+   reconciliation-review queue holds candidate matches, vendor aliases, conflicting
+   amounts/dates, duplicate/revised rows, missing documents, and vanished records; every
+   decision is immutable and auditable.
+6. **Case files.** Deterministic JSON + Markdown case files with a chronological timeline,
+   organizations in documented roles, raw and parsed money, exact citations, source-authority
+   labels, contradictions, missing documents, coverage, provenance, a SHA-256 manifest, and
+   a limitations section. Files stay drafts until the citation-review and publication
+   allowlists pass.
+7. **Gap-driven CORA drafts.** A command generates a local, unsent Colorado Open Records Act
+   draft from unresolved gaps. It never sends, never guesses an email recipient, and states
+   that operator/legal review is required.
+8. **Real case study + benign control.** The Next-Generation Transit Fare Collection System
+   RFI (R26-023AB) is ingested as an RFI (not an award or contract) with no mass-surveillance
+   labeling and an explicit gap where no executed contract or payment was located. A benign
+   control matter (Crack Seal Materials award) proves ingestion does not automatically turn
+   every purchase into a surveillance accusation.
+9. **Hostile-input tests + CSV safety.** Malformed/deeply nested HTML, unexpected columns,
+   duplicate/reordered rows, Unicode and hostile vendor names, huge numbers, currency
+   ambiguity, broken CSV quoting, and source schema drift are exercised. CSV exports
+   neutralize spreadsheet-formula injection.
+10. **Schema v2 + real 0.0.2 upgrade fixture.** `SCHEMA_VERSION = 2`; transactional
+   migration preserves all 0.0.1/0.0.2 rows byte-for-byte; upgrade test loads a real 0.0.2
+   database fixture; failure-injection tests prove atomic rollback.
+
+Also in 0.0.3: the nine-crate layout (added `pnull-procurement`); expanded documentation
+(`docs/procurement-methodology.md`, `docs/migration-v0.0.3.md`, `docs/validation-0.0.3.md`,
+`docs/0.0.3-source-survey.md`).
+
 ## 0.0.2 — "The Verifiable Receipt"
 
 Deliverables added in this release:

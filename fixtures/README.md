@@ -29,3 +29,40 @@ The surveillance-technology link is documented, not assumed: the preserved 2025 
 `pdf/scanned-surveillance-text.pdf` is a test-only, image-only derivative of page 1 of the preserved official presentation, rasterized at 80 DPI. Its SHA-256 is `77779970241d1478db90c7a6d3eac51ba9a7c3c2b3ce17c5ef77bf1bf28cf544`; it exists only to exercise optional OCR and is never represented as an original government file.
 
 Files under `html/` and `hostile/` are synthetic parser-security test inputs. They are not represented as government records.
+
+## Procurement chain fixtures (v0.0.3)
+
+`fixtures/procurement/` preserves the official procurement surfaces used by the offline
+procurement demo. Bytes were retrieved 2026-08-17 from the reviewed City-hosted surfaces,
+one request at a time, with no authentication, access-control bypass, or browser automation.
+
+| File | Official source | Purpose |
+|---|---|---|
+| `procurement/contract-awards.html` | [City contract-award information](https://coloradosprings.gov/procurement-services/page/contract-award-information) | Parsed to contract-award rows with row-level provenance |
+| `procurement/solicitations.html` | [City solicitations](https://coloradosprings.gov/solicitations) | Informational solicitation mirror; carries the source's own incompleteness warning and links the R26-023AB RFI documents |
+
+`procurement/SHA256SUMS` commits the hash of each procurement fixture. The demo verifies
+these digests before ingestion.
+
+The `solicitations.html` fixture preserves the City's own statement that the list "may or
+may not be up to date," that the Rocky Mountain E-Purchasing System and Bonfire Interactive
+Procurement Portal "remain the authoritative and valid version," and that "not all open
+RFP's and IFB's are listed yet." The model preserves this distinction: the City mirror is
+informational, and BidNet/Bonfire are the authoritative portals (not automated).
+
+The R26-023AB fixture documents the **Next-Generation Transit Fare Collection System RFI**
+for Mountain Metropolitan Transit. It is a Request for Information, not a solicitation to
+award, an award, a contract, or a purchase. No executed contract or payment for the fare
+system is asserted; where none was located in the checked sources, the case file shows that
+exact gap and a CORA draft targets it. A sample services contract is distinguished from an
+executed contract.
+
+The benign control matter (Crack Seal Materials award under `B22-T168KK`) is drawn from the
+contract-award fixture to prove that ingestion does not automatically turn a materials
+purchase into a surveillance accusation.
+
+The procurement fixtures are only the informational mirror surfaces the project is lawfully
+able to automate. The City's authoritative procurement portals (BidNet/Bonfire) are not
+fetched or preserved because they are registration/terms-restricted. OpenBook COS is
+documented as a budget-level export that does not provide vendor-level expenditures; no
+vendor-level payment fixture is fabricated.

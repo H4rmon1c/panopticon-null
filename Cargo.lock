@@ -1098,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-cli"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1119,7 +1119,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "hex",
  "rusqlite",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-detect"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pnull-core",
  "regex",
@@ -1145,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-geometry"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "image",
  "pnull-core",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-http"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pnull-core",
  "reqwest",
@@ -1172,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-ingest"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "image",
  "pnull-core",
@@ -1194,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-procurement"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pnull-core",
  "pnull-ingest",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-publish"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pnull-core",
  "quick-xml",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-x"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pnull-core",
  "pnull-publish",

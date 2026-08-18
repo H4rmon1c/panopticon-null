@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-pnull-core = { path = "../pnull-core", version = "=0.0.2" }
-pnull-ingest = { path = "../pnull-ingest", version = "=0.0.2" }
+pnull-core = { path = "../pnull-core", version = "=0.0.3" }
+pnull-ingest = { path = "../pnull-ingest", version = "=0.0.3" }
 regex.workspace = true
 scraper.workspace = true
 serde.workspace = true

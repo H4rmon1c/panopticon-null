@@ -6,7 +6,22 @@ Panopticon Null is lawful, nonviolent, evidence infrastructure for dismantling t
 
 > The machinery of mass surveillance depends on invisibility. This project records what is purchased, what is promised, what changes, and who authorized it.
 
-Version 0.0.2 ("The Verifiable Receipt") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It monitors the official Colorado Springs City Council Legistar API and preserves official matter attachments used by the offline demonstration.
+Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It builds a verifiable institutional money trail — solicitation → amendment → award → contract → expenditure — connecting official records only when the evidence supports the connection. Missing records, inaccessible portals, ambiguous vendor names, contradictory amounts, and incomplete coverage remain visible as explicit evidence gaps.
+
+## What 0.0.3 does
+
+0.0.3 turns isolated evidence receipts into a verifiable procurement chain under the rule **"follow the money without inventing the links."**
+
+- **Source-authority model.** Every procurement source carries an explicit authority classification (authoritative procurement record, official informational mirror, official financial export, official meeting or legislative record, operator-supplied public record, unreviewed, or restricted/inaccessible). The City's solicitation page states its listings may be incomplete or outdated and that BidNet and Bonfire hold the authoritative versions; that distinction is preserved.
+- **Persistent coverage ledger.** Every acquisition records source identity, retrieval timestamp, persisted-byte SHA-256, HTTP provenance metadata, parser/schema version, date range, record count, pagination/completion state, authority, failures, completeness, and human review state. Coverage states include `complete`, `partial`, `informational_only`, `access_blocked`, `terms_unreviewed`, `schema_changed`, and `unknown` (default `unknown`/`partial`). Absence from a partial source is never proof of absence; the phrasing is "Not observed in the checked sources."
+- **Immutable source snapshots + change detection.** Every fetched page, export, and document becomes an immutable snapshot. If an official URL later serves different bytes, both snapshots are preserved and linked through a revision/supersession relationship with a deterministic record-level diff; old artifacts and derived observations are never rewritten. A `304 Not Modified` records provenance without duplicating the artifact. Embedded links are never auto-followed.
+- **Procurement domain model.** Matters, events (solicitation published, amendment, award announced, contract executed, expenditure reported, record corrected/removed, and so on), identifiers (never merged across differing formats without a deterministic rule + tests), money (never floating point; raw string preserved; exact/zero/N/A/various/IDIQ/unknown/unparseable kept distinct), and organizations (source spelling preserved; non-exact matches enter human review; no automatic merging of subsidiaries, parents, joint ventures, or similarly named firms).
+- **Bounded ingestion adapters.** The Colorado Springs contract-award table (with row-level provenance), the City solicitation mirror (carrying the source's own incompleteness warning), a documented negative capability finding for OpenBook COS (budget-level only, no vendor-level expenditure linkage), and a safe operator-supplied public-record import path that treats supplied files as hostile.
+- **Reconciliation.** Connections are created automatically only through exact normalized identifiers, explicit official relationships, or existing evidence-backed relationships. Similar names/titles/amounts/dates/keywords/LLM judgment never connect records. A reconciliation-review queue holds candidate matches, vendor aliases, conflicting amounts/dates, duplicate/revised rows, missing documents, and vanished records; every decision is immutable and auditable.
+- **Case files.** A procurement matter produces deterministic JSON + Markdown case files with a chronological timeline, organizations in documented roles, raw and parsed money, exact citations, source-authority labels, contradictions, missing documents, coverage, provenance, a SHA-256 manifest, and a limitations section. Files stay drafts until they pass the human citation-review and publication-allowlist controls.
+- **Gap-driven CORA drafts.** A command generates a local, unsent Colorado Open Records Act draft from unresolved gaps (institution, identifiers, missing record types, narrow date range, vendor/project name, sources already checked). It never sends, never guesses an email recipient, and states that operator/legal review is required.
+- **A real case study + a benign control.** The Next-Generation Transit Fare Collection System RFI (R26-023AB) is ingested as an RFI (not an award or contract), with no mass-surveillance labeling and an explicit gap where no executed contract or payment was located. A benign control matter (Crack Seal Materials award) proves ingestion does not automatically turn every purchase into a surveillance accusation.
+- **Hostile-input tests + CSV safety.** Malformed/deeply nested HTML, unexpected columns, duplicate/reordered rows, Unicode and hostile vendor names, huge numbers, currency ambiguity, broken CSV quoting, and source schema drift are exercised. CSV exports neutralize spreadsheet-formula injection.
 
 ## What 0.0.2 does
 
@@ -122,6 +137,24 @@ cargo run --locked -p pnull-cli -- x draft <alert-id>
 cargo run --locked -p pnull-cli -- x approve <alert-id>
 ```
 
+Procurement chain commands (all offline by default; live retrieval requires an explicit
+live mode and an approved persistent source review):
+
+```console
+cargo run --locked -p pnull-cli -- procurement ingest solicitations
+cargo run --locked -p pnull-cli -- procurement ingest awards
+cargo run --locked -p pnull-cli -- procurement ingest openbook
+cargo run --locked -p pnull-cli -- procurement import <path>
+cargo run --locked -p pnull-cli -- procurement reconcile <matter>
+cargo run --locked -p pnull-cli -- procurement show <matter>
+cargo run --locked -p pnull-cli -- procurement gaps <matter>
+cargo run --locked -p pnull-cli -- procurement export-awards --output awards.csv
+cargo run --locked -p pnull-cli -- coverage show
+cargo run --locked -p pnull-cli -- coverage diff <old-snapshot> <new-snapshot>
+cargo run --locked -p pnull-cli -- case build <matter>
+cargo run --locked -p pnull-cli -- cora draft <matter>
+```
+
 Live source retrieval is refused unless the operator has recorded a persistent, current, in-scope source review (see `docs/operator-guide-source-review.md`). The ephemeral `--robots-reviewed` flag is deprecated and is no longer the primary authorization. The configured 24-hour interval is persisted and enforced. The source uses one request at a time; it does not bypass authentication, CAPTCHAs, access controls, or restrictions.
 
 ### X safety model
@@ -145,14 +178,24 @@ cargo deny check
 nix --extra-experimental-features 'nix-command flakes' flake check --print-build-logs
 ```
 
-Fixture integrity (both v0.0.1 and v0.0.2 matters):
+Fixture integrity (v0.0.1, v0.0.2, and v0.0.3 procurement fixtures):
 
 ```console
-sha256sum -c fixtures/co/SHA256SUMS
-sha256sum -c fixtures/co2/SHA256SUMS
+sha256sum -c fixtures/co/SHA256SUMS          # run from the repository root
+(cd fixtures/co2 && sha256sum -c SHA256SUMS)        # co2 uses bare filenames
+(cd fixtures/procurement && sha256sum -c SHA256SUMS)  # procurement uses bare filenames
 ```
 
-The offline demo is reproduced byte-for-byte across two clean output directories (site and `state/records`), and the proof file `network-posts.txt` is `0`.
+The two fixture SUMS files verify that every preserved official byte under `fixtures/co/`
+and `fixtures/co2/` is intact and unmodified, and `fixtures/procurement/SHA256SUMS` verifies
+the v0.0.3 procurement fixtures.
+
+`cargo deny check` is provided by the pinned Nix environment; it runs inside
+`nix flake check` as the `dependency-policy` check.
+
+The offline demo is reproduced byte-for-byte across two clean output directories (site,
+`state/records`, and the procurement chain output), and the proof file
+`network-posts.txt` is `0`.
 
 ## Privacy boundary
 
@@ -171,9 +214,11 @@ No facial recognition. No person-level movement analysis. No dossiers on activis
 - `pnull-x`: state-aware drafts, exact-draft approval, attempts/status/reconcile, transport trait, redacted credentials.
 - `pnull-geometry`: page-accurate PDF citation geometry, text maps, OCR pixel-to-page transforms, reviewer-image rendering.
 - `pnull-http`: DNS-safe HTTP provenance, conditional retrieval, credential redaction, resolver/transport abstractions.
+- `pnull-procurement`: the procurement chain — source-authority/coverage ledger, immutable snapshots + change detection, awards/solicitation/openbook/import adapters, reconciliation, case-file generation, gap-driven CORA drafts, and the offline procurement demo.
 - `pnull-cli`: commands and the offline vertical slice.
 
-See `docs/architecture.md`, `docs/methodology.md`, and `docs/source-adapters.md` for details.
+See `docs/architecture.md`, `docs/methodology.md`, `docs/procurement-methodology.md`,
+`docs/source-adapters.md`, and `docs/0.0.3-source-survey.md` for details.
 
 ## License
 

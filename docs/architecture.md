@@ -1,6 +1,6 @@
 # Architecture
 
-Panopticon Null is a lawful, nonviolent evidence infrastructure for dismantling institutional mass surveillance, focused on Colorado Springs. Version 0.0.2 ("The Verifiable Receipt") adds page-accurate citations, immutable processing-run provenance, a real extraction sandbox, DNS-safe HTTP, persistent robots/terms review, bounded Legistar pagination, explicit subjects/actions, a human citation-review queue, safe X-thread reconciliation, and a second genuine matter.
+Panopticon Null is a lawful, nonviolent evidence infrastructure for dismantling institutional mass surveillance, focused on Colorado Springs. Version 0.0.3 ("The Procurement Chain") adds a source-authority/coverage ledger, immutable source snapshots with change detection, bounded procurement ingestion adapters, reconciliation rules, case-file generation, and gap-driven CORA drafts — on top of the 0.0.2 page-accurate citations, processing-run provenance, sandbox, DNS-safe HTTP, source review, explicit subjects/actions, citation-review queue, and X reconciliation.
 
 ## Vertical slice
 
@@ -21,26 +21,28 @@ official HTTPS source / committed fixture
 
 All durable state is local. No hosted service, JavaScript runtime, telemetry, analytics, advertising, or tracking is required.
 
-## Crates (8)
+## Crates (9)
 
-- `pnull-core` owns the evidence, finding, alert, matter, subject, action, citation, review, processing-run, source-review, fetch-observation, X-attempt, and publication-allowlist schemas. IDs are domain-separated SHA-256 values. SQLite enforces durable uniqueness. Original bytes are stored under `evidence/sha256/<prefix>/<digest>`; canonical records are deterministic JSON.
+- `pnull-core` owns the evidence, finding, alert, matter, subject, action, citation, review, processing-run, source-review, fetch-observation, X-attempt, publication-allowlist, and (v0.0.3) procurement schemas. IDs are domain-separated SHA-256 values. SQLite enforces durable uniqueness. Original bytes are stored under `evidence/sha256/<prefix>/<digest>`; canonical records are deterministic JSON.
 - `pnull-ingest` validates metadata, restricts live retrieval to reviewed same-host public HTTPS redirects, enforces input limits, runs the bubblewrap extraction sandbox with per-job resource budgets, and extracts hostile content. It never executes scripts, macros, document attachments, or source content. PDF and OCR tools are allowlisted subprocesses with address-space, CPU, file, process, page, image, output, and wall-time bounds.
 - `pnull-geometry` produces and validates page-accurate PDF citation geometry: immutable text maps, word bounding boxes, coordinate transforms, bounding-rectangle validation, and OCR confidence handling.
 - `pnull-http` is the DNS-safe HTTP layer: public-address validation, allowlisted headers, conditional retrieval, and provenance-aware fetch observations.
 - `pnull-detect` parses the reviewed YAML taxonomy. It records exact lines, limits strong states to cited context, rejects common negation/conditional forms, resolves conflicting states to `Unknown`, and records rule version and digest.
 - `pnull-publish` validates all internal evidence references, applies publication gates and the human review queue, writes a complete temporary tree, then atomically replaces the previous site. Core reading and navigation require no JavaScript.
 - `pnull-x` creates one post or a short thread, applies the same publication gate, binds approval to a canonical draft digest, records attempts and reconciliation, and hides the network transport behind a trait. The demo never constructs a live transport.
+- `pnull-procurement` implements the procurement chain: the source-authority and coverage ledger, immutable source snapshots with revision/supersession and record-level diffing, bounded ingestion adapters (contract awards, solicitation mirror, OpenBook negative finding, operator-supplied import), reconciliation rules and review queue, case-file generation, gap-driven CORA drafts, and the offline procurement demo.
 - `pnull-cli` composes these units without duplicating state-specific application logic.
 
 ## SQLite schema and migration
 
-SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 1`.
+SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 2` (as of v0.0.3).
 
-- v0.0.1 databases have no `user_version` (treated as `0`). They upgrade transactionally by adding supplemental tables without rewriting canonical v0.0.1 records.
-- Existing evidence IDs stay stable, content-addressed blobs are unchanged, and v0.0.1 records still verify.
+- v0.0.1 databases have no `user_version` (treated as `0`). They upgrade transactionally by adding supplemental tables without rewriting canonical records.
+- v0.0.2 databases (`user_version = 1`) upgrade transactionally to v2 by adding procurement supplemental tables.
+- Existing evidence IDs stay stable, content-addressed blobs are unchanged, and older records still verify.
 - Migration failure rolls back cleanly; a newer unsupported schema is rejected.
-- No migration reinterprets old findings as new subject/action assertions.
-- The migration test uses the committed fixture at `fixtures/migration/v0.0.1-minimal.sql`.
+- No migration reinterprets old findings as new subject/action or procurement assertions.
+- The migration tests use the committed fixtures at `fixtures/migration/v0.0.1-minimal.sql` and `fixtures/migration/v0.0.2-minimal.sql`.
 
 Tables: `evidence`, `findings`, `alerts`, `approvals`, `posts`, `post_segments`, `source_fetches` (v0.0.1), plus the v0.0.2 supplemental tables:
 
@@ -56,6 +58,33 @@ Tables: `evidence`, `findings`, `alerts`, `approvals`, `posts`, `post_segments`,
 - `fetch_observations` — DNS-safe HTTP provenance per request/redirect.
 - `x_attempts`, `x_reconciliations` — X posting attempts and operator reconciliation.
 - `publication_allowlists` — structured allowlist entries for public field categories.
+- `procurement_matters`, `procurement_events`, `procurement_identifiers`, `procurement_organizations`, `procurement_money` — the v0.0.3 procurement domain model.
+- `source_snapshots`, `snapshot_revisions`, `snapshot_diffs` — immutable source snapshots and revision/supersession/record-diff relationships.
+- `coverage_ledger` — the persistent coverage ledger.
+- `reconciliation_items`, `reconciliation_decisions` — the reconciliation-review queue and immutable decisions.
+- `supplied_records` — operator-supplied public records with declared origin.
+- `case_files`, `cora_drafts` — generated case files and local unsent CORA drafts.
+
+## Procurement chain
+
+v0.0.3 connects official procurement records only when the evidence supports the connection
+("follow the money without inventing the links"). See `docs/procurement-methodology.md` for
+the full model. In summary:
+
+- Every procurement source carries an authority classification, and every acquisition
+  writes a coverage-ledger entry with digest, date range, record count, completion state,
+  failures, and review state. Coverage defaults to `unknown`/`partial`; absence from a
+  partial source is never proof of absence.
+- Fetched pages/exports/documents are immutable snapshots; changed official bytes produce a
+  second snapshot linked by revision/supersession with a deterministic record-level diff.
+- Money is never floating point; raw strings are preserved with distinct parsed states.
+- Connections are automatic only for exact normalized identifiers, explicit official
+  relationships, or existing evidence-backed relationships; everything else enters the
+  reconciliation-review queue and requires an immutable human decision.
+- Case files (JSON + Markdown) stay drafts until the citation-review and publication
+  allowlists pass. CORA drafts are local and unsent.
+- Live retrieval still requires an explicit live mode and an approved persistent source
+  review; default demonstrations are fully offline.
 
 ## Processing-run provenance
 
