@@ -19,6 +19,11 @@ pub enum SnapshotError {
     NotFound(String),
     #[error("snapshots are from different sources: {old} vs {new}")]
     DifferentSources { old: String, new: String },
+    #[error(
+        "snapshot {0} has no stored record rows; it predates record-level diffing \
+         (legacy snapshot). Re-ingest the source to capture deterministic rows before diffing."
+    )]
+    NoStoredRows(String),
     #[error("store operation failed: {0}")]
     Store(#[from] pnull_core::CoreError),
 }
@@ -104,11 +109,23 @@ pub struct RecordRow {
     pub canonical: String,
 }
 
+impl RecordRow {
+    /// Converts to the core persisted form.
+    pub fn to_snapshot_row(&self) -> pnull_core::SnapshotRow {
+        pnull_core::SnapshotRow {
+            key: self.key.clone(),
+            canonical: self.canonical.clone(),
+        }
+    }
+}
+
 /// Produces a deterministic record-level diff between two snapshots' rows.
 ///
 /// Rows are matched by `key`. A row present only in the old snapshot is a
 /// removal; only in the new snapshot is an addition; present in both with a
-/// different `canonical` is a change. Ordering is ignored.
+/// different `canonical` is a change. Ordering is ignored. Duplicate rows with
+/// the same key are compared as multisets, so a reordered or repeated identical
+/// row is never a spurious change.
 pub fn record_diff(
     old_snapshot_id: &str,
     new_snapshot_id: &str,
@@ -117,33 +134,61 @@ pub fn record_diff(
     new_rows: &[RecordRow],
 ) -> SnapshotDiff {
     let mut changes = Vec::new();
-    let old_map: std::collections::BTreeMap<&str, &RecordRow> =
-        old_rows.iter().map(|row| (row.key.as_str(), row)).collect();
-    let new_map: std::collections::BTreeMap<&str, &RecordRow> =
-        new_rows.iter().map(|row| (row.key.as_str(), row)).collect();
+    let old_map = group_by_key(old_rows);
+    let new_map = group_by_key(new_rows);
 
-    for (key, old_row) in &old_map {
+    for key in old_map.keys() {
         match new_map.get(key) {
-            None => changes.push(RecordChange {
-                kind: "removed".to_owned(),
-                row_key: (*key).to_owned(),
-                summary: format!("record {key} disappeared from the later snapshot"),
-            }),
-            Some(new_row) if new_row.canonical != old_row.canonical => changes.push(RecordChange {
-                kind: "changed".to_owned(),
-                row_key: (*key).to_owned(),
-                summary: format!("record {key} changed between snapshots"),
-            }),
-            _ => {}
+            None => {
+                for _ in &old_map[key] {
+                    changes.push(RecordChange {
+                        kind: "removed".to_owned(),
+                        row_key: (*key).to_owned(),
+                        summary: format!("record {key} disappeared from the later snapshot"),
+                    });
+                }
+            }
+            Some(new_vals) => {
+                let old_vals = &old_map[key];
+                let removed = multiset_difference(old_vals, new_vals);
+                let added = multiset_difference(new_vals, old_vals);
+                if removed.is_empty() && added.is_empty() {
+                    continue;
+                }
+                let paired = removed.len().min(added.len());
+                for _ in 0..paired {
+                    changes.push(RecordChange {
+                        kind: "changed".to_owned(),
+                        row_key: (*key).to_owned(),
+                        summary: format!("record {key} changed between snapshots"),
+                    });
+                }
+                for _ in paired..removed.len() {
+                    changes.push(RecordChange {
+                        kind: "removed".to_owned(),
+                        row_key: (*key).to_owned(),
+                        summary: format!("record {key} disappeared from the later snapshot"),
+                    });
+                }
+                for _ in paired..added.len() {
+                    changes.push(RecordChange {
+                        kind: "added".to_owned(),
+                        row_key: (*key).to_owned(),
+                        summary: format!("record {key} appeared in the later snapshot"),
+                    });
+                }
+            }
         }
     }
     for key in new_map.keys() {
         if !old_map.contains_key(key) {
-            changes.push(RecordChange {
-                kind: "added".to_owned(),
-                row_key: (*key).to_owned(),
-                summary: format!("record {key} appeared in the later snapshot"),
-            });
+            for _ in &new_map[key] {
+                changes.push(RecordChange {
+                    kind: "added".to_owned(),
+                    row_key: (*key).to_owned(),
+                    summary: format!("record {key} appeared in the later snapshot"),
+                });
+            }
         }
     }
     SnapshotDiff {
@@ -156,10 +201,50 @@ pub fn record_diff(
     }
 }
 
+/// Groups rows by key with each key's sorted canonical values (a multiset).
+fn group_by_key(rows: &[RecordRow]) -> std::collections::BTreeMap<&str, Vec<&str>> {
+    let mut map: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+    for row in rows {
+        map.entry(row.key.as_str())
+            .or_default()
+            .push(row.canonical.as_str());
+    }
+    for values in map.values_mut() {
+        values.sort_unstable();
+    }
+    map
+}
+
+/// Multiset difference: returns the values in `a` not fully matched in `b`
+/// (each value matched up to its multiplicity in `b`).
+fn multiset_difference<'a>(a: &[&'a str], b: &[&'a str]) -> Vec<&'a str> {
+    let mut b_counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for &value in b {
+        *b_counts.entry(value).or_insert(0) += 1;
+    }
+    let mut used: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut result = Vec::new();
+    for &value in a {
+        let matched = used.entry(value).or_insert(0);
+        let available = b_counts.get(value).copied().unwrap_or(0);
+        if *matched < available {
+            *matched += 1;
+        } else {
+            result.push(value);
+        }
+    }
+    result
+}
+
 /// Records a snapshot, its revision link to a prior snapshot, and coverage entry.
 ///
 /// `prior_snapshot` is the most recent snapshot of the same source, if any. The
-/// old snapshot is never modified; only a new revision link is added.
+/// old snapshot is never modified; only a new revision link is added. This
+/// snapshot's deterministic parsed `rows` are persisted for later record-level
+/// diffing. When a prior snapshot exists with different bytes, the new rows are
+/// compared against the prior snapshot's *stored* rows — never against
+/// themselves. A prior snapshot with no stored rows (a legacy snapshot) cannot
+/// be diffed honestly, so no diff is produced and none is fabricated.
 pub fn record_snapshot(
     store: &pnull_core::Store,
     acquisition: &Acquisition,
@@ -183,17 +268,37 @@ pub fn record_snapshot(
     let coverage = acquisition.coverage_entry(record_count, "snapshot captured");
     store.insert_coverage_entry(&coverage)?;
 
+    // Persist this snapshot's deterministic parsed rows (additive).
+    let snapshot_rows: Vec<pnull_core::SnapshotRow> =
+        rows.iter().map(RecordRow::to_snapshot_row).collect();
+    store.insert_snapshot_rows(&snapshot.id, &snapshot_rows)?;
+
     let diff = if let Some(prior) = prior_snapshot {
         if prior.persisted_digest == snapshot.persisted_digest {
             None
         } else {
-            Some(record_diff(
-                &prior.id,
-                &snapshot.id,
-                &snapshot.source_id,
-                rows,
-                rows,
-            ))
+            // Load the prior snapshot's stored rows and compare them against the
+            // new rows. Never compare the new rows against themselves.
+            let prior_rows: Vec<RecordRow> = store
+                .snapshot_rows(&prior.id)?
+                .into_iter()
+                .map(|row| RecordRow {
+                    key: row.key,
+                    canonical: row.canonical,
+                })
+                .collect();
+            if prior_rows.is_empty() {
+                // Legacy prior snapshot with no stored rows: cannot diff honestly.
+                None
+            } else {
+                Some(record_diff(
+                    &prior.id,
+                    &snapshot.id,
+                    &snapshot.source_id,
+                    &prior_rows,
+                    rows,
+                ))
+            }
         }
     } else {
         None
@@ -246,6 +351,30 @@ pub fn latest_snapshot(
     source_id: &str,
 ) -> Result<Option<SourceSnapshot>, SnapshotError> {
     Ok(store.source_snapshots(source_id)?.into_iter().last())
+}
+
+/// Loads a snapshot's persisted deterministic record rows.
+///
+/// Fails honestly with [`SnapshotError::NoStoredRows`] when the snapshot has no
+/// stored rows — i.e., it is a legacy snapshot recorded before record-level
+/// diffing existed. Callers must not fall back to counts or digests as fake
+/// records.
+pub fn snapshot_rows(
+    store: &pnull_core::Store,
+    snapshot_id: &str,
+) -> Result<Vec<RecordRow>, SnapshotError> {
+    let rows: Vec<RecordRow> = store
+        .snapshot_rows(snapshot_id)?
+        .into_iter()
+        .map(|row| RecordRow {
+            key: row.key,
+            canonical: row.canonical,
+        })
+        .collect();
+    if rows.is_empty() {
+        return Err(SnapshotError::NoStoredRows(snapshot_id.to_owned()));
+    }
+    Ok(rows)
 }
 
 /// Convenience for hashing a record row's canonical form.
@@ -339,11 +468,20 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
-        let (snap1, diff1) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
+        let old_rows = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A1".into(),
+        }];
+        let (snap1, diff1) =
+            record_snapshot(&store, &first, None, Some(1), &old_rows).expect("first");
         assert!(diff1.is_none());
         let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
+        let new_rows = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A2".into(),
+        }];
         let (snap2, diff2) =
-            record_snapshot(&store, &second, Some(&snap1), Some(1), &[]).expect("second");
+            record_snapshot(&store, &second, Some(&snap1), Some(1), &new_rows).expect("second");
         assert!(diff2.is_some());
         assert_eq!(snap2.supersedes.as_deref(), Some(snap1.id.as_str()));
         // Both snapshots persisted immutably.
@@ -379,5 +517,186 @@ mod tests {
         assert_eq!(store.source_snapshots("src").expect("list").len(), 1);
         let coverage = store.coverage_entries("src").expect("coverage");
         assert!(coverage.iter().any(|e| e.http_status == Some(304)));
+    }
+
+    #[test]
+    fn record_diff_handles_duplicate_row_keys_as_multiset() {
+        // Two rows share the key "R21-T107KK" (a joint award). Reordering the
+        // duplicates must not register as a change.
+        let old = vec![
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "United Rentals".into(),
+            },
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "Herc Rentals Inc.".into(),
+            },
+        ];
+        let reordered = vec![
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "Herc Rentals Inc.".into(),
+            },
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "United Rentals".into(),
+            },
+        ];
+        let diff = record_diff("old", "new", "src", &old, &reordered);
+        assert!(
+            diff.changes.is_empty(),
+            "reordered duplicates are not a change"
+        );
+
+        // A changed duplicate: one of the two rows' content changes.
+        let changed = vec![
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "Herc Rentals Inc.".into(),
+            },
+            RecordRow {
+                key: "R21-T107KK".into(),
+                canonical: "United Rentals of CO".into(),
+            },
+        ];
+        let diff2 = record_diff("old", "new", "src", &old, &changed);
+        assert_eq!(diff2.changes.len(), 1);
+        assert_eq!(diff2.changes[0].kind, "changed");
+
+        // A duplicate removed: only one row remains.
+        let reduced = vec![RecordRow {
+            key: "R21-T107KK".into(),
+            canonical: "United Rentals".into(),
+        }];
+        let diff3 = record_diff("old", "new", "src", &old, &reduced);
+        assert_eq!(diff3.changes.len(), 1);
+        assert_eq!(diff3.changes[0].kind, "removed");
+    }
+
+    #[test]
+    fn record_diff_output_is_deterministic_regardless_of_input_order() {
+        // The same logical row sets produce byte-identical diffs no matter the
+        // order the rows are supplied in.
+        let old_order_a = vec![
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+        ];
+        let old_order_b = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let new = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A2".into(),
+            },
+            RecordRow {
+                key: "C".into(),
+                canonical: "C1".into(),
+            },
+        ];
+        let diff1 = record_diff("old", "new", "src", &old_order_a, &new);
+        let diff2 = record_diff("old", "new", "src", &old_order_b, &new);
+        assert_eq!(
+            diff1.changes, diff2.changes,
+            "output must not depend on input order"
+        );
+        // And the same inputs always produce identical output.
+        let diff3 = record_diff("old", "new", "src", &old_order_a, &new);
+        assert_eq!(diff1.changes, diff3.changes);
+    }
+
+    #[test]
+    fn record_snapshot_persists_rows_and_diffs_against_prior_not_self() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
+        let old_rows = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(2), &old_rows).expect("first");
+        // The first snapshot's rows are persisted.
+        assert_eq!(snapshot_rows(&store, &snap1.id).expect("stored"), old_rows);
+
+        let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
+        let new_rows = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A2".into(),
+            },
+            RecordRow {
+                key: "C".into(),
+                canonical: "C1".into(),
+            },
+        ];
+        let (snap2, diff2) =
+            record_snapshot(&store, &second, Some(&snap1), Some(2), &new_rows).expect("second");
+        // The diff reflects real differences between the prior stored rows and
+        // the new rows (never the new rows against themselves).
+        let diff = diff2.expect("diff present");
+        let kinds: Vec<&str> = diff.changes.iter().map(|c| c.kind.as_str()).collect();
+        assert!(kinds.contains(&"changed"));
+        assert!(kinds.contains(&"added"));
+        assert!(kinds.contains(&"removed"));
+        // The second snapshot's rows are also persisted.
+        assert_eq!(snapshot_rows(&store, &snap2.id).expect("stored"), new_rows);
+    }
+
+    #[test]
+    fn snapshot_rows_fails_honestly_when_no_rows_stored() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for(
+            "src",
+            "https://x/a",
+            "digest-legacy",
+            "2026-08-17T00:00:00Z",
+        );
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("first");
+        // No rows were stored; reading them must fail honestly rather than
+        // fabricating a record from counts or digests.
+        assert!(matches!(
+            snapshot_rows(&store, &snap1.id),
+            Err(SnapshotError::NoStoredRows(_))
+        ));
+    }
+
+    #[test]
+    fn record_snapshot_does_not_fabricate_diff_for_legacy_prior() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        // A legacy prior snapshot recorded with no rows.
+        let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("first");
+        // A new snapshot that supersedes it, with real rows.
+        let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
+        let new_rows = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A1".into(),
+        }];
+        let (_, diff2) =
+            record_snapshot(&store, &second, Some(&snap1), Some(1), &new_rows).expect("second");
+        // Because the prior has no stored rows, no diff is fabricated.
+        assert!(diff2.is_none());
     }
 }

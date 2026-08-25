@@ -10,6 +10,8 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use thiserror::Error;
 
+use crate::snapshot::RecordRow;
+
 /// The source's own incompleteness warning, preserved verbatim and carried on
 /// every record and in every case-file coverage summary.
 pub const INCOMPLETENESS_WARNING: &str = "Solicitations are provided on this page for information \
@@ -40,6 +42,25 @@ pub struct SolicitationRecord {
     /// The mirror's own warning that the list may be incomplete or outdated.
     pub incompleteness_warning: String,
     pub snapshot_digest: String,
+}
+
+impl SolicitationRecord {
+    /// A deterministic record row for snapshot-level diffing.
+    ///
+    /// The `key` is the record's identifier (may be empty for a heading-only
+    /// entry); the `canonical` form is built from the title, identifier, and
+    /// linked documents, ignoring order.
+    pub fn to_record_row(&self) -> RecordRow {
+        RecordRow {
+            key: self.identifier.clone(),
+            canonical: format!(
+                "{}|{}|{}",
+                self.title,
+                self.identifier,
+                self.linked_documents.join(",")
+            ),
+        }
+    }
 }
 
 /// Extracts solicitation records and their linked City-hosted documents.

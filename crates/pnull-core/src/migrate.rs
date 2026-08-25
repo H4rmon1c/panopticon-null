@@ -7,13 +7,16 @@
 //! (matters, events, identifiers, organizations, coverage ledger, immutable
 //! snapshots and revisions, coverage diffs, reconciliation, case files, and CORA
 //! drafts) without rewriting any prior canonical rows.
+//! v0.0.4B introduces `user_version = 3` and adds the `snapshot_rows` table that
+//! persists each snapshot's deterministic parsed record rows for real record-level
+//! diffing, without rewriting any prior canonical rows.
 
 use rusqlite::{Connection, Transaction};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 /// The highest schema version this build understands.
-pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 2;
+pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -44,13 +47,16 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     if version > MAX_SUPPORTED_SCHEMA_VERSION {
         return Err(MigrationError::UnsupportedVersion(version));
     }
-    // version is 0 (v0.0.1) or 1 (v0.0.2) here.
+    // version is 0 (v0.0.1), 1 (v0.0.2), or 2 (v0.0.3) here.
     let transaction = connection.transaction()?;
     if version < 1 {
         apply_v1(&transaction)?;
     }
     if version < 2 {
         apply_v2(&transaction)?;
+    }
+    if version < 3 {
+        apply_v3(&transaction)?;
     }
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
@@ -210,6 +216,25 @@ fn apply_v2(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS idx_rd_item ON reconciliation_decisions(item_id);
          CREATE INDEX IF NOT EXISTS idx_cf_matter ON case_files(matter_id);
          CREATE INDEX IF NOT EXISTS idx_cora_matter ON cora_drafts(matter_id);",
+    )
+}
+
+/// Creates the v0.0.4B `snapshot_rows` table. This persists each immutable
+/// snapshot's deterministic parsed record rows so `coverage diff` can compare
+/// real records between snapshots instead of synthetic counts/digests. Additive
+/// only: it never rewrites prior canonical rows. `seq` preserves duplicate rows
+/// (a row key may legitimately appear more than once within one snapshot).
+fn apply_v3(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS snapshot_rows (
+           snapshot_id TEXT NOT NULL REFERENCES source_snapshots(id),
+           seq INTEGER NOT NULL,
+           row_key TEXT NOT NULL,
+           canonical TEXT NOT NULL,
+           row_json TEXT NOT NULL,
+           PRIMARY KEY (snapshot_id, seq)
+         );
+         CREATE INDEX IF NOT EXISTS idx_sr_snapshot ON snapshot_rows(snapshot_id);",
     )
 }
 
@@ -378,7 +403,7 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 2);
+        assert_eq!(SCHEMA_VERSION, 3);
 
         // Every canonical v0.0.1 and v0.0.2 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -401,9 +426,91 @@ mod tests {
             "reconciliation_decisions",
             "case_files",
             "cora_drafts",
+            "snapshot_rows",
         ] {
             assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
         }
+    }
+
+    #[test]
+    fn v03_database_upgrades_to_v04b_adding_snapshot_rows() {
+        // Load the committed minimal v0.0.2 (schema version 1) fixture and
+        // migrate it all the way to v0.0.4B (schema version 3). The
+        // `snapshot_rows` table must exist, be empty, and every prior canonical
+        // row must survive unchanged.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.2-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.2 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.2 fixture");
+        let evidence_before = read_evidence(&connection);
+        let matters_before = rows_of(&connection, "matters", 4);
+
+        migrate(&mut connection).expect("migrate to v0.0.4B");
+        assert_eq!(current_version(&connection).expect("version"), 3);
+
+        // Prior canonical rows survive byte-for-byte.
+        assert_eq!(read_evidence(&connection), evidence_before);
+        assert_eq!(rows_of(&connection, "matters", 4), matters_before);
+
+        // snapshot_rows exists and is empty; source_snapshots is queryable.
+        assert_eq!(count_table(&connection, "snapshot_rows"), 0);
+        assert_eq!(count_table(&connection, "source_snapshots"), 0);
+    }
+
+    #[test]
+    fn snapshot_rows_table_round_trips_with_duplicates() {
+        // The snapshot_rows table must preserve duplicate row keys (a joint
+        // award can produce two rows with the same identifier) rather than
+        // collapsing them onto a single primary key.
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        migrate(&mut connection).expect("migrate fresh");
+
+        // Insert a snapshot, then two rows sharing a row_key.
+        connection
+            .execute(
+                "INSERT INTO source_snapshots(id, source_id, snapshot_json)
+                 VALUES ('snap:1', 'src', '{}')",
+                [],
+            )
+            .expect("insert snapshot");
+        connection
+            .execute(
+                "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_json)
+                 VALUES ('snap:1', 0, 'R21-T107KK', 'A', '{}'),
+                        ('snap:1', 1, 'R21-T107KK', 'B', '{}')",
+                [],
+            )
+            .expect("insert duplicate rows");
+
+        let count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM snapshot_rows WHERE snapshot_id='snap:1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count");
+        assert_eq!(count, 2, "duplicate row keys must both persist");
+
+        // seq is unique per snapshot, so a third identical key is also fine.
+        connection
+            .execute(
+                "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_json)
+                 VALUES ('snap:1', 2, 'R21-T107KK', 'B', '{}')",
+                [],
+            )
+            .expect("insert third duplicate row");
+        let count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM snapshot_rows WHERE snapshot_id='snap:1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count");
+        assert_eq!(count, 3);
     }
 
     #[test]

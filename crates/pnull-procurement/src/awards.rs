@@ -12,6 +12,8 @@ use pnull_core::{
 use scraper::{Html, Selector};
 use thiserror::Error;
 
+use crate::snapshot::RecordRow;
+
 #[derive(Debug, Error)]
 pub enum AwardsError {
     #[error("award table not found in source document")]
@@ -41,6 +43,28 @@ pub struct AwardRow {
     pub snapshot_digest: String,
     /// The normalized identifier, if a deterministic rule produced one.
     pub normalized_solicitation_id: Option<String>,
+}
+
+impl AwardRow {
+    /// A deterministic record row for snapshot-level diffing.
+    ///
+    /// The `key` is the normalized solicitation identifier (or the raw
+    /// identifier when no normalization applies), so a row that shares an
+    /// identifier but changes content registers as a change. The `canonical`
+    /// form is built from the row's content fields, ignoring order.
+    pub fn to_record_row(&self) -> RecordRow {
+        let key = self
+            .normalized_solicitation_id
+            .clone()
+            .unwrap_or_else(|| self.solicitation_id.clone());
+        RecordRow {
+            key,
+            canonical: format!(
+                "{}|{}|{}|{}|{}",
+                self.project_name, self.contractor, self.raw_amount, self.start_date, self.notes
+            ),
+        }
+    }
 }
 
 /// Parses the 6-column contract-award table from the source HTML.

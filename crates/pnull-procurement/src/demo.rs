@@ -63,6 +63,9 @@ pub struct DemoResult {
 /// `fixtures_dir` is the directory containing the committed fixture snapshots
 /// (`contract-awards.html`, `solicitations.html`, `SHA256SUMS`). `output_dir`
 /// receives the generated case files.
+/// Long top-level demo orchestration: sequentially ingests both sources, the
+/// the `OpenBook` finding, and builds both matters and case files.
+#[allow(clippy::too_many_lines)]
 pub fn run_demo(
     store: &Store,
     fixtures_dir: &Path,
@@ -82,6 +85,10 @@ pub fn run_demo(
         .map_err(|e| format!("parse solicitations: {e}"))?;
 
     let sol_acquisition = solicitation_acquisition(&solicitation_digest);
+    let sol_rows: Vec<_> = solicitation_records
+        .iter()
+        .map(SolicitationRecord::to_record_row)
+        .collect();
     let (sol_snapshot, _) = record_snapshot(
         store,
         &sol_acquisition,
@@ -89,7 +96,7 @@ pub fn run_demo(
             .map_err(|e| e.to_string())?
             .as_ref(),
         Some(solicitation_records.len() as u64),
-        &[],
+        &sol_rows,
     )
     .map_err(|e| e.to_string())?;
     let sol_evidence = vec![sol_snapshot.id.clone()];
@@ -102,6 +109,7 @@ pub fn run_demo(
         parse_awards_table(&award_html, &award_digest).map_err(|e| format!("parse awards: {e}"))?;
 
     let award_acquisition = award_acquisition(&award_digest);
+    let award_record_rows: Vec<_> = award_rows.iter().map(AwardRow::to_record_row).collect();
     let (award_snapshot, _) = record_snapshot(
         store,
         &award_acquisition,
@@ -109,7 +117,7 @@ pub fn run_demo(
             .map_err(|e| e.to_string())?
             .as_ref(),
         Some(award_rows.len() as u64),
-        &[],
+        &award_record_rows,
     )
     .map_err(|e| e.to_string())?;
     let award_evidence = vec![award_snapshot.id.clone()];

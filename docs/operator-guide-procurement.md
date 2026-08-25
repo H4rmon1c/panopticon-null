@@ -114,10 +114,21 @@ pnull coverage show
 pnull coverage diff <old-snapshot> <new-snapshot>
 ```
 
-`coverage show` prints the coverage ledger. `coverage diff` produces a deterministic
-record-level diff between two snapshots, which is how changed or removed official records
-remain historically inspectable. Coverage defaults to `unknown`/`partial`; a source is
-`complete` only with affirmative, reproducible evidence.
+`coverage show` prints the coverage ledger. Coverage defaults to `unknown`/`partial`; a
+source is `complete` only with affirmative, reproducible evidence.
+
+`coverage diff <old-snapshot> <new-snapshot>` reports real, immutable record-level changes
+between two snapshots. Each snapshot persists its deterministic parsed `RecordRow` values
+(a row key plus a canonical string) in SQLite as part of ingestion. When a changed snapshot is
+recorded, the previously stored rows are loaded and compared against the new rows; the diff
+reports the actual added, changed, and removed records. Reordering records produces no
+changes, and duplicate row keys (for example, joint awards sharing an identifier) are
+compared as multisets rather than collapsed.
+
+Legacy limitation: a snapshot recorded before record-level diffing was introduced has no
+stored rows. Diffing such a snapshot fails honestly with a clear message rather than
+fabricating rows from counts or digests. Re-ingest the affected source so deterministic rows
+are captured, then retry the diff.
 
 ### Case files
 

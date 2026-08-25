@@ -53,7 +53,7 @@ pub use reconcile::{
 };
 pub use snapshot::{
     Acquisition, RecordRow, SnapshotError, latest_snapshot, record_diff, record_snapshot,
-    record_unchanged, row_key,
+    record_unchanged, row_key, snapshot_rows,
 };
 pub use solicitations::{
     ABSENCE_PHRASING, INCOMPLETENESS_WARNING, SolicitationRecord, parse_solicitations,

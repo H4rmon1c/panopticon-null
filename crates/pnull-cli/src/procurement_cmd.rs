@@ -56,7 +56,10 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(records.len() as u64),
-        &[],
+        &records
+            .iter()
+            .map(pnull_procurement::SolicitationRecord::to_record_row)
+            .collect::<Vec<_>>(),
     )?;
     let sol_evidence = vec![sol_snapshot.id.clone()];
 
@@ -114,7 +117,10 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(rows.len() as u64),
-        &[],
+        &rows
+            .iter()
+            .map(pnull_procurement::AwardRow::to_record_row)
+            .collect::<Vec<_>>(),
     )?;
     let award_evidence = vec![award_snapshot.id.clone()];
 
@@ -384,21 +390,11 @@ pub fn coverage_diff(store: &Store, old_snapshot: &str, new_snapshot: &str) -> R
             new.source_id
         );
     }
-    // Deterministic placeholder rows: both snapshots store their record counts.
-    let old_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            old.record_count, old.persisted_digest
-        ),
-    }];
-    let new_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            new.record_count, new.persisted_digest
-        ),
-    }];
+    // Load each snapshot's persisted deterministic record rows. A legacy
+    // snapshot with no stored rows fails honestly rather than being diffed from
+    // counts or digests as fake records.
+    let old_rows = pnull_procurement::snapshot_rows(store, old_snapshot)?;
+    let new_rows = pnull_procurement::snapshot_rows(store, new_snapshot)?;
     let diff = pnull_procurement::record_diff(
         old_snapshot,
         new_snapshot,

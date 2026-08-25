@@ -408,6 +408,20 @@ pub struct RecordChange {
     pub summary: String,
 }
 
+/// A deterministic parsed record row persisted against an immutable snapshot.
+///
+/// `key` is the deterministic row identifier (e.g., a normalized solicitation
+/// number) used to match records across snapshots; `canonical` is the canonical
+/// text form of the row's content used to detect changes. A single key may
+/// legitimately appear multiple times within one snapshot (e.g., a joint award
+/// with separate contractor lines), so rows are stored positionally and compared
+/// as multisets.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SnapshotRow {
+    pub key: String,
+    pub canonical: String,
+}
+
 /// A deterministic record-level diff between two snapshots of a source.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SnapshotDiff {

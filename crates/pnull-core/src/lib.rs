@@ -18,7 +18,7 @@ pub use procurement::{
     CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
     MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
     ProcurementMatter, ProcurementOrganization, ReconciliationDecision, ReconciliationItem,
-    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SourceAuthority,
+    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SnapshotRow, SourceAuthority,
     SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
     organization_exact_match, parse_money, sha256_manifest,
 };
@@ -1022,6 +1022,53 @@ impl Store {
         json.map(|j| serde_json::from_str(&j))
             .transpose()
             .map_err(CoreError::from)
+    }
+
+    /// Persists a snapshot's deterministic parsed record rows. Rows are stored
+    /// positionally so duplicate row keys survive; the table is additive and
+    /// never rewrites prior rows.
+    pub fn insert_snapshot_rows(
+        &self,
+        snapshot_id: &str,
+        rows: &[SnapshotRow],
+    ) -> Result<(), CoreError> {
+        let existing: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM snapshot_rows WHERE snapshot_id = ?1",
+            [snapshot_id],
+            |row| row.get(0),
+        )?;
+        if existing > 0 {
+            // Idempotent: a snapshot already captured its rows once.
+            return Ok(());
+        }
+        for (index, row) in rows.iter().enumerate() {
+            self.connection.execute(
+                "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    snapshot_id,
+                    i64::try_from(index).unwrap_or(i64::MAX),
+                    row.key,
+                    row.canonical,
+                    serde_json::to_string(row)?
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Loads a snapshot's persisted deterministic record rows in stored order.
+    pub fn snapshot_rows(&self, snapshot_id: &str) -> Result<Vec<SnapshotRow>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT row_json FROM snapshot_rows WHERE snapshot_id = ?1 ORDER BY seq")?;
+        let rows = statement.query_map([snapshot_id], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let json = row?;
+            out.push(serde_json::from_str::<SnapshotRow>(&json)?);
+        }
+        Ok(out)
     }
 
     pub fn insert_reconciliation_item(&self, item: &ReconciliationItem) -> Result<bool, CoreError> {
