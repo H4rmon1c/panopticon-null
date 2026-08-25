@@ -55,6 +55,19 @@ fn real_pdf_fixture_is_extracted_by_poppler_in_sandbox() {
     )
     .expect("PDF ingestion");
 
+    // On failure, surface the full structured extraction error (failing layer,
+    // exit status or signal, and sanitized stderr) so the CI log explains why.
+    if outcome.record.extraction_status != ExtractionStatus::Complete {
+        eprintln!("extraction_status: {:?}", outcome.record.extraction_status);
+        match &outcome.record.extraction_error {
+            Some(error) => {
+                eprintln!("extraction_error.code:    {}", error.code);
+                eprintln!("extraction_error.message: {}", error.message);
+            }
+            None => eprintln!("extraction_error: <none>"),
+        }
+    }
+
     assert_eq!(outcome.record.extraction_status, ExtractionStatus::Complete);
     assert!(
         outcome
