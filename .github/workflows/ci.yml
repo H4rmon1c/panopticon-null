@@ -24,6 +24,12 @@ jobs:
         run: nix develop --command cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test offline fixtures
         run: nix develop --command cargo test --workspace --all-features
+      - name: Enable unprivileged user namespaces for bubblewrap
+        # ubuntu-24.04 GitHub Actions runners restrict unprivileged user
+        # namespaces by default (kernel.apparmor_restrict_unprivileged_userns=1),
+        # which makes the nix-built (non-setuid) bubblewrap's new-network-namespace
+        # loopback setup fail with "RTM_NEWADDR: Operation not permitted".
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Real sandbox extraction (Bubblewrap + Poppler)
         # Nested Bubblewrap is unsupported inside the Nix derivation, so the
         # real sandbox integration test is #[ignore]d there and is run here,
