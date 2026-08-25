@@ -133,9 +133,13 @@ identical without an explicit deterministic rule and tests.
 
 Connections may be created automatically only through:
 
-- exact normalized identifiers;
-- a relationship explicitly stated by an official source;
-- an existing immutable relationship already supported by evidence.
+- exact normalized identifiers (where **both** endpoints resolve to a stored snapshot with a
+  valid SHA-256 digest);
+
+An "explicitly stated" relationship (a link declared directly by an official record) is **not
+yet supported** — the capability is unimplemented and is not advertised as working. An
+existing immutable relationship already supported by evidence is likewise carried through
+only when that evidence resolves to exact, digest-bound snapshots.
 
 All other relationships require human confirmation. Records are never connected
 automatically solely through similar vendor names, similar titles, equal dollar amounts,
@@ -145,6 +149,10 @@ A reconciliation-review queue holds candidate identifier matches, vendor aliases
 conflicting award amounts, conflicting dates, duplicate or revised rows, missing documents,
 and records that disappear from a later snapshot. Every accepted or rejected reconciliation
 decision is immutable and auditable.
+
+The chain builder's `Review suggestions` section is **not** the reconciliation queue: it lists
+in-memory candidate suggestions derived at read time and does not persist them. Only the
+`reconcile` command writes durable, auditable reconciliation items.
 
 ## Case file
 

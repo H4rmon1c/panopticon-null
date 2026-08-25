@@ -80,7 +80,7 @@ pnull procurement reconcile <matter> --item <item-id> --decision <accepted|rejec
 
 Every decision is append-only and auditable; it binds to the exact item and decision inputs.
 
-### The linked record (v0.0.4)
+### The linked record (v0.0.4A)
 
 ```console
 pnull procurement chain <matter>
@@ -91,15 +91,21 @@ pnull procurement chain <matter>
 `solicitation -> amendment -> award -> contract -> expenditure`
 
 — as a deterministic linked record. Each stage shows the observed records, and every link
-retains its supporting record, citation, and snapshot digest, so the connection can be traced
-to digest-bound evidence. Missing stages render as `Not observed`, never as proof that no
-record exists.
+carries digest-bound evidence for **both** endpoints: the event id, source id, snapshot id,
+and exact SHA-256 digest of the snapshot each record was ingested from. The connection can
+therefore be traced to immutable, digest-bound evidence. Missing stages render as
+`Not observed`, never as proof that no record exists.
 
-Links are created only when normalized procurement identifiers match exactly, or when an
-official record explicitly identifies the relationship. Similar, incomplete, or ambiguous
-identifiers are never auto-linked; they are queued for human reconciliation instead. If a
-fixture contains no genuine cross-stage match, the command reports the exact missing document
-rather than manufacturing a connection.
+A link is created only when **both** endpoints resolve to a stored, immutable source snapshot
+with a valid SHA-256 digest, and the normalized procurement identifiers match exactly.
+Similar, incomplete, or ambiguous identifiers are never auto-linked; they are surfaced as
+**Review suggestions** (in-memory candidates, not yet persisted reconciliation items). If
+either endpoint of a candidate link lacks digest-bound evidence, the link is not created and
+an explicit evidence gap is rendered instead. A newer snapshot for a source never retroactively
+rebinds an existing link — each event stays bound to the exact snapshot it was ingested from.
+
+Explicitly-stated relationships (a link declared directly by an official record) are **not yet
+supported**; the capability is unimplemented and is not advertised as working.
 
 ### Coverage
 

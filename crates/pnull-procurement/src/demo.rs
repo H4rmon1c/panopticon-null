@@ -82,7 +82,7 @@ pub fn run_demo(
         .map_err(|e| format!("parse solicitations: {e}"))?;
 
     let sol_acquisition = solicitation_acquisition(&solicitation_digest);
-    record_snapshot(
+    let (sol_snapshot, _) = record_snapshot(
         store,
         &sol_acquisition,
         crate::snapshot::latest_snapshot(store, &sol_acquisition.source_id)
@@ -92,6 +92,7 @@ pub fn run_demo(
         &[],
     )
     .map_err(|e| e.to_string())?;
+    let sol_evidence = vec![sol_snapshot.id.clone()];
 
     // 2. Ingest the contract-award mirror snapshot.
     let award_bytes = fs::read(&awards_path).map_err(|e| format!("read awards fixture: {e}"))?;
@@ -101,7 +102,7 @@ pub fn run_demo(
         parse_awards_table(&award_html, &award_digest).map_err(|e| format!("parse awards: {e}"))?;
 
     let award_acquisition = award_acquisition(&award_digest);
-    record_snapshot(
+    let (award_snapshot, _) = record_snapshot(
         store,
         &award_acquisition,
         crate::snapshot::latest_snapshot(store, &award_acquisition.source_id)
@@ -111,14 +112,22 @@ pub fn run_demo(
         &[],
     )
     .map_err(|e| e.to_string())?;
+    let award_evidence = vec![award_snapshot.id.clone()];
 
     // 3. Record the OpenBook negative capability finding.
     record_openbook_finding(store)?;
 
     // 4. Build the two matters.
-    build_transit_fare_matter(store, &award_digest, &solicitation_records, &award_rows)
+    build_transit_fare_matter(
+        store,
+        &award_digest,
+        &solicitation_records,
+        &award_rows,
+        &sol_evidence,
+    )
+    .map_err(|e| e.to_string())?;
+    build_control_matter(store, &award_digest, &award_rows, &award_evidence)
         .map_err(|e| e.to_string())?;
-    build_control_matter(store, &award_digest, &award_rows).map_err(|e| e.to_string())?;
 
     // 5. Generate case files for both matters.
     fs::create_dir_all(output_dir).map_err(|e| format!("create output dir: {e}"))?;
@@ -289,6 +298,7 @@ fn build_transit_fare_matter(
     award_digest: &str,
     solicitation_records: &[SolicitationRecord],
     award_rows: &[AwardRow],
+    evidence_ids: &[String],
 ) -> Result<(), String> {
     let matter = ProcurementMatter {
         id: TRANSIT_FARE_MATTER_ID.to_owned(),
@@ -350,6 +360,10 @@ fn build_transit_fare_matter(
         .map_err(|e| e.to_string())?;
 
     // Events: solicitation (RFI) published, then questions & answers published.
+    let bindings = EventBindings {
+        identifier_ids: std::slice::from_ref(&identifier.id),
+        evidence_ids,
+    };
     let event_ids: Vec<String> = vec![
         insert_event(
             store,
@@ -358,8 +372,8 @@ fn build_transit_fare_matter(
             Some("2025-12-01".to_owned()),
             "Next-Generation Transit Fare Collection System RFI (R26-023AB) published on the City solicitation mirror"
                 .to_owned(),
-            std::slice::from_ref(&identifier.id),
             "colorado-springs-solicitation-mirror",
+            &bindings,
         )?,
         insert_event(
             store,
@@ -368,8 +382,8 @@ fn build_transit_fare_matter(
             Some("2026-01-15".to_owned()),
             "Submitted questions and Mountain Metropolitan Transit responses published for R26-023AB"
                 .to_owned(),
-            std::slice::from_ref(&identifier.id),
             "colorado-springs-solicitation-mirror",
+            &bindings,
         )?,
     ];
     let _ = event_ids;
@@ -427,6 +441,7 @@ fn build_control_matter(
     store: &Store,
     award_digest: &str,
     award_rows: &[AwardRow],
+    evidence_ids: &[String],
 ) -> Result<(), String> {
     let row = award_rows
         .iter()
@@ -485,6 +500,10 @@ fn build_control_matter(
 
     // Award-announced event with the raw amount preserved as stated.
     let _money: MoneyValue = parse_money(&row.raw_amount);
+    let bindings = EventBindings {
+        identifier_ids: std::slice::from_ref(&identifier.id),
+        evidence_ids,
+    };
     let _ = insert_event(
         store,
         CONTROL_MATTER_ID,
@@ -494,8 +513,8 @@ fn build_control_matter(
             "Award announced for {} (crack seal materials); raw awarded amount '{}'",
             row.solicitation_id, row.raw_amount
         ),
-        std::slice::from_ref(&identifier.id),
         "colorado-springs-contract-awards",
+        &bindings,
     )?;
 
     // Vendor alias candidates for the joint venture go to human review, never
@@ -514,15 +533,22 @@ fn build_control_matter(
     Ok(())
 }
 
-/// Inserts a deterministic procurement event and returns its id.
+/// Identifiers and snapshot evidence an event is bound to at ingestion.
+struct EventBindings<'a> {
+    identifier_ids: &'a [String],
+    evidence_ids: &'a [String],
+}
+
+/// Inserts a deterministic procurement event bound to the exact snapshot it
+/// was ingested from and returns its id.
 fn insert_event(
     store: &Store,
     matter_id: &str,
     kind: ProcurementEventKind,
     date: Option<String>,
     summary: String,
-    identifier_ids: &[String],
     source_id: &str,
+    bindings: &EventBindings,
 ) -> Result<String, String> {
     let date_key = date.clone().unwrap_or_else(|| "date unknown".to_owned());
     let event = ProcurementEvent {
@@ -531,8 +557,8 @@ fn insert_event(
         kind,
         date,
         summary,
-        identifier_ids: identifier_ids.to_vec(),
-        evidence_ids: Vec::new(),
+        identifier_ids: bindings.identifier_ids.to_vec(),
+        evidence_ids: bindings.evidence_ids.to_vec(),
         source_id: source_id.to_owned(),
     };
     store

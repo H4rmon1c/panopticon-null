@@ -25,8 +25,8 @@ pub use casefile::{
     money_display, render_json as render_case_json, render_markdown as render_case_markdown,
 };
 pub use chain::{
-    ChainError, ChainLink, ChainStage, ChainStageObservation, ChainView, LinkKind, build_chain,
-    linked_by_exact_identifier, render as render_chain,
+    ChainError, ChainEvidence, ChainLink, ChainStage, ChainStageObservation, ChainView,
+    EvidenceGap, LinkKind, build_chain, linked_by_exact_identifier, render as render_chain,
 };
 pub use cora::{
     CITY_DEPARTMENT, REVIEW_REQUIRED, build_draft as build_cora_draft,

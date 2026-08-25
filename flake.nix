@@ -53,6 +53,10 @@
             cargoBuildFlags = [ "--workspace" "--all-features" ];
             checkPhase = ''
               runHook preCheck
+              # The real-sandbox (Bubblewrap + Poppler) integration test is
+              # #[ignore]d because nested Bubblewrap cannot run inside the Nix
+              # build sandbox. It is executed in a dedicated required CI step
+              # outside this derivation (see .github/workflows/ci.yml).
               cargo test --workspace --all-features
               runHook postCheck
             '';

@@ -67,7 +67,8 @@ pub fn ensure_matter(store: &Store, matter_id: &str, title: &str) -> Result<(), 
     Ok(())
 }
 
-/// Inserts an award-stage event bound to an identifier.
+/// Inserts an award-stage event bound to an identifier and the exact snapshot
+/// it was ingested from.
 pub fn insert_award_event(
     store: &Store,
     matter_id: &str,
@@ -75,6 +76,7 @@ pub fn insert_award_event(
     source_id: &str,
     start_date: &str,
     summary: &str,
+    evidence_ids: &[String],
 ) -> Result<(), MatterError> {
     let date_key = if start_date.trim().is_empty() {
         "date unknown".to_owned()
@@ -93,20 +95,22 @@ pub fn insert_award_event(
         date: Some(start_date.to_owned()),
         summary: summary.to_owned(),
         identifier_ids: vec![identifier_id.to_owned()],
-        evidence_ids: Vec::new(),
+        evidence_ids: evidence_ids.to_vec(),
         source_id: source_id.to_owned(),
     };
     store.insert_procurement_event(&event)?;
     Ok(())
 }
 
-/// Inserts a solicitation-stage event bound to an identifier.
+/// Inserts a solicitation-stage event bound to an identifier and the exact
+/// snapshot it was ingested from.
 pub fn insert_solicitation_event(
     store: &Store,
     matter_id: &str,
     identifier_id: &str,
     source_id: &str,
     summary: &str,
+    evidence_ids: &[String],
 ) -> Result<(), MatterError> {
     let date_key = "date unknown".to_owned();
     let event = ProcurementEvent {
@@ -121,7 +125,7 @@ pub fn insert_solicitation_event(
         date: None,
         summary: summary.to_owned(),
         identifier_ids: vec![identifier_id.to_owned()],
-        evidence_ids: Vec::new(),
+        evidence_ids: evidence_ids.to_vec(),
         source_id: source_id.to_owned(),
     };
     store.insert_procurement_event(&event)?;
@@ -161,8 +165,13 @@ pub fn award_amount(raw: &str) -> MoneyValue {
 }
 
 /// Attaches an award row to a real, reachable matter derived from its
-/// solicitation identifier. Returns the matter id used.
-pub fn attach_award_row(store: &Store, row: &AwardRow) -> Result<String, MatterError> {
+/// solicitation identifier. Returns the matter id used. Every created event is
+/// bound to the exact snapshot it was ingested from (`evidence_ids`).
+pub fn attach_award_row(
+    store: &Store,
+    row: &AwardRow,
+    evidence_ids: &[String],
+) -> Result<String, MatterError> {
     let normalized = row.normalized_solicitation_id.clone().unwrap_or_else(|| {
         pnull_core::normalize_identifier(&row.solicitation_id)
             .map_or_else(|| row.solicitation_id.clone(), |(k, _)| k)
@@ -205,15 +214,19 @@ pub fn attach_award_row(store: &Store, row: &AwardRow) -> Result<String, MatterE
             "Award announced for {} ({}); raw awarded amount '{}'",
             row.solicitation_id, row.project_name, row.raw_amount
         ),
+        evidence_ids,
     )?;
     Ok(matter_id)
 }
 
 /// Attaches a solicitation record to a real, reachable matter. Returns the
 /// matter id used, or `None` when the record has no identifier to key on.
+/// Every created event is bound to the exact snapshot it was ingested from
+/// (`evidence_ids`).
 pub fn attach_solicitation_record(
     store: &Store,
     record: &SolicitationRecord,
+    evidence_ids: &[String],
 ) -> Result<Option<String>, MatterError> {
     if record.identifier.trim().is_empty() {
         return Ok(None);
@@ -250,6 +263,7 @@ pub fn attach_solicitation_record(
         &identifier.id,
         "colorado-springs-solicitation-mirror",
         &format!("Solicitation published: {}", record.title),
+        evidence_ids,
     )?;
     Ok(Some(matter_id))
 }
@@ -297,7 +311,7 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = Store::open(dir.path()).expect("store");
         let row = award_row();
-        let matter_id = attach_award_row(&store, &row).expect("attach");
+        let matter_id = attach_award_row(&store, &row, &[]).expect("attach");
         assert_eq!(matter_id, "proc:matter:co:b22t168kk");
         // The matter resolves like any other (no hidden id).
         let matter = store.procurement_matter(&matter_id).expect("matter");
@@ -324,7 +338,7 @@ mod tests {
             incompleteness_warning: "warn".to_owned(),
             snapshot_digest: "d41d8cd98f00b204e9800998ecf8427e".to_owned(),
         };
-        let matter_id = attach_solicitation_record(&store, &record)
+        let matter_id = attach_solicitation_record(&store, &record, &[])
             .expect("attach")
             .expect("matter");
         assert_eq!(matter_id, "proc:matter:co:r25301ab");

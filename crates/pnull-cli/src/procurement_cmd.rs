@@ -51,16 +51,19 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
-    record_snapshot(
+    let (sol_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(records.len() as u64),
         &[],
     )?;
+    let sol_evidence = vec![sol_snapshot.id.clone()];
 
     for record in &records {
-        if let Some(matter_id) = pnull_procurement::attach_solicitation_record(store, record)? {
+        if let Some(matter_id) =
+            pnull_procurement::attach_solicitation_record(store, record, &sol_evidence)?
+        {
             println!("  -> attached to reachable matter {matter_id}");
         }
     }
@@ -106,16 +109,17 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
-    record_snapshot(
+    let (award_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(rows.len() as u64),
         &[],
     )?;
+    let award_evidence = vec![award_snapshot.id.clone()];
 
     for row in &rows {
-        let matter_id = pnull_procurement::attach_award_row(store, row)?;
+        let matter_id = pnull_procurement::attach_award_row(store, row, &award_evidence)?;
         println!("  -> attached to reachable matter {matter_id}");
     }
     println!(

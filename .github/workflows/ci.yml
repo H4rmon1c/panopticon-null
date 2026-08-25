@@ -24,5 +24,11 @@ jobs:
         run: nix develop --command cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test offline fixtures
         run: nix develop --command cargo test --workspace --all-features
+      - name: Real sandbox extraction (Bubblewrap + Poppler)
+        # Nested Bubblewrap is unsupported inside the Nix derivation, so the
+        # real sandbox integration test is #[ignore]d there and is run here,
+        # outside the derivation, where real Bubblewrap and Poppler execute.
+        # This step fails if PDF extraction does not work.
+        run: nix develop --command cargo test -p pnull-ingest --test real_sandbox_pdf -- --ignored --nocapture
       - name: Dependency policy
         run: nix develop --command cargo deny check

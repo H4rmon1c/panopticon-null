@@ -1402,30 +1402,6 @@ mod tests {
     }
 
     #[test]
-    fn real_pdf_fixture_is_extracted_by_poppler_in_sandbox() {
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let bytes = fs::read(workspace.join("fixtures/co/ordinance-25-93-draft.pdf"))
-            .expect("official PDF fixture");
-        let dir = tempdir().expect("temporary directory");
-        let store = Store::open(dir.path()).expect("store");
-        let mut pdf_request = request("application/pdf");
-        pdf_request.max_bytes = DEFAULT_MAX_BYTES;
-        pdf_request.original_filename = "ordinance.pdf".to_owned();
-        let sandbox = RealSandbox::new(ExtractionSandboxConfig::defaults()).expect("bwrap sandbox");
-        let mut b = budgets();
-        let outcome = ingest_bytes(&store, &sandbox, &mut b, &build(), &pdf_request, &bytes)
-            .expect("PDF ingestion");
-        assert_eq!(outcome.record.extraction_status, ExtractionStatus::Complete);
-        assert!(
-            outcome
-                .extracted_text
-                .contains("POLICE DEPARTMENT TECHNOLOGY SURCHARGE")
-        );
-        assert!(!outcome.text_maps.is_empty());
-        store.verify(&outcome.record.id).expect("stored digest");
-    }
-
-    #[test]
     fn official_legistar_json_fixture_extracts_event_actions() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let bytes = fs::read(workspace.join("fixtures/co/event-2660-final-vote.json"))

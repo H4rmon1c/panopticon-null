@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -27,6 +28,35 @@ use tempfile::TempDir;
 use thiserror::Error;
 use wait_timeout::ChildExt;
 
+/// The component in the sandbox pipeline that reported a failure.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FailureLayer {
+    /// `prlimit` could not launch the sandboxed pipeline.
+    Prlimit,
+    /// Bubblewrap could not set up the sandbox (namespace/mount setup failed).
+    Bubblewrap,
+    /// The extractor itself (for example Poppler's `pdftotext`) exited non-zero.
+    Extractor,
+}
+
+/// Structured evidence retained when a sandboxed extractor fails. The exit
+/// status and stderr are never discarded, so the operator can tell why a
+/// sandboxed run failed and whether the fault was in `prlimit`, Bubblewrap, or
+/// the extractor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtractorFailure {
+    /// The allowlisted extractor that was invoked (e.g. `pdftotext`).
+    pub extractor: String,
+    /// Which component of the pipeline failed.
+    pub layer: FailureLayer,
+    /// The exit code, when the process exited normally with a status.
+    pub exit_code: Option<i32>,
+    /// The terminating signal number, when the process was killed by a signal.
+    pub signal: Option<i32>,
+    /// Bounded, sanitized stderr captured from the failed run.
+    pub stderr: String,
+}
+
 #[derive(Debug, Error)]
 pub enum SandboxError {
     #[error("sandbox backend unavailable: {0}")]
@@ -34,11 +64,31 @@ pub enum SandboxError {
     #[error("allowlisted extractor is unavailable: {0}")]
     ExtractorUnavailable(String),
     #[error("sandboxed extractor failed: {0}")]
-    Failed(String),
+    Failed(ExtractorFailure),
     #[error("sandboxed extractor exceeded its time limit: {0}")]
     Timeout(String),
     #[error("sandbox I/O failure: {0}")]
     Io(#[from] std::io::Error),
+}
+
+impl std::fmt::Display for ExtractorFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let layer = match self.layer {
+            FailureLayer::Prlimit => "prlimit",
+            FailureLayer::Bubblewrap => "bubblewrap",
+            FailureLayer::Extractor => "extractor",
+        };
+        let status = match (self.exit_code, self.signal) {
+            (Some(code), _) => format!("exit {code}"),
+            (None, Some(sig)) => format!("signal {sig}"),
+            (None, None) => "no exit status".to_owned(),
+        };
+        write!(f, "{} (layer {layer}, {status})", self.extractor)?;
+        if !self.stderr.is_empty() {
+            write!(f, " — stderr: {}", self.stderr)?;
+        }
+        Ok(())
+    }
 }
 
 /// Resource limits applied to every sandboxed subprocess.
@@ -216,7 +266,14 @@ impl Sandbox for BubblewrapSandbox {
         let stdout = read_limited(&stdout_path, self.config.max_output_bytes)?;
         let stderr = read_limited(&stderr_path, self.config.max_output_bytes)?;
         if !success {
-            return Err(SandboxError::Failed(program.to_owned()));
+            let stderr_text = sanitize_stderr(&stderr, self.config.max_output_bytes);
+            return Err(SandboxError::Failed(ExtractorFailure {
+                extractor: program.to_owned(),
+                layer: classify_layer(&stderr_text),
+                exit_code: status.code(),
+                signal: status.signal(),
+                stderr: stderr_text,
+            }));
         }
         Ok(SandboxOutput {
             stdout,
@@ -281,7 +338,14 @@ impl Sandbox for FakeSandbox {
         let stdout = fs::read(&stdout_path)?;
         let stderr = fs::read(&stderr_path)?;
         if !success {
-            return Err(SandboxError::Failed(program.to_owned()));
+            let stderr_text = sanitize_stderr(&stderr, self.config.max_output_bytes);
+            return Err(SandboxError::Failed(ExtractorFailure {
+                extractor: program.to_owned(),
+                layer: classify_layer(&stderr_text),
+                exit_code: status.code(),
+                signal: status.signal(),
+                stderr: stderr_text,
+            }));
         }
         let _ = self.config.max_output_bytes;
         Ok(SandboxOutput {
@@ -332,6 +396,49 @@ fn read_limited(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SandboxError> {
     Ok(fs::read(path)?)
 }
 
+/// Sanitizes captured stderr for operator display: bounds it to `max_bytes`
+/// (by character, not byte, to stay within the limit after UTF-8 lossy
+/// decoding), trims surrounding whitespace, and strips control characters so
+/// terminal escape sequences and other non-printable bytes never reach a
+/// terminal or log.
+fn sanitize_stderr(bytes: &[u8], max_bytes: u64) -> String {
+    let lossy = String::from_utf8_lossy(bytes);
+    let mut cleaned: String = String::new();
+    for ch in lossy.chars() {
+        if ch == '\n' || ch == '\t' || !ch.is_control() {
+            cleaned.push(ch);
+        }
+        if cleaned.chars().count() as u64 >= max_bytes {
+            break;
+        }
+    }
+    cleaned.trim().to_owned()
+}
+
+/// Classifies which component of the sandbox pipeline failed. The pipeline is
+/// `prlimit -- bwrap ... -- <extractor>`; a non-zero exit is normally the
+/// extractor's status (Bubblewrap propagates the child's exit code), but a
+/// Bubblewrap setup failure produces its own distinctive namespace/mount error
+/// in stderr, which we attribute to Bubblewrap.
+fn classify_layer(stderr: &str) -> FailureLayer {
+    let lower = stderr.to_ascii_lowercase();
+    if lower.contains("prlimit:")
+        || lower.contains("prlimit ")
+        || lower.contains("failed to set resource limits")
+    {
+        FailureLayer::Prlimit
+    } else if lower.contains("bwrap:")
+        || lower.contains("creating new namespace")
+        || lower.contains("unshare")
+        || lower.contains("mount")
+        || lower.contains("operation not permitted")
+    {
+        FailureLayer::Bubblewrap
+    } else {
+        FailureLayer::Extractor
+    }
+}
+
 fn resolve_executable(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH")
         .into_iter()
@@ -368,6 +475,47 @@ mod tests {
             Duration::from_secs(5),
         );
         assert!(matches!(result, Err(SandboxError::ExtractorUnavailable(_))));
+    }
+
+    #[test]
+    fn failed_run_retains_extractor_exit_status_and_stderr() {
+        let sandbox = fake();
+        // A real tool that exits non-zero and writes to stderr.
+        let result = sandbox.run(
+            "/bin/sh",
+            &[OsStr::new("-c"), OsStr::new("echo boom >&2; exit 7")],
+            &[],
+            Duration::from_secs(5),
+        );
+        match result {
+            Err(SandboxError::Failed(failure)) => {
+                assert_eq!(failure.extractor, "/bin/sh");
+                assert_eq!(failure.exit_code, Some(7));
+                assert_eq!(failure.signal, None);
+                assert!(failure.stderr.contains("boom"), "stderr preserved");
+                assert_eq!(failure.layer, FailureLayer::Extractor);
+            }
+            other => panic!("expected Failed with structured evidence, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bubblewrap_setup_failure_is_attributed_to_bubblewrap() {
+        // A pipeline that fails during sandbox setup produces bwrap-specific
+        // stderr; the layer must be Bubblewrap, not Extractor.
+        let sandbox = fake();
+        let result = sandbox.run(
+            "/bin/sh",
+            &[OsStr::new("-c"), OsStr::new("echo 'bwrap: Creating new namespace failed: Operation not permitted' >&2; exit 1")],
+            &[],
+            Duration::from_secs(5),
+        );
+        match result {
+            Err(SandboxError::Failed(failure)) => {
+                assert_eq!(failure.layer, FailureLayer::Bubblewrap);
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 
     fn real_sandbox_available() -> Option<BubblewrapSandbox> {
