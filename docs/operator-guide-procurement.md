@@ -80,6 +80,27 @@ pnull procurement reconcile <matter> --item <item-id> --decision <accepted|rejec
 
 Every decision is append-only and auditable; it binds to the exact item and decision inputs.
 
+### The linked record (v0.0.4)
+
+```console
+pnull procurement chain <matter>
+```
+
+`chain` prints the ordered procurement lifecycle for a matter —
+
+`solicitation -> amendment -> award -> contract -> expenditure`
+
+— as a deterministic linked record. Each stage shows the observed records, and every link
+retains its supporting record, citation, and snapshot digest, so the connection can be traced
+to digest-bound evidence. Missing stages render as `Not observed`, never as proof that no
+record exists.
+
+Links are created only when normalized procurement identifiers match exactly, or when an
+official record explicitly identifies the relationship. Similar, incomplete, or ambiguous
+identifiers are never auto-linked; they are queued for human reconciliation instead. If a
+fixture contains no genuine cross-stage match, the command reports the exact missing document
+rather than manufacturing a connection.
+
 ### Coverage
 
 ```console

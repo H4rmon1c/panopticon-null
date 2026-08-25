@@ -145,6 +145,9 @@ enum ProcurementCommand {
     Gaps {
         matter: String,
     },
+    Chain {
+        matter: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -444,6 +447,7 @@ fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<(
         ),
         ProcurementCommand::Show { matter } => procurement_cmd::show_matter(&store, &matter),
         ProcurementCommand::Gaps { matter } => procurement_cmd::gaps(&store, &matter),
+        ProcurementCommand::Chain { matter } => procurement_cmd::chain(&store, &matter),
     }
 }
 

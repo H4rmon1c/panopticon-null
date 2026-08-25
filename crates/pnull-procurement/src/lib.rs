@@ -7,11 +7,13 @@
 
 pub mod awards;
 pub mod casefile;
+pub mod chain;
 pub mod cora;
 pub mod coverage;
 pub mod csv;
 pub mod demo;
 pub mod import;
+pub mod matters;
 pub mod openbook;
 pub mod reconcile;
 pub mod snapshot;
@@ -21,6 +23,10 @@ pub use awards::{AwardRow, award_identifier, award_organization, parse_awards_ta
 pub use casefile::{
     CaseFileContent, build_content, default_limitations, generate as generate_case_file,
     money_display, render_json as render_case_json, render_markdown as render_case_markdown,
+};
+pub use chain::{
+    ChainError, ChainLink, ChainStage, ChainStageObservation, ChainView, LinkKind, build_chain,
+    linked_by_exact_identifier, render as render_chain,
 };
 pub use cora::{
     CITY_DEPARTMENT, REVIEW_REQUIRED, build_draft as build_cora_draft,
@@ -34,6 +40,9 @@ pub use demo::{
     CONTROL_MATTER_ID, DemoResult, TRANSIT_FARE_MATTER_ID, run_demo, verify_fixture_digests,
 };
 pub use import::{SuppliedRecord, SuppliedRecordDeclaration, import_supplied_record};
+pub use matters::{
+    attach_award_row, attach_solicitation_record, ensure_matter, matter_id_for_identifier,
+};
 pub use openbook::{
     OPENBOOK_DATASETS, OPENBOOK_FIELDS, OPENBOOK_LANDING_URL, OPENBOOK_SOCRATA_URL, OpenBookFinding,
 };

@@ -60,9 +60,8 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
     )?;
 
     for record in &records {
-        if let Some(identifier) = pnull_procurement::solicitation_identifier("proc:matters", record)
-        {
-            store.insert_procurement_identifier(&identifier)?;
+        if let Some(matter_id) = pnull_procurement::attach_solicitation_record(store, record)? {
+            println!("  -> attached to reachable matter {matter_id}");
         }
     }
     println!(
@@ -116,16 +115,8 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
     )?;
 
     for row in &rows {
-        if let Some(identifier) =
-            pnull_procurement::award_identifier("proc:matters", &row.solicitation_id)
-        {
-            store.insert_procurement_identifier(&identifier)?;
-        }
-        if !row.contractor.trim().is_empty() {
-            let org =
-                pnull_procurement::award_organization("proc:matters", &row.contractor, &digest);
-            store.insert_procurement_organization(&org)?;
-        }
+        let matter_id = pnull_procurement::attach_award_row(store, row)?;
+        println!("  -> attached to reachable matter {matter_id}");
     }
     println!(
         "ingested {} award row(s) from {} (digest {})",
@@ -293,6 +284,15 @@ pub fn gaps(store: &Store, matter_id: &str) -> Result<()> {
         );
     }
     println!("Gap phrasing: Not observed in the checked sources.");
+    Ok(())
+}
+
+/// Run `procurement chain <matter>` — print the ordered chain, evidence-backed
+/// links, and every unresolved gap.
+pub fn chain(store: &Store, matter_id: &str) -> Result<()> {
+    let view =
+        pnull_procurement::build_chain(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
+    print!("{}", pnull_procurement::render_chain(&view));
     Ok(())
 }
 
