@@ -18,9 +18,10 @@ pub use procurement::{
     CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
     MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
     ProcurementMatter, ProcurementOrganization, ReconciliationDecision, ReconciliationItem,
-    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SnapshotRow, SourceAuthority,
-    SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
-    organization_exact_match, parse_money, sha256_manifest,
+    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SnapshotRow, SnapshotRowSet,
+    SourceAuthority, SourceSnapshot, identifier_match_key, normalize_identifier,
+    organization_alias_candidate, organization_exact_match, parse_money, row_set_digest,
+    sha256_manifest,
 };
 pub use types::{
     Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
@@ -51,6 +52,12 @@ pub enum CoreError {
     },
     #[error("schema migration failed: {0}")]
     Migration(#[from] migrate::MigrationError),
+    #[error(
+        "snapshot {snapshot_id} already has a persisted row set that differs from the retry \
+         (count, digest, parser version, schema version, or rows differ); refusing to overwrite \
+         or silently reinterpret stored rows"
+    )]
+    SnapshotRowSetConflict { snapshot_id: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1024,37 +1031,134 @@ impl Store {
             .map_err(CoreError::from)
     }
 
-    /// Persists a snapshot's deterministic parsed record rows. Rows are stored
-    /// positionally so duplicate row keys survive; the table is additive and
-    /// never rewrites prior rows.
-    pub fn insert_snapshot_rows(
+    /// Persists a snapshot's completion metadata and its deterministic parsed
+    /// record rows in a single `SQLite` transaction.
+    ///
+    /// Rows are stored positionally so duplicate row keys survive; the table is
+    /// additive and never rewrites prior rows. The metadata row
+    /// (`snapshot_row_sets`) is the completion marker and is written last, so a
+    /// failed operation (transaction rollback) leaves neither a completion
+    /// marker nor partial rows.
+    ///
+    /// Retry semantics: an identical logical row set (same expected count,
+    /// digest, parser version, schema version, and rows) is an idempotent
+    /// success and never overwrites the stored rows. Any difference for the
+    /// same snapshot is a [`CoreError::SnapshotRowSetConflict`]; stored rows
+    /// are never overwritten or silently reinterpreted.
+    pub fn insert_snapshot_row_set_with_rows(
         &self,
-        snapshot_id: &str,
+        meta: &SnapshotRowSet,
         rows: &[SnapshotRow],
     ) -> Result<(), CoreError> {
-        let existing: i64 = self.connection.query_row(
-            "SELECT COUNT(*) FROM snapshot_rows WHERE snapshot_id = ?1",
-            [snapshot_id],
-            |row| row.get(0),
-        )?;
-        if existing > 0 {
-            // Idempotent: a snapshot already captured its rows once.
-            return Ok(());
-        }
-        for (index, row) in rows.iter().enumerate() {
-            self.connection.execute(
-                "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_json)
+        self.transaction(|tx| {
+            let existing_meta: Option<String> = tx
+                .query_row(
+                    "SELECT row_set_digest FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                    [&meta.snapshot_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let existing_rows: Vec<SnapshotRow> = {
+                let mut statement = tx.prepare(
+                    "SELECT row_key, canonical FROM snapshot_rows WHERE snapshot_id = ?1 ORDER BY seq",
+                )?;
+                let mapped = statement.query_map([&meta.snapshot_id], |row| {
+                    Ok(SnapshotRow {
+                        key: row.get(0)?,
+                        canonical: row.get(1)?,
+                    })
+                })?;
+                mapped.collect::<Result<_, _>>()?
+            };
+            if existing_meta.is_some() || !existing_rows.is_empty() {
+                // A row set is already persisted. Verify the retry is logically
+                // identical: the stored row multiset (order-independent, via its
+                // deterministic digest) and the stored metadata must both match
+                // the retry. Any disagreement is a conflict; stored rows are
+                // never overwritten or silently reinterpreted.
+                let identical_rows =
+                    row_set_digest(&existing_rows) == meta.row_set_digest;
+                let identical_meta = matches!(
+                    tx.query_row(
+                        "SELECT expected_count, row_set_digest, parser_version, schema_version
+                         FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                        [&meta.snapshot_id],
+                        |row| {
+                            Ok((
+                                u64::try_from(row.get::<_, i64>(0)?)
+                                    .expect("non-negative expected_count"),
+                                row.get::<_, String>(1)?,
+                                row.get::<_, String>(2)?,
+                                u32::try_from(row.get::<_, i64>(3)?)
+                                    .expect("non-negative schema_version"),
+                            ))
+                        },
+                    ),
+                    Ok((count, digest, pv, sv))
+                        if count == meta.expected_count
+                            && digest == meta.row_set_digest
+                            && pv == meta.parser_version
+                            && sv == meta.schema_version
+                );
+                if identical_rows && identical_meta {
+                    return Ok(());
+                }
+                return Err(CoreError::SnapshotRowSetConflict {
+                    snapshot_id: meta.snapshot_id.clone(),
+                });
+            }
+            // Insert the rows first, then the completion marker last.
+            for (index, row) in rows.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_json)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        meta.snapshot_id,
+                        i64::try_from(index).unwrap_or(i64::MAX),
+                        row.key,
+                        row.canonical,
+                        serde_json::to_string(row)?
+                    ],
+                )?;
+            }
+            tx.execute(
+                "INSERT INTO snapshot_row_sets
+                   (snapshot_id, expected_count, row_set_digest, parser_version, schema_version)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
-                    snapshot_id,
-                    i64::try_from(index).unwrap_or(i64::MAX),
-                    row.key,
-                    row.canonical,
-                    serde_json::to_string(row)?
+                    meta.snapshot_id,
+                    i64::try_from(meta.expected_count).unwrap_or(i64::MAX),
+                    meta.row_set_digest,
+                    meta.parser_version,
+                    i64::from(meta.schema_version),
                 ],
             )?;
-        }
-        Ok(())
+            Ok(())
+        })
+    }
+
+    /// Loads a snapshot's persisted row-set completion metadata, if any.
+    pub fn snapshot_row_set(&self, snapshot_id: &str) -> Result<Option<SnapshotRowSet>, CoreError> {
+        let row_set: Option<SnapshotRowSet> = self
+            .connection
+            .query_row(
+                "SELECT snapshot_id, expected_count, row_set_digest, parser_version, schema_version
+                 FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                [snapshot_id],
+                |row| {
+                    Ok(SnapshotRowSet {
+                        snapshot_id: row.get(0)?,
+                        expected_count: u64::try_from(row.get::<_, i64>(1)?)
+                            .expect("non-negative expected_count"),
+                        row_set_digest: row.get(2)?,
+                        parser_version: row.get(3)?,
+                        schema_version: u32::try_from(row.get::<_, i64>(4)?)
+                            .expect("non-negative schema_version"),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row_set)
     }
 
     /// Loads a snapshot's persisted deterministic record rows in stored order.

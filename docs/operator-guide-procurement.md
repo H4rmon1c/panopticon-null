@@ -119,16 +119,29 @@ source is `complete` only with affirmative, reproducible evidence.
 
 `coverage diff <old-snapshot> <new-snapshot>` reports real, immutable record-level changes
 between two snapshots. Each snapshot persists its deterministic parsed `RecordRow` values
-(a row key plus a canonical string) in SQLite as part of ingestion. When a changed snapshot is
-recorded, the previously stored rows are loaded and compared against the new rows; the diff
-reports the actual added, changed, and removed records. Reordering records produces no
-changes, and duplicate row keys (for example, joint awards sharing an identifier) are
-compared as multisets rather than collapsed.
+(a row key plus a canonical string) in SQLite as part of ingestion, together with explicit
+row-set completion metadata (expected row count, a deterministic ordering-independent SHA-256
+of the row set, and the parser and schema versions). The metadata and every row are written in
+a single SQLite transaction, so an interrupted capture leaves neither a completion marker nor
+partial rows. When a changed snapshot is recorded, the previously stored rows are loaded,
+verified against that metadata, and compared against the new rows; the diff reports the actual
+added, changed, and removed records. Reordering records produces no changes, and duplicate row
+keys (for example, joint awards sharing an identifier) are compared as multisets rather than
+collapsed. Empty-to-nonempty snapshots appear as added records, nonempty-to-empty as removed
+records, and empty-to-empty as no changes.
 
-Legacy limitation: a snapshot recorded before record-level diffing was introduced has no
-stored rows. Diffing such a snapshot fails honestly with a clear message rather than
-fabricating rows from counts or digests. Re-ingest the affected source so deterministic rows
-are captured, then retry the diff.
+Retrying an identical logical row set for the same snapshot is an idempotent success; a retry
+with a different count, digest, parser version, schema version, or row set fails loudly and
+never overwrites or silently reinterprets the stored rows.
+
+Legacy or incomplete captures: a snapshot with no row-set completion metadata is either a true
+legacy snapshot (captured before row-level diffing was introduced) or an incomplete/interrupted
+capture. It cannot be loaded as a complete row set, so diffing it fails honestly with a clear
+message rather than fabricating rows from counts or digests. Re-ingest the affected source so a
+complete row set is captured, then retry the diff. A snapshot whose completion metadata declares
+zero records is a valid empty snapshot, not a legacy one, and loads as an empty row set. Any
+disagreement between the metadata (count, digest) and the stored rows is reported as an
+integrity error.
 
 ### Case files
 

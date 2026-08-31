@@ -20,10 +20,16 @@ pub enum SnapshotError {
     #[error("snapshots are from different sources: {old} vs {new}")]
     DifferentSources { old: String, new: String },
     #[error(
-        "snapshot {0} has no stored record rows; it predates record-level diffing \
-         (legacy snapshot). Re-ingest the source to capture deterministic rows before diffing."
+        "snapshot {0} has no row-set completion metadata; it is either a true legacy snapshot \
+         (captured before row-level diffing) or an incomplete/interrupted capture. It cannot be \
+         loaded as a complete row set. Re-ingest the source so a complete row set is captured."
     )]
-    NoStoredRows(String),
+    LegacyOrIncomplete(String),
+    #[error(
+        "snapshot {snapshot_id} row set is internally inconsistent: {detail}. Stored rows are \
+         never overwritten or silently reinterpreted."
+    )]
+    RowSetIntegrity { snapshot_id: String, detail: String },
     #[error("store operation failed: {0}")]
     Store(#[from] pnull_core::CoreError),
 }
@@ -268,29 +274,32 @@ pub fn record_snapshot(
     let coverage = acquisition.coverage_entry(record_count, "snapshot captured");
     store.insert_coverage_entry(&coverage)?;
 
-    // Persist this snapshot's deterministic parsed rows (additive).
-    let snapshot_rows: Vec<pnull_core::SnapshotRow> =
+    // Persist this snapshot's row-set completion metadata and every row in a
+    // single transaction. The metadata row is the completion marker and is
+    // written last, so a failure rolls back leaving neither partial rows nor a
+    // completion marker. The digest is deterministic and ordering-independent,
+    // so an identical logical row set retried later is an idempotent success.
+    let persisted_rows: Vec<pnull_core::SnapshotRow> =
         rows.iter().map(RecordRow::to_snapshot_row).collect();
-    store.insert_snapshot_rows(&snapshot.id, &snapshot_rows)?;
+    let meta = pnull_core::SnapshotRowSet {
+        snapshot_id: snapshot.id.clone(),
+        expected_count: rows.len() as u64,
+        row_set_digest: pnull_core::row_set_digest(&persisted_rows),
+        parser_version: acquisition.parser_version.clone(),
+        schema_version: acquisition.schema_version,
+    };
+    store.insert_snapshot_row_set_with_rows(&meta, &persisted_rows)?;
 
     let diff = if let Some(prior) = prior_snapshot {
         if prior.persisted_digest == snapshot.persisted_digest {
             None
         } else {
             // Load the prior snapshot's stored rows and compare them against the
-            // new rows. Never compare the new rows against themselves.
-            let prior_rows: Vec<RecordRow> = store
-                .snapshot_rows(&prior.id)?
-                .into_iter()
-                .map(|row| RecordRow {
-                    key: row.key,
-                    canonical: row.canonical,
-                })
-                .collect();
-            if prior_rows.is_empty() {
-                // Legacy prior snapshot with no stored rows: cannot diff honestly.
-                None
-            } else {
+            // new rows. Never compare the new rows against themselves. A prior
+            // snapshot with no completion metadata is a true legacy or incomplete
+            // capture and cannot be diffed honestly, so no diff is produced.
+            if store.snapshot_row_set(&prior.id)?.is_some() {
+                let prior_rows = snapshot_rows(store, &prior.id)?;
                 Some(record_diff(
                     &prior.id,
                     &snapshot.id,
@@ -298,6 +307,8 @@ pub fn record_snapshot(
                     &prior_rows,
                     rows,
                 ))
+            } else {
+                None
             }
         }
     } else {
@@ -353,26 +364,58 @@ pub fn latest_snapshot(
     Ok(store.source_snapshots(source_id)?.into_iter().last())
 }
 
-/// Loads a snapshot's persisted deterministic record rows.
+/// Loads a snapshot's persisted deterministic record rows, verified against its
+/// row-set completion metadata.
 ///
-/// Fails honestly with [`SnapshotError::NoStoredRows`] when the snapshot has no
-/// stored rows — i.e., it is a legacy snapshot recorded before record-level
-/// diffing existed. Callers must not fall back to counts or digests as fake
-/// records.
+/// Loading semantics:
+/// - No completion metadata means the snapshot is a true legacy capture or an
+///   incomplete/interrupted capture; it fails honestly with
+///   [`SnapshotError::LegacyOrIncomplete`] rather than fabricating rows.
+/// - Completion metadata declaring zero rows returns `Ok([])`.
+/// - Any disagreement between the metadata (expected count, digest) and the
+///   stored rows returns a [`SnapshotError::RowSetIntegrity`] error. Stored
+///   rows are never overwritten or silently reinterpreted.
 pub fn snapshot_rows(
     store: &pnull_core::Store,
     snapshot_id: &str,
 ) -> Result<Vec<RecordRow>, SnapshotError> {
-    let rows: Vec<RecordRow> = store
-        .snapshot_rows(snapshot_id)?
-        .into_iter()
+    let meta = store
+        .snapshot_row_set(snapshot_id)?
+        .ok_or_else(|| SnapshotError::LegacyOrIncomplete(snapshot_id.to_owned()))?;
+    let raw: Vec<pnull_core::SnapshotRow> = store.snapshot_rows(snapshot_id)?;
+    let rows: Vec<RecordRow> = raw
+        .iter()
         .map(|row| RecordRow {
-            key: row.key,
-            canonical: row.canonical,
+            key: row.key.clone(),
+            canonical: row.canonical.clone(),
         })
         .collect();
-    if rows.is_empty() {
-        return Err(SnapshotError::NoStoredRows(snapshot_id.to_owned()));
+
+    if meta.expected_count == 0 {
+        if raw.is_empty() {
+            // A valid captured zero-record snapshot.
+            return Ok(Vec::new());
+        }
+        return Err(SnapshotError::RowSetIntegrity {
+            snapshot_id: snapshot_id.to_owned(),
+            detail: "completion metadata declares 0 rows but stored rows exist".to_owned(),
+        });
+    }
+    if raw.len() as u64 != meta.expected_count {
+        return Err(SnapshotError::RowSetIntegrity {
+            snapshot_id: snapshot_id.to_owned(),
+            detail: format!(
+                "completion metadata declares {} rows but {} rows are stored",
+                meta.expected_count,
+                raw.len()
+            ),
+        });
+    }
+    if pnull_core::row_set_digest(&raw) != meta.row_set_digest {
+        return Err(SnapshotError::RowSetIntegrity {
+            snapshot_id: snapshot_id.to_owned(),
+            detail: "stored row-set digest disagrees with completion metadata".to_owned(),
+        });
     }
     Ok(rows)
 }
@@ -663,32 +706,49 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_rows_fails_honestly_when_no_rows_stored() {
+    fn valid_captured_zero_record_snapshot_loads_as_empty() {
+        // A snapshot captured through the row-diffing path with zero parsed
+        // records is a valid empty snapshot, not a legacy one.
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
-        let first = acquisition_for(
-            "src",
-            "https://x/a",
-            "digest-legacy",
-            "2026-08-17T00:00:00Z",
-        );
+        let first = acquisition_for("src", "https://x/a", "digest-empty", "2026-08-17T00:00:00Z");
         let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("first");
-        // No rows were stored; reading them must fail honestly rather than
-        // fabricating a record from counts or digests.
+        assert_eq!(
+            snapshot_rows(&store, &snap1.id).expect("stored"),
+            Vec::<RecordRow>::new()
+        );
+    }
+
+    #[test]
+    fn true_legacy_snapshot_without_metadata_fails_honestly() {
+        // A snapshot with no completion metadata is a true legacy or incomplete
+        // capture. Loading it must fail honestly rather than fabricate rows.
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let snap_id = "snapshot:legacy";
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            connection
+                .execute(
+                    "INSERT INTO source_snapshots(id, source_id, snapshot_json)
+                     VALUES (?1, 'src', '{\"id\":\"snapshot:legacy\",\"source_id\":\"src\"}')",
+                    [snap_id],
+                )
+                .expect("insert legacy snapshot");
+        }
         assert!(matches!(
-            snapshot_rows(&store, &snap1.id),
-            Err(SnapshotError::NoStoredRows(_))
+            snapshot_rows(&store, snap_id),
+            Err(SnapshotError::LegacyOrIncomplete(_))
         ));
     }
 
     #[test]
-    fn record_snapshot_does_not_fabricate_diff_for_legacy_prior() {
+    fn empty_to_nonempty_snapshot_is_added_records() {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
-        // A legacy prior snapshot recorded with no rows.
         let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
-        let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("first");
-        // A new snapshot that supersedes it, with real rows.
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("empty");
         let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
         let new_rows = vec![RecordRow {
             key: "A".into(),
@@ -696,7 +756,274 @@ mod tests {
         }];
         let (_, diff2) =
             record_snapshot(&store, &second, Some(&snap1), Some(1), &new_rows).expect("second");
-        // Because the prior has no stored rows, no diff is fabricated.
-        assert!(diff2.is_none());
+        let diff = diff2.expect("empty->nonempty diff present");
+        assert_eq!(diff.changes.len(), 1);
+        assert_eq!(diff.changes[0].kind, "added");
+    }
+
+    #[test]
+    fn nonempty_to_empty_snapshot_is_removed_records() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
+        let old_rows = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A1".into(),
+        }];
+        let (snap1, _) =
+            record_snapshot(&store, &first, None, Some(1), &old_rows).expect("nonempty");
+        let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
+        let (_, diff2) =
+            record_snapshot(&store, &second, Some(&snap1), Some(0), &[]).expect("second");
+        let diff = diff2.expect("nonempty->empty diff present");
+        assert_eq!(diff.changes.len(), 1);
+        assert_eq!(diff.changes[0].kind, "removed");
+    }
+
+    #[test]
+    fn empty_to_empty_snapshot_is_no_changes() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(0), &[]).expect("empty");
+        let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
+        let (_, diff2) =
+            record_snapshot(&store, &second, Some(&snap1), Some(0), &[]).expect("second");
+        // Both snapshots are empty; the diff must report no record changes.
+        match diff2 {
+            None => {}
+            Some(diff) => assert!(diff.changes.is_empty()),
+        }
+    }
+
+    #[test]
+    fn identical_retry_is_idempotent_success() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-same", "2026-08-17T00:00:00Z");
+        let rows = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(2), &rows).expect("first");
+        // Retry with an identical logical row set for the same snapshot.
+        record_snapshot(&store, &first, None, Some(2), &rows).expect("idempotent retry");
+        assert_eq!(snapshot_rows(&store, &snap1.id).expect("stored"), rows);
+    }
+
+    #[test]
+    fn reordered_but_logically_identical_retry_is_idempotent_success() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-same", "2026-08-17T00:00:00Z");
+        let rows = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(2), &rows).expect("first");
+        // Reordered but logically identical row set: same multiset.
+        let reordered = vec![
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+        ];
+        record_snapshot(&store, &first, None, Some(2), &reordered).expect("reordered retry");
+        assert_eq!(snapshot_rows(&store, &snap1.id).expect("stored"), rows);
+    }
+
+    #[test]
+    fn conflicting_retry_rejection() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-same", "2026-08-17T00:00:00Z");
+        let rows = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A1".into(),
+        }];
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &rows).expect("first");
+        // A retry with a different logical row set for the same snapshot fails
+        // loudly and never overwrites the stored rows.
+        let conflicting = vec![RecordRow {
+            key: "A".into(),
+            canonical: "A2".into(),
+        }];
+        assert!(matches!(
+            record_snapshot(&store, &first, None, Some(1), &conflicting),
+            Err(SnapshotError::Store(
+                pnull_core::CoreError::SnapshotRowSetConflict { .. }
+            ))
+        ));
+        // Stored rows are unchanged.
+        assert_eq!(snapshot_rows(&store, &snap1.id).expect("stored"), rows);
+    }
+
+    #[test]
+    fn injected_mid_write_failure_rolls_back_fully() {
+        // A failed write must leave neither a completion marker nor partial rows.
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let snap_id = "snapshot:injected";
+        let meta = pnull_core::SnapshotRowSet {
+            snapshot_id: snap_id.to_owned(),
+            expected_count: 2,
+            row_set_digest: "x".to_owned(),
+            parser_version: "p".to_owned(),
+            schema_version: 4,
+        };
+        let rows = vec![
+            pnull_core::SnapshotRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            pnull_core::SnapshotRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        // Sabotage: make the completion-marker insert fail after the rows would
+        // have been written, to prove the entire transaction rolls back.
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            connection
+                .execute_batch(
+                    "CREATE TRIGGER sabotage_meta BEFORE INSERT ON snapshot_row_sets
+                     BEGIN SELECT RAISE(ABORT, 'injected failure'); END;",
+                )
+                .expect("create sabotage trigger");
+        }
+        let result = store.insert_snapshot_row_set_with_rows(&meta, &rows);
+        // Drop the trigger so it does not affect later statements.
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            connection
+                .execute_batch("DROP TRIGGER IF EXISTS sabotage_meta;")
+                .expect("drop trigger");
+        }
+        assert!(result.is_err(), "injected failure must propagate");
+        // Neither a completion marker nor any partial rows may persist.
+        assert!(store.snapshot_row_set(snap_id).expect("meta").is_none());
+        assert!(
+            store.snapshot_rows(snap_id).expect("rows").is_empty(),
+            "no partial rows may persist after a failed write"
+        );
+    }
+
+    #[test]
+    fn marker_count_or_digest_corruption_is_detected() {
+        let dir = tempdir().expect("temp");
+        let store = pnull_core::Store::open(dir.path()).expect("store");
+        let first = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T00:00:00Z");
+        let rows = vec![
+            RecordRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            RecordRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(2), &rows).expect("first");
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            // Corrupt the count.
+            connection
+                .execute(
+                    "UPDATE snapshot_row_sets SET expected_count = 99 WHERE snapshot_id = ?1",
+                    [&snap1.id],
+                )
+                .expect("corrupt count");
+        }
+        assert!(matches!(
+            snapshot_rows(&store, &snap1.id),
+            Err(SnapshotError::RowSetIntegrity { .. })
+        ));
+        // Restore count and corrupt the digest.
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            connection
+                .execute(
+                    "UPDATE snapshot_row_sets SET expected_count = 2,
+                            row_set_digest = 'deadbeef' WHERE snapshot_id = ?1",
+                    [&snap1.id],
+                )
+                .expect("corrupt digest");
+        }
+        assert!(matches!(
+            snapshot_rows(&store, &snap1.id),
+            Err(SnapshotError::RowSetIntegrity { .. })
+        ));
+        // Corrupt a stored row directly (row count unchanged, digest differs).
+        {
+            let connection =
+                rusqlite::Connection::open(store.data_dir().join("pnull.db")).expect("open db");
+            connection
+                .execute(
+                    "UPDATE snapshot_rows SET canonical = 'ZZZ' WHERE snapshot_id = ?1 AND seq = 0",
+                    [&snap1.id],
+                )
+                .expect("corrupt row");
+        }
+        assert!(matches!(
+            snapshot_rows(&store, &snap1.id),
+            Err(SnapshotError::RowSetIntegrity { .. })
+        ));
+    }
+
+    #[test]
+    fn row_set_digest_is_deterministic_and_order_independent() {
+        let rows = vec![
+            pnull_core::SnapshotRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+            pnull_core::SnapshotRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+        ];
+        let reordered = vec![
+            pnull_core::SnapshotRow {
+                key: "B".into(),
+                canonical: "B1".into(),
+            },
+            pnull_core::SnapshotRow {
+                key: "A".into(),
+                canonical: "A1".into(),
+            },
+        ];
+        let d1 = pnull_core::row_set_digest(&rows);
+        let d2 = pnull_core::row_set_digest(&reordered);
+        assert_eq!(d1, d2, "order must not change the digest");
+        let d3 = pnull_core::row_set_digest(&rows);
+        assert_eq!(d1, d3, "digest must be stable");
+
+        // Duplicates are preserved: removing one duplicate changes the digest.
+        let fewer = vec![pnull_core::SnapshotRow {
+            key: "A".into(),
+            canonical: "A1".into(),
+        }];
+        assert_ne!(d1, pnull_core::row_set_digest(&fewer));
     }
 }

@@ -422,6 +422,51 @@ pub struct SnapshotRow {
     pub canonical: String,
 }
 
+/// Completion metadata for a snapshot's persisted record row set.
+///
+/// This is the persisted completion marker for a snapshot's captured rows. Its
+/// presence in the `snapshot_row_sets` table means the snapshot was captured
+/// with the row-level diffing path and the stored rows are complete. A
+/// deterministic digest of the stored row set lets a later retry or read verify
+/// the persisted rows are exactly what was captured, without ever reinterpreting
+/// or overwriting them.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SnapshotRowSet {
+    pub snapshot_id: String,
+    /// The number of rows expected for this snapshot's row set.
+    pub expected_count: u64,
+    /// SHA-256 of the deterministic, ordering-independent row-set encoding.
+    pub row_set_digest: String,
+    /// The parser version that produced the rows.
+    pub parser_version: String,
+    /// The schema version the rows were captured under.
+    pub schema_version: u32,
+}
+
+/// Computes the deterministic SHA-256 digest of a snapshot's row set.
+///
+/// The encoding is order-independent (rows are sorted by key then canonical,
+/// matching the multiset comparison used by diffs), preserves duplicate rows,
+/// and uses length-prefixed fields so concatenation is unambiguous. Two logical
+/// row sets that produce the same multiset therefore hash identically, while any
+/// difference in membership, content, or multiplicity changes the digest.
+pub fn row_set_digest(rows: &[SnapshotRow]) -> String {
+    let mut sorted: Vec<&SnapshotRow> = rows.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.key
+            .cmp(&b.key)
+            .then_with(|| a.canonical.cmp(&b.canonical))
+    });
+    let mut stream: Vec<u8> = Vec::new();
+    for row in sorted {
+        stream.extend_from_slice(&(row.key.len() as u64).to_le_bytes());
+        stream.extend_from_slice(row.key.as_bytes());
+        stream.extend_from_slice(&(row.canonical.len() as u64).to_le_bytes());
+        stream.extend_from_slice(row.canonical.as_bytes());
+    }
+    sha256_hex(&stream)
+}
+
 /// A deterministic record-level diff between two snapshots of a source.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SnapshotDiff {
