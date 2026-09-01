@@ -1,0 +1,32 @@
+name: Public terminal
+
+on:
+  pull_request:
+    paths:
+      - "web/panopticon-terminal/**"
+      - ".github/workflows/public-terminal.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/panopticon-terminal/**"
+      - ".github/workflows/public-terminal.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: |
+          node --check web/panopticon-terminal/api.js
+          node --check web/panopticon-terminal/app.js
+          node --check web/panopticon-terminal/scripts/validate.mjs
+      - name: Validate snapshot and references
+        run: node web/panopticon-terminal/scripts/validate.mjs
