@@ -24,11 +24,16 @@ jobs:
         with:
           node-version: "22"
       - name: Check JavaScript syntax
+        shell: bash
         run: |
+          set -euo pipefail
           node --check web/panopticon-terminal/api.js
           node --check web/panopticon-terminal/app.js
           node --check web/panopticon-terminal/scripts/validate.mjs
-      - name: Validate snapshot and references
+          for script in web/panopticon-terminal/scripts/[0-9][0-9]-*.js; do
+            node --check "$script"
+          done
+      - name: Validate shell, snapshot, and references
         run: node web/panopticon-terminal/scripts/validate.mjs
       - name: Browser smoke test
         shell: bash
@@ -53,33 +58,33 @@ jobs:
           "$chrome" \
             --headless=new \
             --no-sandbox \
-            --disable-gpu \
             --disable-dev-shm-usage \
-            --virtual-time-budget=5000 \
+            --virtual-time-budget=6500 \
             --dump-dom \
             http://127.0.0.1:4173/ \
             > /tmp/pnull-terminal-dom.html
 
           grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
-          grep --quiet "12,418" /tmp/pnull-terminal-dom.html
+          grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-dom.html
+          grep --quiet "OPEN PRIMARY EVIDENCE" /tmp/pnull-terminal-dom.html
+          grep --quiet 'id="world-canvas"' /tmp/pnull-terminal-dom.html
           grep --quiet "Recent public activity" /tmp/pnull-terminal-dom.html
 
           "$chrome" \
             --headless=new \
             --no-sandbox \
-            --disable-gpu \
             --disable-dev-shm-usage \
-            --virtual-time-budget=5000 \
+            --virtual-time-budget=6500 \
             --window-size=1440,1000 \
-            --screenshot=/tmp/panopticon-terminal.png \
+            --screenshot=/tmp/panopticon-command-center.png \
             http://127.0.0.1:4173/
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-terminal-smoke
+          name: public-terminal-command-center
           if-no-files-found: error
           path: |
-            /tmp/panopticon-terminal.png
+            /tmp/panopticon-command-center.png
             /tmp/pnull-terminal-dom.html
             /tmp/pnull-terminal-server.log

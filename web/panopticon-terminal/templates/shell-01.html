@@ -1,0 +1,52 @@
+            </button>
+            <button class="layer is-active" data-layer="ORGANIZATION" type="button">
+              <i class="layer-dot layer-dot--operator"></i><span><b>OPERATORS</b><small>owners and organizations</small></span><em>0</em>
+            </button>
+            <button class="layer is-active" data-layer="UTILITY" type="button">
+              <i class="layer-dot layer-dot--power"></i><span><b>POWER</b><small>utilities and agreements</small></span><em>0</em>
+            </button>
+            <button class="layer is-active" data-layer="NETWORK" type="button">
+              <i class="layer-dot layer-dot--network"></i><span><b>NETWORK</b><small>carriers and interconnects</small></span><em>0</em>
+            </button>
+            <button class="layer is-active" data-layer="CONTRACTOR" type="button">
+              <i class="layer-dot layer-dot--build"></i><span><b>BUILD CHAIN</b><small>contractors and suppliers</small></span><em>0</em>
+            </button>
+            <button class="layer is-active" data-layer="CONTRACT" type="button">
+              <i class="layer-dot layer-dot--contract"></i><span><b>CONTRACTS</b><small>awards and agreements</small></span><em>0</em>
+            </button>
+          </div>
+
+          <div class="sensor-block">
+            <div><span class="eyebrow">OPTICS</span><strong id="sensor-label">PUBLIC RECORD</strong></div>
+            <div class="sensor-tabs" role="group" aria-label="Visual treatment">
+              <button class="sensor-tab is-active" data-sensor="record" type="button">RECORD</button>
+              <button class="sensor-tab" data-sensor="night" type="button">NIGHT</button>
+              <button class="sensor-tab" data-sensor="change" type="button">CHANGE</button>
+            </div>
+            <p>Optics change presentation only. The underlying evidence remains unchanged.</p>
+          </div>
+        </aside>
+
+        <section class="map-hud" aria-label="Map telemetry">
+          <div class="target-reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="map-readout map-readout--camera"><span>CAMERA</span><strong id="camera-readout">38.83N / 104.82W</strong></div>
+          <div class="map-readout map-readout--alt"><span>VIEW ALT</span><strong id="altitude-readout">6,500 KM</strong></div>
+          <div class="map-legend">
+            <span><i class="legend-dot"></i>SOURCE-BACKED</span>
+            <span><i class="legend-line"></i>DOCUMENTED LINK</span>
+            <span><i class="legend-ring"></i>SELECTED</span>
+          </div>
+        </section>
+
+        <aside class="panel activity-panel" aria-label="Recent public activity">
+          <header class="panel__header panel__header--small">
+            <div><span class="eyebrow">LIVE PUBLIC FEED</span><h2>Recent public activity</h2></div>
+            <button id="pause-activity" class="icon-button" type="button" aria-label="Pause activity animation">Ⅱ</button>
+          </header>
+          <div id="activity-list" class="activity-list" aria-live="polite"></div>
+        </aside>
+
+        <aside id="entity-workspace" class="panel dossier" tabindex="-1" aria-label="Selected entity workspace">
+          <div id="dossier-empty" class="dossier-empty">
+            <span class="eyebrow">NO SIGNAL SELECTED</span>
+            <h1>Select a public record</h1>

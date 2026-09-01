@@ -1,0 +1,33 @@
+      <aside id="evidence-drawer" class="evidence-drawer" aria-hidden="true" aria-label="Evidence record">
+        <header><div><span class="eyebrow">EVIDENCE LOCK</span><strong id="evidence-id">—</strong></div><button id="close-evidence" type="button" aria-label="Close evidence drawer">×</button></header>
+        <div class="evidence-drawer__body">
+          <div class="evidence-state"><i></i><span id="evidence-review">APPROVED</span><span>BOUND TO EXACT BYTES</span></div>
+          <h2 id="evidence-claim">Select a fact to inspect its source.</h2>
+          <blockquote id="evidence-quote"></blockquote>
+          <dl class="evidence-meta">
+            <div><dt>SOURCE</dt><dd id="evidence-source">—</dd></div>
+            <div><dt>AUTHORITY</dt><dd id="evidence-authority">—</dd></div>
+            <div><dt>LOCATOR</dt><dd id="evidence-locator">—</dd></div>
+            <div><dt>RETRIEVED</dt><dd id="evidence-retrieved">—</dd></div>
+            <div><dt>SHA-256</dt><dd id="evidence-hash">—</dd></div>
+          </dl>
+          <div class="evidence-actions"><a id="evidence-link" href="#">OPEN PUBLIC SOURCE ↗</a><button id="copy-hash" type="button">COPY HASH</button></div>
+          <p class="evidence-note">A visual relationship is never stronger than the public evidence attached to it.</p>
+        </div>
+      </aside>
+
+      <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title">
+        <div class="dialog-shell">
+          <header class="search-header"><span>P//F</span><input id="search-input" type="search" autocomplete="off" spellcheck="false" placeholder="Search the public graph…" /><kbd>ESC</kbd></header>
+          <div class="query-hints"><button data-query="type:facility" type="button">type:facility</button><button data-query="power" type="button">power</button><button data-query="source:official" type="button">source:official</button><button data-query="Front Range" type="button">Front Range</button></div>
+          <div class="dialog-title"><h2 id="search-title">PUBLIC GRAPH QUERY</h2><span id="search-result-count">READY</span></div>
+          <div id="search-results" class="search-results"></div>
+        </div>
+      </dialog>
+
+      <dialog id="command-dialog" class="command-dialog" aria-labelledby="command-title">
+        <div class="dialog-shell"><header class="dialog-title"><h2 id="command-title">COMMAND PALETTE</h2><button id="close-command" type="button">ESC</button></header><div id="command-list" class="command-list"></div></div>
+      </dialog>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>

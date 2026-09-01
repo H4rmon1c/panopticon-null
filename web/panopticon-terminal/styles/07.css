@@ -1,0 +1,22 @@
+@media (max-width: 620px) {
+  .omnibox__prefix, .omnibox kbd { display: none; }
+  .omnibox { padding-left: 10px; }
+  .layer-panel { top: 78px; right: 12px; width: auto; max-height: 180px; }
+  .layer-panel .panel__header, .sensor-block { display: none; }
+  .view-tab { height: 43px; }
+  .layer-list { display: flex; overflow-x: auto; }
+  .layer { min-width: 126px; min-height: 47px; }
+  .layer small, .layer em { display: none; }
+  .target-reticle { left: 55%; }
+  .map-readout, .map-legend { display: none; }
+  .activity-panel { top: 484px; height: 118px; }
+  .activity-item { grid-template-columns: 42px 72px minmax(0,1fr); min-height: 35px; }
+  .timeline { top: 602px; grid-template-columns: 128px 1fr; }
+  .timeline__transport { padding: 0 8px; }
+  .timeline__transport strong { display: none; }
+  .dossier { top: 672px; }
+  .search-dialog { margin-top: 60px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
