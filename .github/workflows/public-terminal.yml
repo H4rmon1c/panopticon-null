@@ -17,7 +17,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,3 +30,56 @@ jobs:
           node --check web/panopticon-terminal/scripts/validate.mjs
       - name: Validate snapshot and references
         run: node web/panopticon-terminal/scripts/validate.mjs
+      - name: Browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory web/panopticon-terminal \
+            >/tmp/pnull-terminal-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for _ in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 0.2
+          done
+          curl --fail --silent http://127.0.0.1:4173/ >/dev/null
+
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome"
+
+          "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --virtual-time-budget=5000 \
+            --dump-dom \
+            http://127.0.0.1:4173/ \
+            > /tmp/pnull-terminal-dom.html
+
+          grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
+          grep --quiet "12,418" /tmp/pnull-terminal-dom.html
+          grep --quiet "Recent public activity" /tmp/pnull-terminal-dom.html
+
+          "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --virtual-time-budget=5000 \
+            --window-size=1440,1000 \
+            --screenshot=/tmp/panopticon-terminal.png \
+            http://127.0.0.1:4173/
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-terminal-smoke
+          if-no-files-found: error
+          path: |
+            /tmp/panopticon-terminal.png
+            /tmp/pnull-terminal-dom.html
+            /tmp/pnull-terminal-server.log
