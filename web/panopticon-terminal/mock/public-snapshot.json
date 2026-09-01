@@ -1,0 +1,496 @@
+{
+  "schema_version": "pnull-public-snapshot-v1",
+  "demo": true,
+  "status": {
+    "state": "demo",
+    "dataset_version": "demo-2026-08-31T23:41:22Z",
+    "last_ingest": "2026-08-31T23:38:07Z",
+    "last_publish": "2026-08-31T23:41:22Z",
+    "manifest_digest": "sha256:7805aa7c56fce4947ee5876cbe8a24849c164a4ce38bc07b93b4798ea4f4529f",
+    "counts": {
+      "entities": 12418,
+      "records": 46210,
+      "sources": 193,
+      "relationships": 28174
+    }
+  },
+  "activity": [
+    {
+      "id": "act_001",
+      "type": "RELATION_ADDED",
+      "summary": "Front Range Campus documented as connected to VectorLink Networks",
+      "timestamp": "2026-08-31T23:35:44Z",
+      "entity_id": "ent_front_range",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": "act_002",
+      "type": "SOURCE_CHANGED",
+      "summary": "Utility planning docket received a byte-level revision",
+      "timestamp": "2026-08-31T23:31:08Z",
+      "entity_id": "ent_meridian",
+      "status": "VERIFIED"
+    },
+    {
+      "id": "act_003",
+      "type": "PROJECT_OBSERVED",
+      "summary": "Phase II construction milestone added to the campus timeline",
+      "timestamp": "2026-08-31T23:26:51Z",
+      "entity_id": "ent_front_range",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": "act_004",
+      "type": "ENTITY_UPDATED",
+      "summary": "Northstar Compute aliases and registry identifiers reconciled",
+      "timestamp": "2026-08-31T23:20:12Z",
+      "entity_id": "ent_northstar",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": "act_005",
+      "type": "CONTRACT_OBSERVED",
+      "summary": "Power service agreement added as a source-backed contract entity",
+      "timestamp": "2026-08-31T23:15:39Z",
+      "entity_id": "ent_power_agreement",
+      "status": "VERIFIED"
+    },
+    {
+      "id": "act_006",
+      "type": "SOURCE_ADDED",
+      "summary": "Official carrier interconnection filing preserved",
+      "timestamp": "2026-08-31T23:09:03Z",
+      "entity_id": "ent_vectorlink",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": "act_007",
+      "type": "EVIDENCE_REVISED",
+      "summary": "Earlier campus fact sheet retained and linked to its superseding revision",
+      "timestamp": "2026-08-31T22:58:42Z",
+      "entity_id": "ent_front_range",
+      "status": "VERIFIED"
+    },
+    {
+      "id": "act_008",
+      "type": "ENTITY_ADDED",
+      "summary": "Arc Tensor Systems added as a hardware supplier entity",
+      "timestamp": "2026-08-31T22:51:19Z",
+      "entity_id": "ent_arc_tensor",
+      "status": "PUBLISHED"
+    }
+  ],
+  "entities": [
+    {
+      "id": "ent_northstar",
+      "type": "ORGANIZATION",
+      "name": "Northstar Compute",
+      "subtitle": "Synthetic hyperscale infrastructure operator",
+      "status": "ACTIVE",
+      "description": "Synthetic demonstration entity representing an infrastructure operator. Identity, relationships, and activity are displayed as independently sourced public claims rather than a single unsourced narrative profile.",
+      "aliases": ["Northstar Compute Holdings", "Northstar"],
+      "tags": ["HYPERSCALE", "INFRASTRUCTURE", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:20:12Z",
+      "source_count": 14,
+      "relation_count": 3,
+      "attributes": [
+        { "label": "ENTITY TYPE", "value": "Infrastructure operator", "evidence_id": "ev_northstar_registry" },
+        { "label": "STATUS", "value": "Active", "evidence_id": "ev_northstar_registry" },
+        { "label": "REGISTRY ID", "value": "DEMO-NSC-00418", "evidence_id": "ev_northstar_registry" },
+        { "label": "OBSERVED REGION", "value": "Front Range, Colorado", "evidence_id": "ev_northstar_campus" }
+      ],
+      "relationships": [
+        { "id": "rel_northstar_front_range", "type": "OPERATES", "label": "operates", "target_entity_id": "ent_front_range", "confidence": 1, "source_count": 3, "evidence_id": "ev_northstar_campus" },
+        { "id": "rel_northstar_arc", "type": "CONTRACTS_WITH", "label": "contracts with", "target_entity_id": "ent_arc_tensor", "confidence": 0.96, "source_count": 2, "evidence_id": "ev_arc_supply" },
+        { "id": "rel_northstar_orion", "type": "CONTRACTS_WITH", "label": "contracts with", "target_entity_id": "ent_orion", "confidence": 1, "source_count": 2, "evidence_id": "ev_orion_permit" }
+      ],
+      "timeline": [
+        { "id": "evt_ns_001", "date": "2026-08-24", "type": "FILING", "title": "Operator registration record amended", "evidence_id": "ev_northstar_registry" },
+        { "id": "evt_ns_002", "date": "2026-07-18", "type": "ANNOUNCEMENT", "title": "Front Range Campus Phase II publicly described", "evidence_id": "ev_northstar_campus" },
+        { "id": "evt_ns_003", "date": "2026-05-02", "type": "CONTRACT", "title": "Hardware supply agreement referenced in public filing", "evidence_id": "ev_arc_supply" }
+      ],
+      "source_ids": ["src_registry", "src_campus_fact_sheet", "src_hardware_filing", "src_permit_attachment"]
+    },
+    {
+      "id": "ent_front_range",
+      "type": "FACILITY",
+      "name": "Front Range Campus",
+      "subtitle": "Synthetic datacenter campus · Colorado",
+      "status": "ACTIVE / EXPANDING",
+      "description": "Synthetic facility showing how Panopticon can connect an operator, utility, contractor, network carrier, power agreement, and project timeline without embedding those assertions directly in frontend code.",
+      "aliases": ["FRC-1", "Front Range Compute Campus"],
+      "tags": ["DATACENTER", "CAMPUS", "EXPANSION", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:35:44Z",
+      "source_count": 11,
+      "relation_count": 5,
+      "attributes": [
+        { "label": "FACILITY TYPE", "value": "Hyperscale datacenter campus", "evidence_id": "ev_front_range_permit" },
+        { "label": "STATUS", "value": "Active / Phase II observed", "evidence_id": "ev_front_range_phase2" },
+        { "label": "POWER", "value": "96 MW documented planning capacity", "evidence_id": "ev_meridian_power" },
+        { "label": "LOCATION", "value": "Colorado demonstration region", "evidence_id": "ev_front_range_permit" }
+      ],
+      "relationships": [
+        { "id": "rel_front_range_northstar", "type": "OPERATED_BY", "label": "operated by", "target_entity_id": "ent_northstar", "confidence": 1, "source_count": 3, "evidence_id": "ev_northstar_campus" },
+        { "id": "rel_front_range_meridian", "type": "POWERED_BY", "label": "powered by", "target_entity_id": "ent_meridian", "confidence": 1, "source_count": 2, "evidence_id": "ev_meridian_power" },
+        { "id": "rel_front_range_orion", "type": "BUILT_BY", "label": "built by", "target_entity_id": "ent_orion", "confidence": 1, "source_count": 2, "evidence_id": "ev_orion_permit" },
+        { "id": "rel_front_range_vectorlink", "type": "CONNECTED_TO", "label": "connected to", "target_entity_id": "ent_vectorlink", "confidence": 0.94, "source_count": 2, "evidence_id": "ev_vectorlink_interconnect" },
+        { "id": "rel_front_range_power_agreement", "type": "GOVERNED_BY", "label": "governed by", "target_entity_id": "ent_power_agreement", "confidence": 1, "source_count": 1, "evidence_id": "ev_power_contract" }
+      ],
+      "timeline": [
+        { "id": "evt_frc_001", "date": "2026-08-28", "type": "CONSTRUCTION", "title": "Phase II structural milestone appears in permit attachment", "evidence_id": "ev_front_range_phase2" },
+        { "id": "evt_frc_002", "date": "2026-07-18", "type": "ANNOUNCEMENT", "title": "Operator publishes revised campus fact sheet", "evidence_id": "ev_northstar_campus" },
+        { "id": "evt_frc_003", "date": "2026-06-11", "type": "POWER", "title": "Utility docket lists staged capacity allocation", "evidence_id": "ev_meridian_power" },
+        { "id": "evt_frc_004", "date": "2026-04-03", "type": "NETWORK", "title": "Carrier interconnection filing identifies campus handoff", "evidence_id": "ev_vectorlink_interconnect" }
+      ],
+      "source_ids": ["src_campus_fact_sheet", "src_permit_attachment", "src_utility_docket", "src_carrier_filing", "src_power_agreement"]
+    },
+    {
+      "id": "ent_meridian",
+      "type": "UTILITY",
+      "name": "Meridian Grid Cooperative",
+      "subtitle": "Synthetic electric utility",
+      "status": "ACTIVE",
+      "description": "Synthetic utility entity used to demonstrate source-backed power relationships and revision-aware public records.",
+      "aliases": ["Meridian Grid"],
+      "tags": ["POWER", "UTILITY", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:31:08Z",
+      "source_count": 7,
+      "relation_count": 2,
+      "attributes": [
+        { "label": "ENTITY TYPE", "value": "Electric utility", "evidence_id": "ev_meridian_power" },
+        { "label": "SERVICE REGION", "value": "Front Range demonstration region", "evidence_id": "ev_meridian_power" },
+        { "label": "DOCKET STATUS", "value": "Revision observed", "evidence_id": "ev_meridian_power" },
+        { "label": "PUBLIC AUTHORITY", "value": "Official planning docket", "evidence_id": "ev_meridian_power" }
+      ],
+      "relationships": [
+        { "id": "rel_meridian_front_range", "type": "SUPPLIES_POWER_TO", "label": "supplies power to", "target_entity_id": "ent_front_range", "confidence": 1, "source_count": 2, "evidence_id": "ev_meridian_power" },
+        { "id": "rel_meridian_power_agreement", "type": "PARTY_TO", "label": "party to", "target_entity_id": "ent_power_agreement", "confidence": 1, "source_count": 1, "evidence_id": "ev_power_contract" }
+      ],
+      "timeline": [
+        { "id": "evt_meridian_001", "date": "2026-08-31", "type": "SOURCE_REVISION", "title": "Planning docket revision preserved", "evidence_id": "ev_meridian_power" },
+        { "id": "evt_meridian_002", "date": "2026-06-11", "type": "FILING", "title": "Staged capacity allocation published", "evidence_id": "ev_meridian_power" }
+      ],
+      "source_ids": ["src_utility_docket", "src_power_agreement"]
+    },
+    {
+      "id": "ent_orion",
+      "type": "CONTRACTOR",
+      "name": "Orion Build Partners",
+      "subtitle": "Synthetic construction contractor",
+      "status": "ACTIVE",
+      "description": "Synthetic contractor demonstrating a relationship supported by a permit attachment rather than inferred from similar names or project timing.",
+      "aliases": ["Orion Build"],
+      "tags": ["CONSTRUCTION", "CONTRACTOR", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:15:39Z",
+      "source_count": 5,
+      "relation_count": 2,
+      "attributes": [
+        { "label": "ENTITY TYPE", "value": "Construction contractor", "evidence_id": "ev_orion_permit" },
+        { "label": "PROJECT ROLE", "value": "General contractor", "evidence_id": "ev_orion_permit" },
+        { "label": "PROJECT", "value": "Front Range Campus Phase II", "evidence_id": "ev_orion_permit" },
+        { "label": "MATCH METHOD", "value": "Exact demonstration identifier", "evidence_id": "ev_orion_permit" }
+      ],
+      "relationships": [
+        { "id": "rel_orion_front_range", "type": "BUILDS", "label": "builds", "target_entity_id": "ent_front_range", "confidence": 1, "source_count": 2, "evidence_id": "ev_orion_permit" },
+        { "id": "rel_orion_northstar", "type": "CONTRACTS_WITH", "label": "contracts with", "target_entity_id": "ent_northstar", "confidence": 1, "source_count": 2, "evidence_id": "ev_orion_permit" }
+      ],
+      "timeline": [
+        { "id": "evt_orion_001", "date": "2026-08-28", "type": "PERMIT", "title": "Contractor named in Phase II permit attachment", "evidence_id": "ev_orion_permit" }
+      ],
+      "source_ids": ["src_permit_attachment"]
+    },
+    {
+      "id": "ent_vectorlink",
+      "type": "NETWORK",
+      "name": "VectorLink Networks",
+      "subtitle": "Synthetic fiber and interconnection provider",
+      "status": "ACTIVE",
+      "description": "Synthetic network provider used to demonstrate carrier and facility relationship records.",
+      "aliases": ["VectorLink"],
+      "tags": ["FIBER", "NETWORK", "INTERCONNECTION", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:09:03Z",
+      "source_count": 4,
+      "relation_count": 1,
+      "attributes": [
+        { "label": "ENTITY TYPE", "value": "Network provider", "evidence_id": "ev_vectorlink_interconnect" },
+        { "label": "OBSERVED SERVICE", "value": "Fiber interconnection", "evidence_id": "ev_vectorlink_interconnect" },
+        { "label": "HANDOFF", "value": "Front Range Campus meet-me room", "evidence_id": "ev_vectorlink_interconnect" },
+        { "label": "SOURCE STATE", "value": "Current public filing", "evidence_id": "ev_vectorlink_interconnect" }
+      ],
+      "relationships": [
+        { "id": "rel_vectorlink_front_range", "type": "CONNECTED_TO", "label": "connected to", "target_entity_id": "ent_front_range", "confidence": 0.94, "source_count": 2, "evidence_id": "ev_vectorlink_interconnect" }
+      ],
+      "timeline": [
+        { "id": "evt_vector_001", "date": "2026-04-03", "type": "INTERCONNECTION", "title": "Campus handoff appears in public filing", "evidence_id": "ev_vectorlink_interconnect" }
+      ],
+      "source_ids": ["src_carrier_filing"]
+    },
+    {
+      "id": "ent_arc_tensor",
+      "type": "SUPPLIER",
+      "name": "Arc Tensor Systems",
+      "subtitle": "Synthetic compute hardware supplier",
+      "status": "ACTIVE",
+      "description": "Synthetic hardware supplier demonstrating a public supply relationship with an infrastructure operator.",
+      "aliases": ["Arc Tensor"],
+      "tags": ["HARDWARE", "ACCELERATORS", "SUPPLIER", "DEMO DATA"],
+      "updated_at": "2026-08-31T22:51:19Z",
+      "source_count": 4,
+      "relation_count": 1,
+      "attributes": [
+        { "label": "ENTITY TYPE", "value": "Compute hardware supplier", "evidence_id": "ev_arc_supply" },
+        { "label": "DOCUMENTED ROLE", "value": "Accelerator platform supplier", "evidence_id": "ev_arc_supply" },
+        { "label": "COUNTERPARTY", "value": "Northstar Compute", "evidence_id": "ev_arc_supply" },
+        { "label": "DISCLOSURE TYPE", "value": "Public contract summary", "evidence_id": "ev_arc_supply" }
+      ],
+      "relationships": [
+        { "id": "rel_arc_northstar", "type": "SUPPLIES", "label": "supplies", "target_entity_id": "ent_northstar", "confidence": 0.96, "source_count": 2, "evidence_id": "ev_arc_supply" }
+      ],
+      "timeline": [
+        { "id": "evt_arc_001", "date": "2026-05-02", "type": "CONTRACT", "title": "Public filing summarizes accelerator supply agreement", "evidence_id": "ev_arc_supply" }
+      ],
+      "source_ids": ["src_hardware_filing"]
+    },
+    {
+      "id": "ent_power_agreement",
+      "type": "CONTRACT",
+      "name": "Front Range Power Service Agreement",
+      "subtitle": "Synthetic utility service contract",
+      "status": "EXECUTED",
+      "description": "Synthetic contract entity showing how a contract can sit in the same graph as organizations, utilities, and facilities while retaining its own source and evidence record.",
+      "aliases": ["FRPSA-2026"],
+      "tags": ["CONTRACT", "POWER", "UTILITY", "DEMO DATA"],
+      "updated_at": "2026-08-31T23:15:39Z",
+      "source_count": 1,
+      "relation_count": 2,
+      "attributes": [
+        { "label": "DOCUMENT TYPE", "value": "Power service agreement", "evidence_id": "ev_power_contract" },
+        { "label": "STATUS", "value": "Executed", "evidence_id": "ev_power_contract" },
+        { "label": "PLANNING CAPACITY", "value": "96 MW", "evidence_id": "ev_power_contract" },
+        { "label": "IDENTIFIER", "value": "FRPSA-2026", "evidence_id": "ev_power_contract" }
+      ],
+      "relationships": [
+        { "id": "rel_agreement_front_range", "type": "SERVES", "label": "serves", "target_entity_id": "ent_front_range", "confidence": 1, "source_count": 1, "evidence_id": "ev_power_contract" },
+        { "id": "rel_agreement_meridian", "type": "EXECUTED_BY", "label": "executed by", "target_entity_id": "ent_meridian", "confidence": 1, "source_count": 1, "evidence_id": "ev_power_contract" }
+      ],
+      "timeline": [
+        { "id": "evt_contract_001", "date": "2026-06-09", "type": "EXECUTED", "title": "Synthetic power service agreement executed", "evidence_id": "ev_power_contract" }
+      ],
+      "source_ids": ["src_power_agreement"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "src_registry",
+      "title": "Northstar Compute — organization registry record",
+      "authority": "OFFICIAL REGISTRY",
+      "source_type": "REGISTRY RECORD",
+      "canonical_url": "https://example.invalid/panopticon-demo/northstar-registry",
+      "retrieved_at": "2026-08-31T23:18:10Z",
+      "document_date": "2026-08-24",
+      "sha256": "1d6f9a96901385540f1b6f9ee542c111c0b5657e54931a6cb97b3eadfda73e2d",
+      "description": "Synthetic official registry record used only by the frontend demonstration.",
+      "demo": true
+    },
+    {
+      "id": "src_campus_fact_sheet",
+      "title": "Front Range Campus — revised public fact sheet",
+      "authority": "OPERATOR-PUBLISHED RECORD",
+      "source_type": "FACT SHEET",
+      "canonical_url": "https://example.invalid/panopticon-demo/front-range-fact-sheet",
+      "retrieved_at": "2026-08-31T23:24:42Z",
+      "document_date": "2026-07-18",
+      "sha256": "f0b4cbb88b81f8c471d894b6fceccba48a07a75c201812782cc795c06212cc0b",
+      "description": "Synthetic public fact sheet with a preserved prior revision.",
+      "demo": true
+    },
+    {
+      "id": "src_permit_attachment",
+      "title": "Front Range Campus Phase II — permit attachment",
+      "authority": "OFFICIAL PERMIT RECORD",
+      "source_type": "PERMIT ATTACHMENT",
+      "canonical_url": "https://example.invalid/panopticon-demo/front-range-permit",
+      "retrieved_at": "2026-08-31T23:14:17Z",
+      "document_date": "2026-08-28",
+      "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
+      "description": "Synthetic permit attachment naming the project, location, and contractor.",
+      "demo": true
+    },
+    {
+      "id": "src_utility_docket",
+      "title": "Meridian Grid — large-load planning docket",
+      "authority": "OFFICIAL UTILITY RECORD",
+      "source_type": "PLANNING DOCKET",
+      "canonical_url": "https://example.invalid/panopticon-demo/meridian-docket",
+      "retrieved_at": "2026-08-31T23:30:12Z",
+      "document_date": "2026-08-31",
+      "sha256": "9e1f0058b062df15b8d15df3dd182e931b7d3f1ff663d89628729c2463b9365a",
+      "description": "Synthetic revised planning docket used to demonstrate immutable source snapshots.",
+      "demo": true
+    },
+    {
+      "id": "src_carrier_filing",
+      "title": "VectorLink Networks — interconnection filing",
+      "authority": "OFFICIAL REGULATORY RECORD",
+      "source_type": "INTERCONNECTION FILING",
+      "canonical_url": "https://example.invalid/panopticon-demo/vectorlink-filing",
+      "retrieved_at": "2026-08-31T23:07:28Z",
+      "document_date": "2026-04-03",
+      "sha256": "44b1a6f6700a8ebdf450fe8c95d6dd663ca33af8138565b5f71fb7aa0799943b",
+      "description": "Synthetic carrier filing identifying a campus handoff.",
+      "demo": true
+    },
+    {
+      "id": "src_hardware_filing",
+      "title": "Arc Tensor Systems — public contract summary",
+      "authority": "COMPANY-PUBLISHED RECORD",
+      "source_type": "CONTRACT SUMMARY",
+      "canonical_url": "https://example.invalid/panopticon-demo/arc-tensor-filing",
+      "retrieved_at": "2026-08-31T22:48:31Z",
+      "document_date": "2026-05-02",
+      "sha256": "7342b4f5595c40ce8b9a73c43a0ba115c89303324e1f22037ef72f4f5581d2f5",
+      "description": "Synthetic contract summary used to demonstrate supplier relationships.",
+      "demo": true
+    },
+    {
+      "id": "src_power_agreement",
+      "title": "Front Range Power Service Agreement — public contract record",
+      "authority": "OFFICIAL UTILITY RECORD",
+      "source_type": "EXECUTED CONTRACT",
+      "canonical_url": "https://example.invalid/panopticon-demo/front-range-power-agreement",
+      "retrieved_at": "2026-08-31T23:12:02Z",
+      "document_date": "2026-06-09",
+      "sha256": "9f4cb9c606f1516a8e3f1e64c4f97234b703381b582361c150369135c657e597",
+      "description": "Synthetic executed contract used to demonstrate contract entities and power relationships.",
+      "demo": true
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev_northstar_registry",
+      "source_id": "src_registry",
+      "claim": "Northstar Compute is recorded as an active infrastructure operator under demonstration registry identifier DEMO-NSC-00418.",
+      "quote": "Entity status: Active. Primary activity: operation of digital infrastructure facilities. Registry identifier: DEMO-NSC-00418.",
+      "locator": "Page 1 · organization summary",
+      "page": 1,
+      "authority": "OFFICIAL REGISTRY",
+      "retrieved_at": "2026-08-31T23:18:10Z",
+      "sha256": "1d6f9a96901385540f1b6f9ee542c111c0b5657e54931a6cb97b3eadfda73e2d",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:54a1218a697e0a4cf2ef7d4cbddcabcb43577f444f61c58a7ae81b22e94d3429",
+      "demo": true
+    },
+    {
+      "id": "ev_northstar_campus",
+      "source_id": "src_campus_fact_sheet",
+      "claim": "Northstar Compute publicly identifies itself as operator of Front Range Campus.",
+      "quote": "Northstar Compute operates the Front Range Campus, a multi-building digital infrastructure site in the Colorado Front Range region.",
+      "locator": "Page 2 · campus overview",
+      "page": 2,
+      "authority": "OPERATOR-PUBLISHED RECORD",
+      "retrieved_at": "2026-08-31T23:24:42Z",
+      "sha256": "f0b4cbb88b81f8c471d894b6fceccba48a07a75c201812782cc795c06212cc0b",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:8152481e675521a6e934f7fe2f4c1b8327c22bdb4cc1887e0693139bc5ad9e2a",
+      "demo": true
+    },
+    {
+      "id": "ev_front_range_permit",
+      "source_id": "src_permit_attachment",
+      "claim": "The synthetic permit identifies Front Range Campus as a hyperscale datacenter campus in a Colorado demonstration region.",
+      "quote": "Project: Front Range Campus Phase II. Use classification: hyperscale data center campus. Region: Colorado demonstration region.",
+      "locator": "Page 3 · project identification",
+      "page": 3,
+      "authority": "OFFICIAL PERMIT RECORD",
+      "retrieved_at": "2026-08-31T23:14:17Z",
+      "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:085c23078f0a18a2f673c278e18ac41b7f0ec32222ddb55d3b57b288b28ff5ec",
+      "demo": true
+    },
+    {
+      "id": "ev_front_range_phase2",
+      "source_id": "src_permit_attachment",
+      "claim": "A Phase II structural milestone was present in the synthetic permit attachment dated August 28, 2026.",
+      "quote": "Phase II milestone: structural steel package accepted for permit review on 2026-08-28.",
+      "locator": "Page 8 · milestone schedule",
+      "page": 8,
+      "authority": "OFFICIAL PERMIT RECORD",
+      "retrieved_at": "2026-08-31T23:14:17Z",
+      "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:c14e3a5ab6dd09163f1f31c82701ba5e1dbc2cdeff73c9898ae158e90b4cf851",
+      "demo": true
+    },
+    {
+      "id": "ev_meridian_power",
+      "source_id": "src_utility_docket",
+      "claim": "The synthetic utility docket documents staged planning capacity totaling 96 MW for Front Range Campus.",
+      "quote": "Front Range Campus large-load allocation: Stage A 32 MW; Stage B 32 MW; Stage C 32 MW; total planning capacity 96 MW.",
+      "locator": "Page 14 · large-load allocations",
+      "page": 14,
+      "authority": "OFFICIAL UTILITY RECORD",
+      "retrieved_at": "2026-08-31T23:30:12Z",
+      "sha256": "9e1f0058b062df15b8d15df3dd182e931b7d3f1ff663d89628729c2463b9365a",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:a6bb11a8e56dd0d92531adf8e02cbe2213265f1ca60dd75bff78eac558ca1e3a",
+      "demo": true
+    },
+    {
+      "id": "ev_orion_permit",
+      "source_id": "src_permit_attachment",
+      "claim": "The synthetic permit attachment names Orion Build Partners as general contractor for Front Range Campus Phase II.",
+      "quote": "Owner/operator: Northstar Compute. Project: Front Range Campus Phase II. General contractor: Orion Build Partners (DEMO-OBP-0917).",
+      "locator": "Page 4 · project parties",
+      "page": 4,
+      "authority": "OFFICIAL PERMIT RECORD",
+      "retrieved_at": "2026-08-31T23:14:17Z",
+      "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:14d0937640af2e28df5fa17216bca23df3a121ff50d1f08d0ad6747074df76af",
+      "demo": true
+    },
+    {
+      "id": "ev_vectorlink_interconnect",
+      "source_id": "src_carrier_filing",
+      "claim": "The synthetic carrier filing identifies a VectorLink fiber handoff at Front Range Campus.",
+      "quote": "Interconnection location: Front Range Campus meet-me room. Provider: VectorLink Networks. Service: dual-path fiber handoff.",
+      "locator": "Page 6 · interconnection locations",
+      "page": 6,
+      "authority": "OFFICIAL REGULATORY RECORD",
+      "retrieved_at": "2026-08-31T23:07:28Z",
+      "sha256": "44b1a6f6700a8ebdf450fe8c95d6dd663ca33af8138565b5f71fb7aa0799943b",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:b6e2d82d60ca8e7818d35a40837d42040959cb26cbb2d983af1bbadb22700c98",
+      "demo": true
+    },
+    {
+      "id": "ev_arc_supply",
+      "source_id": "src_hardware_filing",
+      "claim": "A synthetic public contract summary describes Arc Tensor Systems as an accelerator platform supplier to Northstar Compute.",
+      "quote": "Supplier: Arc Tensor Systems. Counterparty: Northstar Compute. Scope: accelerator compute platform supply and support.",
+      "locator": "Page 2 · agreement summary",
+      "page": 2,
+      "authority": "COMPANY-PUBLISHED RECORD",
+      "retrieved_at": "2026-08-31T22:48:31Z",
+      "sha256": "7342b4f5595c40ce8b9a73c43a0ba115c89303324e1f22037ef72f4f5581d2f5",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:6ed7bbd8184cf984c355d83036275276a90e02c8d6fbac9dd26373dd216ff44e",
+      "demo": true
+    },
+    {
+      "id": "ev_power_contract",
+      "source_id": "src_power_agreement",
+      "claim": "The synthetic executed agreement identifies Meridian Grid as provider, Front Range Campus as the served facility, and 96 MW as planning capacity.",
+      "quote": "Agreement FRPSA-2026. Provider: Meridian Grid Cooperative. Served facility: Front Range Campus. Planning capacity: 96 MW. Status: executed.",
+      "locator": "Page 1 · agreement summary",
+      "page": 1,
+      "authority": "OFFICIAL UTILITY RECORD",
+      "retrieved_at": "2026-08-31T23:12:02Z",
+      "sha256": "9f4cb9c606f1516a8e3f1e64c4f97234b703381b582361c150369135c657e597",
+      "review_state": "APPROVED",
+      "review_bound_digest": "sha256:305d2a980517909664f286034ed75764c30dd78c27382ecf2216ec96111b57aa",
+      "demo": true
+    }
+  ]
+}
