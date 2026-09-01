@@ -55,14 +55,22 @@ jobs:
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$chrome"
 
-          "$chrome" \
+          status=0
+          timeout --signal=TERM 25s "$chrome" \
             --headless=new \
             --no-sandbox \
             --disable-dev-shm-usage \
+            --disable-background-networking \
             --virtual-time-budget=6500 \
             --dump-dom \
             http://127.0.0.1:4173/ \
-            > /tmp/pnull-terminal-dom.html
+            > /tmp/pnull-terminal-dom.html \
+            2> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/pnull-terminal-dom.html
 
           grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
           grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-dom.html
@@ -70,14 +78,23 @@ jobs:
           grep --quiet 'id="world-canvas"' /tmp/pnull-terminal-dom.html
           grep --quiet "Recent public activity" /tmp/pnull-terminal-dom.html
 
-          "$chrome" \
+          status=0
+          timeout --signal=TERM 25s "$chrome" \
             --headless=new \
             --no-sandbox \
             --disable-dev-shm-usage \
+            --disable-background-networking \
             --virtual-time-budget=6500 \
             --window-size=1440,1000 \
             --screenshot=/tmp/panopticon-command-center.png \
-            http://127.0.0.1:4173/
+            http://127.0.0.1:4173/ \
+            >> /tmp/pnull-terminal-chrome.log \
+            2>&1 || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/panopticon-command-center.png
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,3 +105,4 @@ jobs:
             /tmp/panopticon-command-center.png
             /tmp/pnull-terminal-dom.html
             /tmp/pnull-terminal-server.log
+            /tmp/pnull-terminal-chrome.log
