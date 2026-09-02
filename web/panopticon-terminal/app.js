@@ -41,6 +41,7 @@ const classicScripts = [
   "./scripts/20-civic-atlas-links.js",
   "./scripts/21-civic-atlas-helpers.js",
   "./scripts/22-civic-runtime.js",
+  "./scripts/23-civic-polish.js",
 ];
 
 for (const src of classicScripts) {
