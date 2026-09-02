@@ -38,7 +38,7 @@ async function boot() {
       : state.entities[0]?.id;
   if (initial) await selectEntity(initial, true, true);
 
-  setInterval(rotateActivity, 3300);
+  if (!new URLSearchParams(location.search).has("ci")) setInterval(rotateActivity, 3300);
 }
 
 function normalizeEntities(items) {
