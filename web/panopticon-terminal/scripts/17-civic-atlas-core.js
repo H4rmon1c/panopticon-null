@@ -17,6 +17,8 @@ function CivicAtlas(canvas, { onSelect } = {}) {
   this.drag = null;
   this.moved = false;
   this.reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  this.ciMode = new URLSearchParams(location.search).has("ci");
+  this.frameCount = 0;
   this.resize = this.resize.bind(this);
   this.frame = this.frame.bind(this);
   this.wire();
@@ -60,22 +62,26 @@ CivicAtlas.prototype.setData = function setData(entities) {
   this.byId = new Map(this.entities.map((entity) => [entity.id, entity]));
   if (!this.selected && this.entities[0]) this.selected = this.entities[0].id;
   this.layout();
+  if (this.ciMode) this.draw(performance.now());
 };
 
 CivicAtlas.prototype.setLayers = function setLayers(layers) {
   this.activeLayers = new Set(layers ?? []);
   this.layout();
+  if (this.ciMode) this.draw(performance.now());
 };
 
 CivicAtlas.prototype.setSelected = function setSelected(id) {
   if (!id) return;
   this.selected = id;
   this.layout();
+  if (this.ciMode) this.draw(performance.now());
 };
 
 CivicAtlas.prototype.setView = function setView(view) {
   this.view = view === "connections" ? "connections" : "place";
   this.layout();
+  if (this.ciMode) this.draw(performance.now());
 };
 
 CivicAtlas.prototype.resize = function resize() {
@@ -87,6 +93,7 @@ CivicAtlas.prototype.resize = function resize() {
   this.canvas.height = Math.round(this.height * this.dpr);
   this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   this.layout();
+  if (this.ciMode) this.draw(performance.now());
 };
 
 CivicAtlas.prototype.visible = function visible(entity) {
