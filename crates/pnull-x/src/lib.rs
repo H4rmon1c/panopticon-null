@@ -4,7 +4,9 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
-use pnull_core::{Alert, CoreError, Store, XAttempt, XReconciliation, XSegment, stable_id};
+use pnull_core::{
+    Alert, CoreError, ProcurementAlert, Store, XAttempt, XReconciliation, XSegment, stable_id,
+};
 use reqwest::blocking::Client;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -82,6 +84,60 @@ pub fn draft(alert: &Alert, canonical_base_url: &str) -> Result<Draft, XError> {
         alert.state.label(),
         alert.summary,
         alert_url
+    );
+    pnull_publish::validate_public_text(&text).map_err(|_| XError::SensitiveData)?;
+    let posts = split_thread(&text)?;
+    if posts
+        .iter()
+        .any(|post| post.chars().count() > X_CHARACTER_LIMIT)
+    {
+        return Err(XError::CharacterLimit);
+    }
+    Ok(Draft {
+        alert_id: alert.id.clone(),
+        posts,
+    })
+}
+
+/// Drafts an X thread for a procurement change alert (v0.0.4, Item 1).
+///
+/// Reuses the same pipeline machinery as the general alert draft: dry-run
+/// default, exact-digest approval, canonical-URL check, credentials gate, and
+/// reconciliation for uncertain attempts. The body identifies the feed as
+/// automated, names the jurisdiction and matter/identifier, states the observed
+/// change in one sentence with phrasing discipline, links the published
+/// case-file page under `canonical_base_url`, and carries the "public record;
+/// not proof of absence" caveat.
+pub fn draft_procurement(
+    alert: &ProcurementAlert,
+    canonical_base_url: &str,
+    jurisdiction: &str,
+    matter_label: &str,
+) -> Result<Draft, XError> {
+    pnull_publish::validate_public_text(&alert.summary).map_err(|_| XError::SensitiveData)?;
+    let first = alert.changes.first().ok_or(XError::MissingCitation)?;
+    let kind = first.change_kind.label();
+    // The published case-file page for a procurement change is the affected
+    // matter's page (deterministic slug from the matter id). The canonical base
+    // URL already carries the site path prefix (e.g. `.../co`), so the
+    // `procurement/` segment is appended directly, matching how the general
+    // alert draft appends `/alerts/...`. When no matter id is resolvable, fall
+    // back to the change-alert page.
+    let case_page = match alert.matter_ids.first() {
+        Some(matter_id) if !matter_id.is_empty() => format!(
+            "{}/procurement/{}/index.html",
+            canonical_base_url.trim_end_matches('/'),
+            safe_id(matter_id)
+        ),
+        _ => format!(
+            "{}/procurement/change-alerts/{}.html",
+            canonical_base_url.trim_end_matches('/'),
+            safe_id(&alert.id)
+        ),
+    };
+    let text = format!(
+        "AUTOMATED PUBLIC-RECORD CHANGE NOTICE · procurement\n\n{jurisdiction} — matter/identifier: {matter_label}\n\nObserved change ({kind}): {}. This reports a change in the public record; it is not proof of absence or of wrongdoing.\n\nCase-file page: {case_page}\n\nPublic record; not proof of absence.",
+        alert.summary
     );
     pnull_publish::validate_public_text(&text).map_err(|_| XError::SensitiveData)?;
     let posts = split_thread(&text)?;
@@ -557,7 +613,8 @@ impl XTransport for ReqwestXTransport {
 mod tests {
     use super::*;
     use pnull_core::{
-        Citation, EvidenceRecord, ExtractionStatus, FindingState, Locator, SourceType,
+        Citation, CoverageState, EvidenceRecord, ExtractionStatus, FindingState, Locator,
+        ProcurementAlert, ProcurementChangeKind, ProcurementRecordChange, SourceType,
     };
     use tempfile::tempdir;
 
@@ -956,5 +1013,76 @@ mod tests {
             draft(&alert("Plate: ABC123"), "https://example.invalid"),
             Err(XError::SensitiveData)
         ));
+    }
+
+    fn procurement_alert() -> ProcurementAlert {
+        ProcurementAlert {
+            id: "proc-alert:test".to_owned(),
+            source_id: "colorado-springs-contract-awards".to_owned(),
+            surface: "contract-award-table".to_owned(),
+            old_snapshot_id: "snapshot:a".to_owned(),
+            old_snapshot_digest: "a".repeat(64),
+            new_snapshot_id: "snapshot:b".to_owned(),
+            new_snapshot_digest: "b".repeat(64),
+            changes: vec![ProcurementRecordChange {
+                change_kind: ProcurementChangeKind::RecordAdded,
+                row_identity: "proc:matter:co:abc".to_owned(),
+                field_diffs: Vec::new(),
+                old_snapshot_id: "snapshot:a".to_owned(),
+                old_snapshot_digest: "a".repeat(64),
+                new_snapshot_id: "snapshot:b".to_owned(),
+                new_snapshot_digest: "b".repeat(64),
+                summary: "The row observed in snapshot snapshot:a (digest aaaaa...) is not present in snapshot snapshot:b (digest bbbbb...).".to_owned(),
+            }],
+            retrieved_at: "2026-08-31T00:00:00Z".to_owned(),
+            coverage_state: CoverageState::InformationalOnly,
+            matter_ids: vec!["proc:matter:co:abc".to_owned()],
+            identifier_ids: Vec::new(),
+            taxonomy_matches: Vec::new(),
+            summary: "The row observed in snapshot snapshot:a (digest aaaaa...) is not present in snapshot snapshot:b (digest bbbbb...).".to_owned(),
+        }
+    }
+
+    #[test]
+    fn procurement_draft_links_the_matter_case_file_page() {
+        let draft = draft_procurement(
+            &procurement_alert(),
+            "https://example.invalid/base",
+            "Colorado Springs, Colorado",
+            "proc:matter:co:abc",
+        )
+        .expect("draft");
+        let text = draft.posts.join("\n");
+        assert!(
+            text.contains("AUTOMATED PUBLIC-RECORD CHANGE NOTICE · procurement"),
+            "the draft must identify the feed as automated"
+        );
+        assert!(
+            text.contains("/procurement/proc_matter_co_abc/index.html"),
+            "the draft must link the matter case-file page (slug from the matter id), got: {text}"
+        );
+        assert!(
+            text.contains("not proof of absence"),
+            "the draft must carry the absence caveat"
+        );
+    }
+
+    #[test]
+    fn procurement_draft_links_change_alert_page_when_no_matter() {
+        let mut alert = procurement_alert();
+        alert.matter_ids.clear();
+        let draft = draft_procurement(
+            &alert,
+            "https://example.invalid/base",
+            "Colorado Springs, Colorado",
+            "proc:matter:co:abc",
+        )
+        .expect("draft");
+        assert!(
+            draft
+                .posts
+                .join("\n")
+                .contains("/procurement/change-alerts/proc-alert_test.html")
+        );
     }
 }

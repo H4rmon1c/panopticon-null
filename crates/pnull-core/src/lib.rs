@@ -15,12 +15,14 @@ pub mod types;
 
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use procurement::{
-    CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
-    MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
-    ProcurementMatter, ProcurementOrganization, ReconciliationDecision, ReconciliationItem,
-    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SourceAuthority,
-    SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
-    organization_exact_match, parse_money, sha256_manifest,
+    CaseFile, CaseFileState, CoraDraft, CoraRequest, CoraRequestEvent, CoraRequestState,
+    CoverageEntry, CoverageState, FieldDiff, IdentifierKind, MoneyState, MoneyValue,
+    OfficialRelationship, OfficialRelationshipKind, OrganizationRole, ProcurementAlert,
+    ProcurementChangeKind, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
+    ProcurementMatter, ProcurementOrganization, ProcurementRecordChange, ReconciliationDecision,
+    ReconciliationItem, ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision,
+    SourceAuthority, SourceSnapshot, identifier_match_key, normalize_identifier,
+    organization_alias_candidate, organization_exact_match, parse_money, sha256_manifest,
 };
 pub use types::{
     Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
@@ -885,7 +887,7 @@ impl Store {
 
     pub fn procurement_matters(&self) -> Result<Vec<ProcurementMatter>, CoreError> {
         self.read_json_rows(
-            "SELECT matter_json FROM procurement_matters ORDER BY title",
+            "SELECT matter_json FROM procurement_matters ORDER BY id",
             &[],
         )
     }
@@ -1105,6 +1107,143 @@ impl Store {
             "SELECT draft_json FROM cora_drafts WHERE matter_id = ?1 ORDER BY json_extract(draft_json, '$.created_at')",
             &[matter_id],
         )
+    }
+}
+
+impl Store {
+    /// Inserts a procurement change alert (Item 1), ignoring duplicates so that
+    /// re-ingesting the same snapshot pair never creates a second alert.
+    pub fn insert_procurement_alert(&self, alert: &ProcurementAlert) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_alerts(id, source_id, alert_json) VALUES (?1, ?2, ?3)",
+            params![alert.id, alert.source_id, serde_json::to_string(alert)?],
+        )? == 1)
+    }
+
+    /// Lists every procurement change alert for a source, newest retrieval first.
+    pub fn procurement_alerts(&self, source_id: &str) -> Result<Vec<ProcurementAlert>, CoreError> {
+        self.read_json_rows(
+            "SELECT alert_json FROM procurement_alerts WHERE source_id = ?1 ORDER BY json_extract(alert_json, '$.retrieved_at'), id",
+            &[source_id],
+        )
+    }
+
+    /// Lists every procurement change alert across all sources.
+    pub fn all_procurement_alerts(&self) -> Result<Vec<ProcurementAlert>, CoreError> {
+        self.read_json_rows(
+            "SELECT alert_json FROM procurement_alerts ORDER BY json_extract(alert_json, '$.retrieved_at'), source_id, id",
+            &[],
+        )
+    }
+
+    /// Inserts a CORA request ledger entry (Item 3), ignoring duplicates.
+    pub fn insert_cora_request(&self, request: &CoraRequest) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO cora_requests(id, matter_id, request_json) VALUES (?1, ?2, ?3)",
+            params![
+                request.id,
+                request.matter_id,
+                serde_json::to_string(request)?
+            ],
+        )? == 1)
+    }
+
+    /// Lists every CORA request ledger entry for a matter.
+    pub fn cora_requests(&self, matter_id: &str) -> Result<Vec<CoraRequest>, CoreError> {
+        self.read_json_rows(
+            "SELECT request_json FROM cora_requests WHERE matter_id = ?1 ORDER BY json_extract(request_json, '$.created_at'), id",
+            &[matter_id],
+        )
+    }
+
+    /// Reads a single CORA request ledger entry by id.
+    pub fn cora_request(&self, request_id: &str) -> Result<CoraRequest, CoreError> {
+        self.read_json_row(
+            "SELECT request_json FROM cora_requests WHERE id = ?1",
+            &[request_id],
+        )
+    }
+
+    /// Lists every CORA request ledger entry across all matters.
+    pub fn all_cora_requests(&self) -> Result<Vec<CoraRequest>, CoreError> {
+        self.read_json_rows(
+            "SELECT request_json FROM cora_requests ORDER BY json_extract(request_json, '$.created_at'), matter_id, id",
+            &[],
+        )
+    }
+
+    /// Updates a CORA request's JSON in place. Only used to append a new
+    /// transition event to an existing request; prior events are preserved
+    /// byte-for-byte and in order (append-only within the request's event list).
+    pub fn update_cora_request(&self, request: &CoraRequest) -> Result<(), CoreError> {
+        self.connection.execute(
+            "UPDATE cora_requests SET request_json = ?1, matter_id = ?2 WHERE id = ?3",
+            params![
+                serde_json::to_string(request)?,
+                request.matter_id,
+                request.id
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Inserts an official-relationship link (Item 5), ignoring duplicates.
+    pub fn insert_official_relationship(
+        &self,
+        relationship: &OfficialRelationship,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO official_relationships(id, source_record_id, relationship_json) VALUES (?1, ?2, ?3)",
+            params![relationship.id, relationship.source_record_id, serde_json::to_string(relationship)?],
+        )? == 1)
+    }
+
+    /// Lists every official-relationship link.
+    pub fn all_official_relationships(&self) -> Result<Vec<OfficialRelationship>, CoreError> {
+        self.read_json_rows(
+            "SELECT relationship_json FROM official_relationships ORDER BY json_extract(relationship_json, '$.source_snapshot_id'), id",
+            &[],
+        )
+    }
+
+    /// Persists an operator-imported supplied record's JSON (hostile-file import
+    /// path) so a later CORA response can link to a record that provably exists.
+    /// The record body is stored as opaque JSON; the caller owns its schema.
+    pub fn insert_supplied_record_json(
+        &self,
+        id: &str,
+        observed_digest: &str,
+        record_json: &str,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO supplied_records(id, observed_digest, record_json) VALUES (?1, ?2, ?3)",
+            params![id, observed_digest, record_json],
+        )? == 1)
+    }
+
+    /// Reads a single imported supplied record's JSON by id, if present.
+    pub fn supplied_record_json(&self, id: &str) -> Result<Option<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT record_json FROM supplied_records WHERE id = ?1")?;
+        let mut rows = statement.query(params![id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Reads a single imported supplied record's observed SHA-256 digest by
+    /// id, if present.
+    pub fn supplied_record_digest(&self, id: &str) -> Result<Option<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT observed_digest FROM supplied_records WHERE id = ?1")?;
+        let mut rows = statement.query(params![id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
     }
 }
 

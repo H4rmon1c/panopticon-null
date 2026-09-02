@@ -22,12 +22,13 @@ use pnull_ingest::{
 use pnull_publish::{
     SiteConfig, assert_citations_approved, build_site, citation_id, citation_review_binding,
 };
-use pnull_x::{attempts_for_alert, draft, post_approved, reconcile};
+use pnull_x::{attempts_for_alert, draft, draft_procurement, post_approved, reconcile};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 mod procurement_cmd;
+mod refresh;
 
 const CONFIG_PATH: &str = "configs/states/co.toml";
 const RULES_PATH: &str = "rules/surveillance.yml";
@@ -148,6 +149,15 @@ enum ProcurementCommand {
     Chain {
         matter: String,
     },
+    Alerts,
+    PublishReady {
+        matter_id: String,
+    },
+    Refresh {
+        source_id: String,
+        #[arg(long)]
+        live: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -187,7 +197,34 @@ enum CaseCommand {
 
 #[derive(Subcommand)]
 enum CoraCommand {
-    Draft { matter: String },
+    Draft {
+        matter: String,
+    },
+    List {
+        #[arg(long)]
+        matter: Option<String>,
+    },
+    Show {
+        request_id: String,
+    },
+    Submit {
+        request_id: String,
+        #[arg(long)]
+        operator: String,
+        #[arg(long)]
+        date: String,
+        #[arg(long)]
+        tracking: String,
+        #[arg(long)]
+        recipient_note: Option<String>,
+    },
+    Response {
+        request_id: String,
+        #[arg(long)]
+        evidence_id: String,
+        #[arg(long)]
+        note: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -448,6 +485,13 @@ fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<(
         ProcurementCommand::Show { matter } => procurement_cmd::show_matter(&store, &matter),
         ProcurementCommand::Gaps { matter } => procurement_cmd::gaps(&store, &matter),
         ProcurementCommand::Chain { matter } => procurement_cmd::chain(&store, &matter),
+        ProcurementCommand::Alerts => procurement_cmd::procurement_alerts(&store),
+        ProcurementCommand::PublishReady { matter_id } => {
+            procurement_cmd::publish_ready(&store, &matter_id)
+        }
+        ProcurementCommand::Refresh { source_id, live } => {
+            procurement_cmd::procurement_refresh(&store, &source_id, live)
+        }
     }
 }
 
@@ -475,6 +519,27 @@ fn cora_command(data_dir: &Path, command: CoraCommand) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
         CoraCommand::Draft { matter } => procurement_cmd::cora_draft(&store, &matter),
+        CoraCommand::List { matter } => procurement_cmd::cora_list(&store, matter.as_deref()),
+        CoraCommand::Show { request_id } => procurement_cmd::cora_show(&store, &request_id),
+        CoraCommand::Submit {
+            request_id,
+            operator,
+            date,
+            tracking,
+            recipient_note,
+        } => procurement_cmd::cora_submit(
+            &store,
+            &request_id,
+            &operator,
+            &date,
+            &tracking,
+            recipient_note.as_deref(),
+        ),
+        CoraCommand::Response {
+            request_id,
+            evidence_id,
+            note,
+        } => procurement_cmd::cora_response(&store, &request_id, &evidence_id, note.as_deref()),
     }
 }
 
@@ -891,6 +956,23 @@ fn list_alerts(data_dir: &Path) -> Result<()> {
             alert.publication_date,
             alert.state.label(),
             alert.title
+        );
+    }
+    // Procurement change alerts share the alert listing so an operator sees
+    // both kinds in one place (v0.0.4, Item 1).
+    for alert in store.all_procurement_alerts()? {
+        let kinds: Vec<&str> = alert
+            .changes
+            .iter()
+            .map(|c| c.change_kind.label())
+            .collect();
+        println!(
+            "{} | {} | {} | {} | {}",
+            alert.id,
+            alert.retrieved_at,
+            kinds.join(","),
+            alert.source_id,
+            alert.summary
         );
     }
     Ok(())
@@ -1786,6 +1868,73 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
         procurement_out.join("awards.csv").display()
     );
 
+    // v0.0.4, Item 2: publish the procurement chain. Write the control matter's
+    // case file (same deterministic JSON source as transit-fare), approve the
+    // procurement citations with a clearly-labeled demonstration review, and
+    // rebuild the site so /co/procurement is included. The control matter's
+    // page is the restraint demonstration: no surveillance labeling anywhere.
+    let control_case =
+        pnull_procurement::build_content(&store, pnull_procurement::CONTROL_MATTER_ID)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    let control_json = pnull_procurement::render_case_json(&control_case);
+    let control_md = pnull_procurement::render_case_markdown(&control_case);
+    fs::create_dir_all(procurement_out.join("control"))?;
+    fs::write(
+        procurement_out.join("control").join("case-file.json"),
+        &control_json,
+    )?;
+    fs::write(
+        procurement_out.join("control").join("case-file.md"),
+        &control_md,
+    )?;
+    approve_procurement_citations_demo(&store, pnull_procurement::TRANSIT_FARE_MATTER_ID)?;
+    approve_procurement_citations_demo(&store, pnull_procurement::CONTROL_MATTER_ID)?;
+    // Also approve any derived matters (Item 4 affected award records) so their
+    // pages publish and render the "what changed" section.
+    for matter in store.procurement_matters()? {
+        approve_procurement_citations_demo(&store, &matter.id)?;
+    }
+    println!(
+        "15. Approved procurement citations (demonstration review) and wrote control case file."
+    );
+    let files2 = build_site(
+        &store,
+        &site_dir,
+        &SiteConfig {
+            canonical_base_url: &config.canonical_base_url,
+            rules_yaml: &rules_yaml,
+        },
+    )
+    .map_err(|error| anyhow!("publication refused: {error}"))?;
+    println!(
+        "16. Rebuilt {} static site files (now including the procurement chain) at {}",
+        files2.len(),
+        site_dir.display()
+    );
+
+    // v0.0.4, Item 1/4: a dry-run X draft for a procurement change alert. The
+    // demo constructs no live X transport; the draft is deterministic and
+    // clearly labeled as a demonstration. It links the affected matter's
+    // published case-file page under the canonical base URL.
+    let procurement_alerts = store.all_procurement_alerts()?;
+    if let Some(first_alert) = procurement_alerts.first() {
+        let matter_label = first_alert
+            .matter_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "unresolved".to_owned());
+        let generated = draft_procurement(
+            first_alert,
+            &config.canonical_base_url,
+            "Colorado Springs, Colorado",
+            &matter_label,
+        )?;
+        println!("17. Generated dry-run X draft for a procurement change alert (no transport):");
+        print_draft(&generated);
+    } else {
+        println!("17. No procurement change alerts to draft (dry-run X step skipped).");
+    }
+
     println!("Alert ID: {}", alert.id);
     Ok(())
 }
@@ -1800,6 +1949,7 @@ fn seed_demo_reviews(store: &Store) -> Result<()> {
             "page_citation".to_owned(),
             "subject_action".to_owned(),
             "evidence_metadata".to_owned(),
+            "procurement_casefile".to_owned(),
         ],
         created_at: "2026-08-16T00:00:00Z".to_owned(),
         note: "Demonstration allowlist for the offline v0.0.2 demo.".to_owned(),
@@ -1883,6 +2033,34 @@ fn approve_alert_citations_demo(store: &Store, alert: &Alert) -> Result<()> {
                 };
                 store.insert_review(&decision)?;
             }
+        }
+    }
+    Ok(())
+}
+
+/// Approve every citation in a matter's case-file content so the offline demo
+/// can exercise the procurement publication path (v0.0.4, Item 2). Each
+/// approval binds to the exact digests via the shared citation binding.
+fn approve_procurement_citations_demo(store: &Store, matter_id: &str) -> Result<()> {
+    let content =
+        pnull_procurement::build_content(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
+    for citation in &content.citations {
+        let id = pnull_publish::citation_id(citation);
+        if store.current_review(&id)?.is_none() {
+            let binding = pnull_publish::citation_review_binding(citation);
+            let decided_at = "2026-08-16T00:00:00Z".to_owned();
+            let decision = ReviewDecision {
+                id: ReviewDecision::id_for(&id, &decided_at),
+                citation_id: id.clone(),
+                state: ReviewState::Approved,
+                reviewer: "demo-operator".to_owned(),
+                note: "Demonstration approval for the offline v0.0.4 demo.".to_owned(),
+                bound_digest: binding.digest(),
+                decision_digest: sha256_hex(format!("{id}\0Approved\0{decided_at}").as_bytes()),
+                decided_at,
+                supersedes: None,
+            };
+            store.insert_review(&decision)?;
         }
     }
     Ok(())
@@ -2073,6 +2251,33 @@ mod tests {
         assert!(cora.contains("not submitted"));
         assert!(cora.contains("colorado-springs-solicitation-mirror"));
         assert!(!cora.contains("mailto:"));
+        // The procurement site publishes the transit-fare matter, the benign
+        // control matter, and a derived "what changed" page with the
+        // second-snapshot supersession and record-level changes (v0.0.4).
+        let transit_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_r26-023ab/index.html"))
+                .expect("transit page");
+        let transit_page = String::from_utf8_lossy(&transit_page);
+        assert!(transit_page.contains("Next-Generation Transit Fare"));
+        assert!(!transit_page.contains("Publication withheld"));
+        let control_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_crack-seal-2023/index.html"))
+                .expect("control page");
+        let control_page = String::from_utf8_lossy(&control_page);
+        assert!(!control_page.contains("surveillance purchase"));
+        assert!(!control_page.contains("surveillance award"));
+        let changed_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_q25130zm/index.html"))
+                .expect("changed page");
+        let changed_page = String::from_utf8_lossy(&changed_page);
+        assert!(changed_page.contains("What changed"));
+        assert!(changed_page.contains("supersedes"));
+        assert!(!changed_page.contains("Publication withheld"));
+        // The procurement Atom feed lists the matters.
+        let proc_atom =
+            fs::read(first.join("site/co/procurement/atom.xml")).expect("procurement atom");
+        let proc_atom = String::from_utf8_lossy(&proc_atom);
+        assert!(proc_atom.contains("Next-Generation Transit Fare"));
         // No script element may occur in public output.
         for (path, bytes) in snapshot(&first.join("site")) {
             let content = String::from_utf8_lossy(&bytes);

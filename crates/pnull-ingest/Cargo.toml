@@ -8,9 +8,9 @@ repository.workspace = true
 
 [dependencies]
 image = { version = "0.25.6", default-features = false, features = ["png"] }
-pnull-core = { path = "../pnull-core", version = "=0.0.3" }
-pnull-geometry = { path = "../pnull-geometry", version = "=0.0.3" }
-pnull-http = { path = "../pnull-http", version = "=0.0.3" }
+pnull-core = { path = "../pnull-core", version = "=0.0.4" }
+pnull-geometry = { path = "../pnull-geometry", version = "=0.0.4" }
+pnull-http = { path = "../pnull-http", version = "=0.0.4" }
 quick-xml.workspace = true
 regex.workspace = true
 reqwest.workspace = true

@@ -8,6 +8,21 @@ Panopticon Null is lawful, nonviolent, evidence infrastructure for dismantling t
 
 Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It builds a verifiable institutional money trail — solicitation → amendment → award → contract → expenditure — connecting official records only when the evidence supports the connection. Missing records, inaccessible portals, ambiguous vendor names, contradictory amounts, and incomplete coverage remain visible as explicit evidence gaps.
 
+Version 0.0.4 ("The Public Ledger") turns the procurement chain public. Changes to official records become alerts; the chain is published to a static site and Atom feed; and the records-request loop closes with a local, append-only CORA request ledger — all behind the existing human review and privacy gates.
+
+## What 0.0.4 does
+
+0.0.4 closes four gaps left when 0.0.3's procurement chain ended in local state, under the rule **"follow the money without inventing the links."**
+
+- **Procurement change alerts.** Re-ingesting a reviewed surface that differs from the latest snapshot produces deterministic, idempotent alerts `record_added`/`record_modified`/`record_removed`. Award-row `record_modified` carries a field-level diff (field name, old raw value, new raw value). Row identity is a stable key (official identifier where present; otherwise a digest over the row's normalized field values). Removals are phrased as comparisons ("The row observed in snapshot N (digest …) is not present in snapshot M (digest …)"), never legal conclusions. Alerts flow into the existing Alert store; `pnull alerts` lists both kinds; X drafts reuse the existing pipeline verbatim (dry-run default, exact-digest approval, canonical-URL check, credentials gate, reconciliation). No surveillance labeling: taxonomy matches appear only as optional metadata "surveillance-related terminology observed, rule `<rule-id>`".
+- **Publish the procurement chain.** `pnull build-site` publishes from the SAME deterministic case-file JSON as `case build` (one source of truth): a matter list at `/co/procurement/index.html` plus a per-matter page with timeline, roles, raw/parsed money, citations, contradictions, coverage gaps, a "what changed" section from supersessions, provenance, a SHA-256 manifest, and a limitations block. Gates fail closed: every citation needs an Approved citation-review bound to exact digests; a `procurement_casefile` publication-allowlist category is required; the privacy backstop runs over all rendered text incl. vendor names and raw money. Pending/rejected/stale/mismatched pages are withheld with a "publication withheld pending review" note. The Atom feed runs under identical gates. `pnull procurement publish-ready <matter-id>` reports gate state without publishing.
+- **CORA request ledger.** Append-only, fully local, never sends. States: `drafted`/`submitted`/`response_received`/`gap_resolved`/`still_unresolved`. No transition is reversed or edited; corrections are new events. The tool never guesses a recipient and never claims a legal deadline.
+- **Second snapshot in-place-edit demonstration.** `fixtures/procurement/contract-awards-2.html` is a labeled SYNTHETIC demonstration fixture derived from the preserved official snapshot (not an official record): it edits one amount + one vendor name + adds notes on `Q25-130ZM` (record_modified), removes `R24-T114JD` (record_removed), and adds `R25-044AB` (record_added). The demo re-ingests it and shows supersession + diff + alerts + RecordCorrected/RecordRemoved events + "what changed".
+- **Explicit official-relationship links ("who authorized it").** Source adapters may declare reference fields; a link (kind `official_relationship`) is recorded only when a declared reference field of one preserved record contains an exact match of an identifier stored for another record AND both endpoints resolve to stored snapshots with valid SHA-256 digests. Near-miss identifiers become candidates in the reconciliation review queue, never auto-links. The demo records ZERO such links (absence proven, not fabricated).
+- **`pnull procurement refresh`.** `pnull procurement refresh <source-id> [--live]`. `--dry-run` is the default and prints the planned fetch with zero network. `--live` requires the persistent source-review gate (refuse on no review, expired review, config change, host change, out-of-scope endpoint), one request at a time, DNS-safe HTTPS, conditional request where an ETag exists, and aggregate budgets. Live path: fetch → new snapshot (or 304 provenance) → change detection → alert count + matter ids → coverage-ledger entry. Fails closed on refusal/failure. The demo never invokes this command.
+
+Schema v3 adds four tables — `procurement_alerts`, `cora_requests`, `official_relationships`, `supplied_records` — via a transactional migration that preserves every 0.0.1/0.0.2/0.0.3 row byte-for-byte.
+
 ## What 0.0.3 does
 
 0.0.3 turns isolated evidence receipts into a verifiable procurement chain under the rule **"follow the money without inventing the links."**
@@ -17,7 +32,7 @@ Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado 
 - **Immutable source snapshots + change detection.** Every fetched page, export, and document becomes an immutable snapshot. If an official URL later serves different bytes, both snapshots are preserved and linked through a revision/supersession relationship with a deterministic record-level diff; old artifacts and derived observations are never rewritten. A `304 Not Modified` records provenance without duplicating the artifact. Embedded links are never auto-followed.
 - **Procurement domain model.** Matters, events (solicitation published, amendment, award announced, contract executed, expenditure reported, record corrected/removed, and so on), identifiers (never merged across differing formats without a deterministic rule + tests), money (never floating point; raw string preserved; exact/zero/N/A/various/IDIQ/unknown/unparseable kept distinct), and organizations (source spelling preserved; non-exact matches enter human review; no automatic merging of subsidiaries, parents, joint ventures, or similarly named firms).
 - **Bounded ingestion adapters.** The Colorado Springs contract-award table (with row-level provenance), the City solicitation mirror (carrying the source's own incompleteness warning), a documented negative capability finding for OpenBook COS (budget-level only, no vendor-level expenditure linkage), and a safe operator-supplied public-record import path that treats supplied files as hostile.
-- **Reconciliation.** Connections are created automatically only through exact normalized identifiers where both endpoints resolve to stored snapshots with valid SHA-256 digests. Similar names/titles/amounts/dates/keywords/LLM judgment never connect records; explicit-official-relationship links are not yet implemented. The chain's `Review suggestions` are in-memory candidates, not persisted queue items. A durable reconciliation-review queue holds candidate matches, vendor aliases, conflicting amounts/dates, duplicate/revised rows, missing documents, and vanished records; every decision is immutable and auditable.
+- **Reconciliation.** Connections are created automatically only through exact normalized identifiers where both endpoints resolve to stored snapshots with valid SHA-256 digests. Similar names/titles/amounts/dates/keywords/LLM judgment never connect records. The chain's `Review suggestions` are in-memory candidates, not persisted queue items. A durable reconciliation-review queue holds candidate matches, vendor aliases, conflicting amounts/dates, duplicate/revised rows, missing documents, and vanished records; every decision is immutable and auditable.
 - **Case files.** A procurement matter produces deterministic JSON + Markdown case files with a chronological timeline, organizations in documented roles, raw and parsed money, exact citations, source-authority labels, contradictions, missing documents, coverage, provenance, a SHA-256 manifest, and a limitations section. Files stay drafts until they pass the human citation-review and publication-allowlist controls.
 - **Gap-driven CORA drafts.** A command generates a local, unsent Colorado Open Records Act draft from unresolved gaps (institution, identifiers, missing record types, narrow date range, vendor/project name, sources already checked). It never sends, never guesses an email recipient, and states that operator/legal review is required.
 - **A real case study + a benign control.** The Next-Generation Transit Fare Collection System RFI (R26-023AB) is ingested as an RFI (not an award or contract), with no mass-surveillance labeling and an explicit gap where no executed contract or payment was located. A benign control matter (Crack Seal Materials award) proves ingestion does not automatically turn every purchase into a surveillance accusation.
@@ -104,7 +119,7 @@ cargo run --locked -p pnull-cli -- demo
 # Open demo-output/site/index.html directly in a browser.
 ```
 
-The demo runs offline against preserved official fixtures, exercises the v0.0.1→v0.0.2 migration, generates page-accurate citations, models explicit subjects and actions for two genuine matters, requires deterministic demonstration review decisions, generates a JavaScript-free static site and Atom feed, and produces only dry-run X drafts. It performs zero network posts and constructs no live X transport.
+The demo runs offline against preserved official fixtures, exercises the v0.0.1→v0.0.2 migration, generates page-accurate citations, models explicit subjects and actions for two genuine matters, requires deterministic demonstration review decisions, generates a JavaScript-free static site and Atom feed, and produces only dry-run X drafts. It now also re-ingests the second contract-award snapshot, publishes procurement pages and Atom entries (a transit-fare page, a benign control, and a derived "what changed" matter), produces one dry-run X draft for a procurement change alert, and registers a transit-fare CORA request in `drafted` state. It performs zero network posts and constructs no live X transport.
 
 Common commands:
 
@@ -152,8 +167,20 @@ cargo run --locked -p pnull-cli -- procurement export-awards --output awards.csv
 cargo run --locked -p pnull-cli -- coverage show
 cargo run --locked -p pnull-cli -- coverage diff <old-snapshot> <new-snapshot>
 cargo run --locked -p pnull-cli -- case build <matter>
-cargo run --locked -p pnull-cli -- cora draft <matter>
+cargo run --locked -p pnull-cli -- procurement alerts
+cargo run --locked -p pnull-cli -- procurement publish-ready <matter-id>
+cargo run --locked -p pnull-cli -- procurement refresh <source-id> [--live]   # --dry-run default
+cargo run --locked -p pnull-cli -- cora list [--matter <id>]
+cargo run --locked -p pnull-cli -- cora show <request-id>
+cargo run --locked -p pnull-cli -- cora submit <request-id> --operator NAME --date YYYY-MM-DD --tracking REF [--recipient-note TEXT]
+cargo run --locked -p pnull-cli -- cora response <request-id> --evidence-id EID [--note TEXT]
 ```
+
+`pnull build-site` now publishes procurement pages and Atom entries under the same gates as the
+rest of the site, and `pnull alerts` lists both the v0.0.1 taxonomy alerts and the procurement
+change alerts (`record_added`/`record_modified`/`record_removed`). `pnull cora draft <matter>`
+remains a separate local, unsent CORA draft generator; the CORA request ledger above is the
+append-only records-request loop.
 
 Live source retrieval is refused unless the operator has recorded a persistent, current, in-scope source review (see `docs/operator-guide-source-review.md`). The ephemeral `--robots-reviewed` flag is deprecated and is no longer the primary authorization. The configured 24-hour interval is persisted and enforced. The source uses one request at a time; it does not bypass authentication, CAPTCHAs, access controls, or restrictions.
 
@@ -194,8 +221,9 @@ the v0.0.3 procurement fixtures.
 `nix flake check` as the `dependency-policy` check.
 
 The offline demo is reproduced byte-for-byte across two clean output directories (site,
-`state/records`, and the procurement chain output), and the proof file
-`network-posts.txt` is `0`.
+`state/records`, and the procurement chain output, incl. the published procurement pages and
+Atom entries, the record/store files under `state/records/`, and the `procurement/` output
+tree), and the proof file `network-posts.txt` is `0`.
 
 ## Privacy boundary
 
@@ -210,11 +238,11 @@ No facial recognition. No person-level movement analysis. No dossiers on activis
 - `pnull-core`: canonical records, IDs, SQLite schema + migration, digest verification, subjects/actions/document roles, review decisions, processing-run provenance, source reviews, fetch observations, X attempts/reconciliations, publication allowlists.
 - `pnull-ingest`: lawful retrieval, Legistar parsing, bounded pagination, the bubblewrap sandbox, aggregate job budgets, Poppler/Tesseract orchestration, page-accurate citation construction.
 - `pnull-detect`: YAML rules, cautious classification, exact citations, meaningful diffs, explicit subject/action extraction.
-- `pnull-publish`: privacy-gated static HTML and Atom, citation-review gates, publication allowlists.
+- `pnull-publish`: privacy-gated static HTML and Atom, citation-review gates, publication allowlists, procurement-chain rendering (matter list + per-matter pages + Atom under identical gates).
 - `pnull-x`: state-aware drafts, exact-draft approval, attempts/status/reconcile, transport trait, redacted credentials.
 - `pnull-geometry`: page-accurate PDF citation geometry, text maps, OCR pixel-to-page transforms, reviewer-image rendering.
 - `pnull-http`: DNS-safe HTTP provenance, conditional retrieval, credential redaction, resolver/transport abstractions.
-- `pnull-procurement`: the procurement chain — source-authority/coverage ledger, immutable snapshots + change detection, awards/solicitation/openbook/import adapters, reconciliation, case-file generation, gap-driven CORA drafts, and the offline procurement demo.
+- `pnull-procurement`: the procurement chain — source-authority/coverage ledger, immutable snapshots + change detection, awards/solicitation/openbook/import adapters, procurement change alerts, reconciliation and official-relationship links, case-file generation, the CORA request ledger, the refresh heartbeat, and the offline procurement demo.
 - `pnull-cli`: commands and the offline vertical slice.
 
 See `docs/architecture.md`, `docs/methodology.md`, `docs/procurement-methodology.md`,

@@ -2,6 +2,76 @@
 
 All notable changes to Panopticon Null are documented here. This project adheres to semantic versioning.
 
+## 0.0.4 — "The Public Ledger"
+
+Closes the four gaps left when 0.0.3's procurement chain ended in local state: the chain
+becomes public, changes to official records become alerts, and the records-request loop
+closes — all behind the existing human review and privacy gates, under the rule
+**"follow the money without inventing the links."**
+
+1. **Procurement change alerts.** Re-ingesting a reviewed surface that differs from the
+   latest snapshot produces deterministic, idempotent alerts `record_added`/`record_modified`/
+   `record_removed`. Award-row `record_modified` carries a field-level diff (field name, old
+   raw value, new raw value). Row identity is a stable key (official identifier where present;
+   otherwise a digest over the row's normalized field values). Removals are phrased as
+   comparisons, never legal conclusions. Alerts flow into the existing Alert store; `pnull
+   alerts` lists both the v0.0.1 taxonomy alerts and the procurement change alerts. X drafts
+   reuse the existing pipeline verbatim (dry-run default, exact-digest approval, canonical-URL
+   check, credentials gate, reconciliation). No surveillance labeling: taxonomy matches appear
+   only as optional metadata "surveillance-related terminology observed, rule `<rule-id>`".
+2. **Publish the procurement chain.** `pnull build-site` publishes from the SAME deterministic
+   case-file JSON as `case build` (one source of truth): a matter list at
+   `/co/procurement/index.html` plus a per-matter page with timeline, roles, raw/parsed money,
+   citations, contradictions, coverage gaps, a "what changed" section from supersessions,
+   provenance, a SHA-256 manifest, and a limitations block. Gates fail closed: every citation
+   needs an Approved citation-review bound to exact digests; a `procurement_casefile`
+   publication-allowlist category is required; the privacy backstop runs over all rendered text
+   incl. vendor names and raw money. Pending/rejected/stale/mismatched pages are withheld with
+   a "publication withheld pending review" note. The Atom feed runs under identical gates.
+   `pnull procurement publish-ready <matter-id>` reports gate state without publishing.
+3. **CORA request ledger.** Append-only, fully local, never sends. States
+   `drafted`/`submitted`/`response_received`/`gap_resolved`/`still_unresolved`. No transition
+   is reversed or edited; corrections are new events. The tool never guesses a recipient and
+   never claims a legal deadline. Commands: `pnull cora list [--matter <id>]`,
+   `pnull cora show <request-id>`, `pnull cora submit <request-id> --operator NAME --date
+   YYYY-MM-DD --tracking REF [--recipient-note TEXT]`, `pnull cora response <request-id>
+   --evidence-id EID [--note TEXT]`.
+4. **Second snapshot in-place-edit demonstration.** `fixtures/procurement/contract-awards-2.html`
+   is a labeled SYNTHETIC demonstration fixture derived from the preserved official snapshot
+   (not an official record): it edits one amount + one vendor name + adds notes on `Q25-130ZM`
+   (record_modified), removes `R24-T114JD` (record_removed), and adds `R25-044AB`
+   (record_added). The demo re-ingests it and shows supersession + diff + alerts +
+   RecordCorrected/RecordRemoved events + "what changed".
+5. **Explicit official-relationship links ("who authorized it").** Source adapters may declare
+   reference fields; a link (kind `official_relationship`) is recorded only when a declared
+   reference field of one preserved record contains an exact match of an identifier stored for
+   another record AND both endpoints resolve to stored snapshots with valid SHA-256 digests.
+   Near-miss identifiers become candidates in the reconciliation review queue, never auto-links.
+   The demo records ZERO such links (absence proven, not fabricated).
+6. **`pnull procurement refresh`.** `pnull procurement refresh <source-id> [--live]`.
+   `--dry-run` is the default and prints the planned fetch with zero network. `--live` requires
+   the persistent source-review gate (refuse on no review, expired review, config change, host
+   change, out-of-scope endpoint), one request at a time, DNS-safe HTTPS, conditional request
+   where an ETag exists, and aggregate budgets. Live path: fetch → new snapshot (or 304
+   provenance) → change detection → alert count + matter ids → coverage-ledger entry. Fails
+   closed on refusal/failure. The demo never invokes this command.
+7. **Schema v3 + real 0.0.3 upgrade fixture.** `SCHEMA_VERSION = 3`; transactional migration
+   preserves every 0.0.1/0.0.2/0.0.3 row byte-for-byte. New tables: `procurement_alerts`,
+   `cora_requests`, `official_relationships`, `supplied_records`. Upgrade test loads the real
+   0.0.3 fixture `fixtures/migration/v0.0.3-minimal.sql`; failure-injection tests prove atomic
+   rollback.
+
+Also in 0.0.4: the workspace version bumped to 0.0.4 everywhere; the offline demo extended
+(re-ingests the second contract-award snapshot, publishes procurement pages + Atom entries,
+produces one dry-run X draft for a procurement change alert, and registers a transit-fare CORA
+request in `drafted` state); documentation updates (`docs/validation-0.0.4.md` and the roadmap).
+
+Honest limitations: there is no live second snapshot — the second contract-award surface is a
+synthetic, labeled demonstration fixture derived from the preserved official snapshot; the demo
+records zero official-relationship links (absence proven, not fabricated); and refresh change
+detection reads prior rows from the preserved fixture on disk because snapshots store metadata
+not raw bytes.
+
 ## 0.0.3 — "The Procurement Chain"
 
 Turns isolated evidence receipts into a verifiable institutional money trail

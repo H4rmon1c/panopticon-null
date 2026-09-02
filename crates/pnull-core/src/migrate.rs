@@ -7,13 +7,16 @@
 //! (matters, events, identifiers, organizations, coverage ledger, immutable
 //! snapshots and revisions, coverage diffs, reconciliation, case files, and CORA
 //! drafts) without rewriting any prior canonical rows.
+//! v0.0.4 introduces `user_version = 3` and adds the public-ledger tables
+//! (procurement change alerts, the CORA request ledger, and official-
+//! relationship links) without rewriting any prior canonical rows.
 
 use rusqlite::{Connection, Transaction};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 /// The highest schema version this build understands.
-pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 2;
+pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -31,11 +34,12 @@ pub fn current_version(connection: &Connection) -> Result<u32, MigrationError> {
     Ok(u32::try_from(version).unwrap_or(u32::MAX))
 }
 
-/// Runs the v0.0.1 -> v0.0.2 migration inside a transaction.
+/// Runs the v0.0.1 -> v0.0.2 -> v0.0.3 -> v0.0.4 migration inside a
+/// transaction.
 ///
 /// This is a no-op for a fresh database (which is created at the target schema).
-/// For an existing v0.0.1 database it only adds supplemental tables; it never
-/// rewrites canonical v0.0.1 records.
+/// For an existing older database it only adds supplemental tables; it never
+/// rewrites canonical records.
 pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     let version = current_version(connection)?;
     if version == SCHEMA_VERSION {
@@ -44,13 +48,16 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     if version > MAX_SUPPORTED_SCHEMA_VERSION {
         return Err(MigrationError::UnsupportedVersion(version));
     }
-    // version is 0 (v0.0.1) or 1 (v0.0.2) here.
+    // version is 0 (v0.0.1), 1 (v0.0.2), or 2 (v0.0.3) here.
     let transaction = connection.transaction()?;
     if version < 1 {
         apply_v1(&transaction)?;
     }
     if version < 2 {
         apply_v2(&transaction)?;
+    }
+    if version < 3 {
+        apply_v3(&transaction)?;
     }
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
@@ -210,6 +217,38 @@ fn apply_v2(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS idx_rd_item ON reconciliation_decisions(item_id);
          CREATE INDEX IF NOT EXISTS idx_cf_matter ON case_files(matter_id);
          CREATE INDEX IF NOT EXISTS idx_cora_matter ON cora_drafts(matter_id);",
+    )
+}
+
+/// Creates the v0.0.4 public-ledger tables (procurement change alerts, the CORA
+/// request ledger, and official-relationship links). This is additive only: it
+/// never rewrites any prior canonical rows.
+fn apply_v3(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS procurement_alerts (
+           id TEXT PRIMARY KEY,
+           source_id TEXT NOT NULL,
+           alert_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS cora_requests (
+           id TEXT PRIMARY KEY,
+           matter_id TEXT NOT NULL,
+           request_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS official_relationships (
+           id TEXT PRIMARY KEY,
+           source_record_id TEXT NOT NULL,
+           relationship_json TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS supplied_records (
+           id TEXT PRIMARY KEY,
+           observed_digest TEXT NOT NULL,
+           record_json TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_pa_source ON procurement_alerts(source_id);
+         CREATE INDEX IF NOT EXISTS idx_cr_matter ON cora_requests(matter_id);
+         CREATE INDEX IF NOT EXISTS idx_or_source ON official_relationships(source_record_id);
+         CREATE INDEX IF NOT EXISTS idx_sr_digest ON supplied_records(observed_digest);",
     )
 }
 
@@ -378,7 +417,7 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 2);
+        assert_eq!(SCHEMA_VERSION, 3);
 
         // Every canonical v0.0.1 and v0.0.2 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -404,6 +443,117 @@ mod tests {
         ] {
             assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
         }
+
+        // The v0.0.4 public-ledger tables now exist and are empty.
+        for table in [
+            "procurement_alerts",
+            "cora_requests",
+            "official_relationships",
+            "supplied_records",
+        ] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
+    }
+
+    #[test]
+    fn v03_database_upgrades_to_v04_preserving_all_rows() {
+        // Load the committed minimal v0.0.3 (schema version 2) fixture database.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.3-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.3 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.3 fixture");
+
+        assert_eq!(current_version(&connection).expect("version"), 2);
+        let evidence_before = read_evidence(&connection);
+        let matters_before = rows_of(&connection, "matters", 4);
+        let proc_matters_before = rows_of(&connection, "procurement_matters", 3);
+        let events_before = rows_of(&connection, "procurement_events", 3);
+        let snapshots_before = rows_of(&connection, "source_snapshots", 3);
+        let case_files_before = rows_of(&connection, "case_files", 3);
+
+        migrate(&mut connection).expect("migrate v0.0.3 -> v0.0.4");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+        assert_eq!(SCHEMA_VERSION, 3);
+
+        // Every canonical v0.0.1, v0.0.2, and v0.0.3 row survives byte-for-byte.
+        assert_eq!(read_evidence(&connection), evidence_before);
+        assert_eq!(rows_of(&connection, "matters", 4), matters_before);
+        assert_eq!(
+            rows_of(&connection, "procurement_matters", 3),
+            proc_matters_before
+        );
+        assert_eq!(rows_of(&connection, "procurement_events", 3), events_before);
+        assert_eq!(
+            rows_of(&connection, "source_snapshots", 3),
+            snapshots_before
+        );
+        assert_eq!(rows_of(&connection, "case_files", 3), case_files_before);
+
+        // The v0.0.4 public-ledger tables now exist and are empty.
+        for table in [
+            "procurement_alerts",
+            "cora_requests",
+            "official_relationships",
+            "supplied_records",
+        ] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
+    }
+
+    #[test]
+    fn official_relationship_link_survives_migration_byte_for_byte() {
+        // A recorded official-relationship link (Item 5) must survive an
+        // idempotent re-migration unchanged: it is append-only and never
+        // rewritten or dropped.
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        migrate(&mut connection).expect("migrate to v3");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+
+        let relationship_json = r#"{"id":"official-rel:test","kind":"official_relationship","source_record_id":"proc:matter:co:r26-023ab:record:award:0","source_snapshot_id":"snapshot:src1","source_snapshot_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","target_identifier":"25-93","target_matter_id":"proc:matter:co:ordinance-25-93","reference_field":"notes","quote":"25-93","locator":"contract-award row notes column","citations":["c1","c2"],"reviewed":true}"#;
+        connection
+            .execute(
+                "INSERT INTO official_relationships(id, source_record_id, relationship_json) VALUES (?1, ?2, ?3)",
+                rusqlite::params![
+                    "official-rel:test",
+                    "proc:matter:co:r26-023ab:record:award:0",
+                    relationship_json
+                ],
+            )
+            .expect("insert relationship");
+
+        let before = rows_of(&connection, "official_relationships", 3);
+
+        // Re-migrate (idempotent at v3); nothing may change.
+        migrate(&mut connection).expect("re-migrate");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+        assert_eq!(
+            rows_of(&connection, "official_relationships", 3),
+            before,
+            "official-relationship link must survive migration byte-for-byte"
+        );
+
+        // The stored JSON round-trips to the same struct.
+        let stored: String = connection
+            .query_row(
+                "SELECT relationship_json FROM official_relationships WHERE id='official-rel:test'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read relationship json");
+        assert_eq!(stored, relationship_json);
     }
 
     #[test]

@@ -21,9 +21,10 @@ use std::fs;
 use std::path::Path;
 
 use pnull_core::{
-    CoverageEntry, CoverageState, IdentifierKind, MoneyValue, OrganizationRole, ProcurementEvent,
-    ProcurementEventKind, ProcurementIdentifier, ProcurementMatter, ProcurementOrganization,
-    ReconciliationItem, SourceAuthority, Store, parse_money, sha256_hex,
+    CoverageEntry, CoverageState, IdentifierKind, MoneyValue, OrganizationRole,
+    ProcurementChangeKind, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
+    ProcurementMatter, ProcurementOrganization, ReconciliationItem, SourceAuthority, Store,
+    parse_money, sha256_hex,
 };
 
 use crate::awards::{AwardRow, parse_awards_table};
@@ -35,6 +36,10 @@ use crate::solicitations::{SolicitationRecord, parse_solicitations};
 
 /// The fixed retrieval timestamp for offline demonstrations (deterministic).
 pub const OFFLINE_RETRIEVED_AT: &str = "2026-08-17T00:00:00Z";
+
+/// The fixed retrieval timestamp for the second (synthetic) award snapshot
+/// (deterministic; Item 4).
+pub const OFFLINE_RETRIEVED_AT_2: &str = "2026-08-31T00:00:00Z";
 
 /// The matter id for the real case study.
 pub const TRANSIT_FARE_MATTER_ID: &str = "proc:matter:co:r26-023ab";
@@ -56,6 +61,15 @@ pub struct DemoResult {
     pub control_identifiers: usize,
     pub control_reconciliation: usize,
     pub openbook_finding: String,
+    /// Item 4: change alerts produced by re-ingesting the second snapshot.
+    pub second_snapshot_digest: String,
+    pub change_alerts: usize,
+    pub corrected_events: usize,
+    pub removed_events: usize,
+    /// Item 5: explicit official-relationship links recorded (zero unless a
+    /// preserved record's declared reference field exactly references another
+    /// stored identifier).
+    pub documented_relationships: usize,
 }
 
 /// Runs the full offline procurement-chain demonstration into `store`.
@@ -63,6 +77,7 @@ pub struct DemoResult {
 /// `fixtures_dir` is the directory containing the committed fixture snapshots
 /// (`contract-awards.html`, `solicitations.html`, `SHA256SUMS`). `output_dir`
 /// receives the generated case files.
+#[allow(clippy::too_many_lines)]
 pub fn run_demo(
     store: &Store,
     fixtures_dir: &Path,
@@ -90,6 +105,7 @@ pub fn run_demo(
             .as_ref(),
         Some(solicitation_records.len() as u64),
         &[],
+        &[],
     )
     .map_err(|e| e.to_string())?;
     let sol_evidence = vec![sol_snapshot.id.clone()];
@@ -110,6 +126,7 @@ pub fn run_demo(
             .as_ref(),
         Some(award_rows.len() as u64),
         &[],
+        &crate::changealert::award_record_rows(&award_rows),
     )
     .map_err(|e| e.to_string())?;
     let award_evidence = vec![award_snapshot.id.clone()];
@@ -128,6 +145,38 @@ pub fn run_demo(
     .map_err(|e| e.to_string())?;
     build_control_matter(store, &award_digest, &award_rows, &award_evidence)
         .map_err(|e| e.to_string())?;
+
+    // 4.25 Item 3: register the transit-fare CORA request in `drafted` state.
+    // The demo publishes no request state beyond this.
+    register_transit_fare_cora_request(store, &solicitation_records).map_err(|e| e.to_string())?;
+
+    // 4.5 Item 4: re-ingest the second (synthetic) contract-award snapshot and
+    // demonstrate the supersession + diff + change-alert pipeline.
+    let second = reingest_second_snapshot(
+        store,
+        fixtures_dir,
+        &award_snapshot,
+        &award_rows,
+        &award_digest,
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 4.75 Item 5: run exact, declared-field official-relationship detection
+    // over the preserved records. The committed fixtures contain no declared
+    // reference field that exactly references another stored identifier, so
+    // the demo records zero links and the test proves absence rather than
+    // fabricating a link.
+    let relationship_outcome = crate::relationships::detect_official_relationships(
+        store,
+        &preserved_record_references(
+            &award_rows,
+            &solicitation_records,
+            &award_snapshot,
+            &sol_snapshot,
+        ),
+    )
+    .map_err(|e| e.to_string())?;
+    let documented_relationships = relationship_outcome.links.len();
 
     // 5. Generate case files for both matters.
     fs::create_dir_all(output_dir).map_err(|e| format!("create output dir: {e}"))?;
@@ -182,6 +231,240 @@ pub fn run_demo(
         control_identifiers,
         control_reconciliation,
         openbook_finding: OpenBookFinding::current().note,
+        second_snapshot_digest: second.digest,
+        change_alerts: second.alert_count,
+        corrected_events: second.corrected_events,
+        removed_events: second.removed_events,
+        documented_relationships,
+    })
+}
+
+/// The outcome of re-ingesting the second contract-award snapshot (Item 4).
+pub struct SecondSnapshotOutcome {
+    pub digest: String,
+    pub alert_count: usize,
+    pub corrected_events: usize,
+    pub removed_events: usize,
+}
+
+/// Builds the preserved-record reference-field entries used by Item 5 link
+/// detection, one per award row's `notes` field and one per solicitation's
+/// `linked_documents` list. Only declared reference fields are included.
+fn preserved_record_references(
+    award_rows: &[AwardRow],
+    solicitation_records: &[SolicitationRecord],
+    award_snapshot: &pnull_core::SourceSnapshot,
+    sol_snapshot: &pnull_core::SourceSnapshot,
+) -> Vec<crate::relationships::RecordReference> {
+    let mut refs = Vec::new();
+    for row in award_rows {
+        if row.notes.trim().is_empty() {
+            continue;
+        }
+        let matter_id = crate::matters::matter_id_for_identifier(
+            row.normalized_solicitation_id
+                .as_deref()
+                .unwrap_or(&row.solicitation_id),
+        );
+        refs.push(crate::relationships::RecordReference {
+            source_id: "colorado-springs-contract-awards".to_owned(),
+            source_record_id: format!("{matter_id}:record:award:{}", row.row_index),
+            matter_id: matter_id.clone(),
+            snapshot_id: award_snapshot.id.clone(),
+            snapshot_digest: award_snapshot.persisted_digest.clone(),
+            reference_field: "notes".to_owned(),
+            reference_text: row.notes.clone(),
+        });
+    }
+    for record in solicitation_records {
+        if record.linked_documents.is_empty() {
+            continue;
+        }
+        let matter_id = crate::matters::matter_id_for_identifier(&record.identifier);
+        refs.push(crate::relationships::RecordReference {
+            source_id: "colorado-springs-solicitation-mirror".to_owned(),
+            source_record_id: format!("{matter_id}:record:solicitation:{}", record.identifier),
+            matter_id: matter_id.clone(),
+            snapshot_id: sol_snapshot.id.clone(),
+            snapshot_digest: sol_snapshot.persisted_digest.clone(),
+            reference_field: "linked_documents".to_owned(),
+            reference_text: record.linked_documents.join(" "),
+        });
+    }
+    refs
+}
+
+/// Registers the transit-fare CORA request in the append-only ledger in
+/// `drafted` state (Item 3). The demo publishes no request state beyond this.
+fn register_transit_fare_cora_request(
+    store: &Store,
+    solicitation_records: &[SolicitationRecord],
+) -> Result<(), String> {
+    let r26 = solicitation_records
+        .iter()
+        .find(|r| r.identifier.eq_ignore_ascii_case("R26-023AB"))
+        .ok_or_else(|| "R26-023AB not found in solicitation mirror fixture".to_owned())?;
+    let missing = vec![
+        "executed contract".to_owned(),
+        "award notice".to_owned(),
+        "vendor-level expenditure evidence".to_owned(),
+    ];
+    let date_range = Some((Some("2026-01-01".to_owned()), Some("2026-08-17".to_owned())));
+    let sources_checked = vec![
+        "colorado-springs-contract-awards".to_owned(),
+        "colorado-springs-solicitation-mirror".to_owned(),
+        "openbook-cos".to_owned(),
+    ];
+    let draft_text = format!(
+        "Records request (draft): missing record types for {}\nInstitution: Colorado Springs Mountain Metropolitan Transit (City of Colorado Springs)\nIdentifiers: {}\nSources already checked: {}\nThis draft is local; nothing has been sent.",
+        r26.identifier,
+        r26.identifier,
+        sources_checked.join(", ")
+    );
+    let registered = crate::cora_ledger::register_draft(
+        store,
+        TRANSIT_FARE_MATTER_ID,
+        "Colorado Springs Mountain Metropolitan Transit (City of Colorado Springs)",
+        vec![r26.identifier.clone()],
+        missing,
+        date_range,
+        Some("Next-Generation Transit Fare Collection System".to_owned()),
+        sources_checked,
+        &draft_text,
+        crate::cora_ledger::OFFLINE_CREATED_AT,
+    )
+    .map_err(|e| e.to_string())?;
+    if !registered {
+        return Err("CORA request already registered (unexpected duplicate)".to_owned());
+    }
+    Ok(())
+}
+
+/// Re-ingests a second (synthetic) contract-award snapshot, recording the
+/// supersession relationship, the record-level diff, the resulting change
+/// alerts (Item 1), and `RecordCorrected`/`RecordRemoved` events on the
+/// affected matters. The synthetic fixture is clearly labeled and never
+/// presented as official bytes.
+#[allow(clippy::too_many_lines)]
+fn reingest_second_snapshot(
+    store: &Store,
+    fixtures_dir: &Path,
+    first_snapshot: &pnull_core::SourceSnapshot,
+    first_rows: &[AwardRow],
+    _first_digest: &str,
+) -> Result<SecondSnapshotOutcome, String> {
+    let second_path = fixtures_dir.join("contract-awards-2.html");
+    let second_bytes =
+        fs::read(&second_path).map_err(|e| format!("read second awards fixture: {e}"))?;
+    let second_digest = sha256_hex(&second_bytes);
+    let second_html = String::from_utf8_lossy(&second_bytes);
+    let second_rows =
+        parse_awards_table(&second_html, &second_digest).map_err(|e| format!("parse: {e}"))?;
+
+    let acquisition = award_acquisition(&second_digest);
+    let (second_snapshot, _) = record_snapshot(
+        store,
+        &acquisition,
+        Some(first_snapshot),
+        Some(second_rows.len() as u64),
+        &crate::changealert::award_record_rows(first_rows),
+        &crate::changealert::award_record_rows(&second_rows),
+    )
+    .map_err(|e| e.to_string())?;
+    debug_assert_eq!(
+        second_snapshot.supersedes.as_deref(),
+        Some(first_snapshot.id.as_str()),
+        "the second snapshot must supersede the first"
+    );
+
+    // Build and persist the deterministic change alerts (Item 1).
+    let mut alerts = crate::changealert::build_change_alerts(
+        &first_snapshot.source_id,
+        "contract-award-table",
+        &first_snapshot.id,
+        &first_snapshot.persisted_digest,
+        &second_snapshot.id,
+        &second_snapshot.persisted_digest,
+        OFFLINE_RETRIEVED_AT_2,
+        first_snapshot.coverage_state,
+        first_rows,
+        &second_rows,
+        &[],
+        &[],
+    );
+    // Resolve the affected matter/identifier ids for each alert by the exact
+    // identifier rule (never by similarity).
+    for alert in &mut alerts {
+        let normalized = alert
+            .changes
+            .first()
+            .map(|c| crate::matters::matter_id_for_identifier(&c.row_identity))
+            .unwrap_or_default();
+        alert.matter_ids = vec![normalized];
+    }
+    let inserted =
+        crate::changealert::persist_change_alerts(store, &alerts).map_err(|e| e.to_string())?;
+    // Re-ingesting the same snapshot pair must not create duplicate alerts; the
+    // insert is idempotent (INSERT OR IGNORE over stable alert ids), so on a
+    // re-run `inserted` may be less than `alerts.len()`.
+    debug_assert!(inserted <= alerts.len());
+
+    // Record RecordCorrected / RecordRemoved events on affected matters. Each
+    // affected matter is ensured to exist so it is a real, reachable matter and
+    // its case file / site page can render the change.
+    let mut corrected_events = 0usize;
+    let mut removed_events = 0usize;
+    for alert in &alerts {
+        let change = &alert.changes[0];
+        let matter_id = crate::matters::matter_id_for_identifier(&change.row_identity);
+        let title = format!("{} — affected award record", change.row_identity);
+        crate::matters::ensure_matter(store, &matter_id, &title).map_err(|e| e.to_string())?;
+        let (kind, summary) = match change.change_kind {
+            ProcurementChangeKind::RecordModified => {
+                corrected_events += 1;
+                (
+                    ProcurementEventKind::RecordCorrected,
+                    format!(
+                        "Award record corrected between snapshot {} (digest {}) and {} (digest {}): {}",
+                        alert.old_snapshot_id,
+                        alert.old_snapshot_digest,
+                        alert.new_snapshot_id,
+                        alert.new_snapshot_digest,
+                        change
+                            .field_diffs
+                            .iter()
+                            .map(|d| format!("{} '{}' -> '{}'", d.field, d.old_raw, d.new_raw))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    ),
+                )
+            }
+            ProcurementChangeKind::RecordRemoved => {
+                removed_events += 1;
+                (ProcurementEventKind::RecordRemoved, change.summary.clone())
+            }
+            ProcurementChangeKind::RecordAdded => continue,
+        };
+        let event = ProcurementEvent {
+            id: ProcurementEvent::id_for(&matter_id, kind, OFFLINE_RETRIEVED_AT_2, &summary),
+            matter_id: matter_id.clone(),
+            kind,
+            date: Some(OFFLINE_RETRIEVED_AT_2.to_owned()),
+            summary,
+            identifier_ids: Vec::new(),
+            evidence_ids: vec![second_snapshot.id.clone()],
+            source_id: "colorado-springs-contract-awards".to_owned(),
+        };
+        store
+            .insert_procurement_event(&event)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(SecondSnapshotOutcome {
+        digest: second_digest,
+        alert_count: alerts.len(),
+        corrected_events,
+        removed_events,
     })
 }
 
@@ -718,6 +1001,154 @@ mod tests {
     #[test]
     fn fixture_digests_verify() {
         verify_fixture_digests(&fixtures_dir()).expect("digests verify");
+    }
+
+    #[test]
+    fn second_snapshot_produces_change_and_event_kinds() {
+        let dir = tempdir().expect("temp");
+        let store = Store::open(dir.path()).expect("store");
+        let result = run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
+        // The synthetic second snapshot must produce at least one of each
+        // change kind (added, modified, removed).
+        assert!(
+            result.change_alerts >= 3,
+            "alerts: {}",
+            result.change_alerts
+        );
+        assert!(result.corrected_events >= 1);
+        assert!(result.removed_events >= 1);
+        let alerts = store.all_procurement_alerts().expect("alerts");
+        let kinds: std::collections::BTreeSet<String> = alerts
+            .iter()
+            .flat_map(|a| a.changes.iter().map(|c| format!("{:?}", c.change_kind)))
+            .collect();
+        assert!(kinds.contains("RecordAdded"), "kinds: {kinds:?}");
+        assert!(kinds.contains("RecordModified"), "kinds: {kinds:?}");
+        assert!(kinds.contains("RecordRemoved"), "kinds: {kinds:?}");
+        // The affected derived matters must have received the
+        // corrected/removed events (exact-identifier rule maps the changed
+        // rows to their per-identifier matters, not by similarity).
+        let affected: [&str; 2] = [
+            "proc:matter:co:q25130zm",  // modified LogRhythm row
+            "proc:matter:co:r24t114jd", // removed guardrail row
+        ];
+        let mut corrected = 0usize;
+        for matter_id in affected {
+            corrected += store
+                .procurement_events(matter_id)
+                .expect("events")
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e.kind,
+                        ProcurementEventKind::RecordCorrected | ProcurementEventKind::RecordRemoved
+                    )
+                })
+                .count();
+        }
+        assert!(corrected >= 1, "corrected/removed events: {corrected}");
+    }
+
+    #[test]
+    fn demo_registers_transit_fare_cora_request_drafted() {
+        let dir = tempdir().expect("temp");
+        let store = Store::open(dir.path()).expect("store");
+        let _ = run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
+        let requests = store
+            .cora_requests(TRANSIT_FARE_MATTER_ID)
+            .expect("requests");
+        assert_eq!(requests.len(), 1, "exactly one transit-fare request");
+        let request = &requests[0];
+        assert_eq!(request.state, pnull_core::CoraRequestState::Drafted);
+        assert!(request.identifiers.iter().any(|i| i == "R26-023AB"));
+        assert!(
+            request
+                .missing_record_types
+                .iter()
+                .any(|m| m.contains("executed contract"))
+        );
+        assert_eq!(
+            request.created_at,
+            crate::cora_ledger::OFFLINE_CREATED_AT,
+            "deterministic timestamp"
+        );
+        assert_eq!(request.events.len(), 1, "only the drafting event");
+        assert_eq!(
+            request.events[0].state,
+            pnull_core::CoraRequestState::Drafted
+        );
+    }
+
+    #[test]
+    fn demo_records_zero_official_relationships_by_absence() {
+        let dir = tempdir().expect("temp");
+        let store = Store::open(dir.path()).expect("store");
+        let result = run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
+        // The preserved fixtures contain no declared reference field that
+        // exactly references another stored identifier, so the demo must prove
+        // absence rather than fabricate a link (Item 5).
+        assert_eq!(
+            result.documented_relationships, 0,
+            "no preserved fixture record carries a genuine cross-reference"
+        );
+        let links = store.all_official_relationships().expect("links");
+        assert!(
+            links.is_empty(),
+            "zero official-relationship links must be stored"
+        );
+    }
+
+    #[test]
+    fn first_snapshot_digests_unchanged_and_superseded() {
+        let dir = tempdir().expect("temp");
+        let store = Store::open(dir.path()).expect("store");
+        let _ = run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
+        let snapshots = store
+            .source_snapshots("colorado-springs-contract-awards")
+            .expect("snapshots");
+        assert!(snapshots.len() >= 2, "want at least 2 award snapshots");
+        // The first snapshot digest must equal the preserved official fixture.
+        let first = &snapshots[0];
+        let official_bytes =
+            std::fs::read(fixtures_dir().join("contract-awards.html")).expect("read");
+        assert_eq!(first.persisted_digest, sha256_hex(&official_bytes));
+        // The second supersedes the first.
+        let second = snapshots[1].clone();
+        assert_eq!(second.supersedes.as_deref(), Some(first.id.as_str()));
+    }
+
+    #[test]
+    fn second_snapshot_reingest_is_idempotent() {
+        let dir = tempdir().expect("temp");
+        let store = Store::open(dir.path()).expect("store");
+        let first = run_demo(&store, &fixtures_dir(), dir.path()).expect("demo");
+        let alerts_before = store.all_procurement_alerts().expect("alerts").len();
+        // Re-running the second-snapshot step must not create duplicate alerts
+        // (stable, idempotent alert ids) and must not add snapshots/events.
+        let second = reingest_second_snapshot(
+            &store,
+            &fixtures_dir(),
+            &store
+                .source_snapshots("colorado-springs-contract-awards")
+                .expect("snapshots")[0],
+            &parse_awards_table(
+                &String::from_utf8_lossy(
+                    &std::fs::read(fixtures_dir().join("contract-awards.html")).expect("read"),
+                ),
+                &sha256_hex(
+                    &std::fs::read(fixtures_dir().join("contract-awards.html")).expect("read"),
+                ),
+            )
+            .expect("parse"),
+            "",
+        )
+        .expect("reingest");
+        assert_eq!(first.second_snapshot_digest, second.digest);
+        let alerts_after = store.all_procurement_alerts().expect("alerts").len();
+        assert_eq!(
+            alerts_before, alerts_after,
+            "no duplicate alerts on re-ingest"
+        );
     }
 
     #[test]

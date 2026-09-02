@@ -66,3 +66,25 @@ able to automate. The City's authoritative procurement portals (BidNet/Bonfire) 
 fetched or preserved because they are registration/terms-restricted. OpenBook COS is
 documented as a budget-level export that does not provide vendor-level expenditures; no
 vendor-level payment fixture is fabricated.
+
+## Synthetic second snapshot (v0.0.4, Item 4)
+
+`procurement/contract-awards-2.html` is a **synthetic demonstration fixture derived from
+the preserved official snapshot; not an official record**. It is not bytes retrieved from
+any live endpoint. It is a second variant of the preserved `contract-awards.html` built to
+demonstrate that the supersession + diff + change-alert pipeline catches in-place edits to
+award rows. Relative to the preserved official snapshot it:
+
+- edits one amount and one vendor name and adds notes on the `Q25-130ZM` LogRhythm renewal
+  row (a `record_modified` field-level diff);
+- removes one row (`R24-T114JD` on-call guardrail construction) to demonstrate
+  `record_removed`;
+- adds one row (`R25-044AB` flood-control pump station maintenance) to demonstrate
+  `record_added`;
+- preserves every other row and the two `R21-T107KK` rental-equipment rows byte-for-byte.
+
+Its SHA-256 is committed in `procurement/SHA256SUMS`. Every demo output that references it
+carries the label "synthetic demonstration fixture derived from the preserved official
+snapshot; not an official record," and it is never presented as official bytes. This is
+consistent with how the demo labels its deterministic demonstration reviews.
+

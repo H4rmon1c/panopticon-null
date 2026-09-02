@@ -15,7 +15,7 @@ Public availability does not automatically justify republication.
 
 The static site publishes selected citations, not complete extracted records. Meaningful diffs include only cited changed lines. Local evidence and SQLite directories are mode `0700` on Unix; record and database files are mode `0600` where set directly.
 
-Automated checks reject recognized plate labels, email addresses, common street-address forms, Social Security numbers, personal contact/location field labels, coordinates, and movement logs. Pattern matching cannot detect every sensitive value. Before distributing generated files or approving an X draft, a human must inspect every citation and diff. If relevance is uncertain, do not publish.
+Automated checks reject recognized plate labels, email addresses, common street-address forms, Social Security numbers, personal contact/location field labels, coordinates, and movement logs. On procurement pages the same backstop also runs over vendor names and raw money strings. Pattern matching cannot detect every sensitive value. Before distributing generated files or approving an X draft, a human must inspect every citation and diff. If relevance is uncertain, do not publish.
 
 ## Publication allowlists and the human review gate
 
@@ -28,6 +28,18 @@ Publication is governed by structured allowlists and an append-only human review
 - The site, Atom feed, and X pipeline fail closed on pending, rejected, stale, or mismatched decisions.
 
 The review queue is append-only: Pending, Approved, Rejected, NeedsContext, and Superseded states accumulate; a later decision supersedes an earlier one without deleting history.
+
+## Procurement page gates
+
+Procurement pages follow the identical gates as document pages, bound to the same exact digests.
+
+- `pnull build-site` publishes the procurement chain from the same deterministic case-file JSON as `case build`.
+- Every citation on a procurement page requires an Approved citation-review decision bound to the exact digests (evidence, source, locator/quote, quote digest) — the same mechanism as document pages. Changing any bound value invalidates approval.
+- A structured publication-allowlist category `procurement_casefile` is required for procurement case-file content. An allowlist entry is a permission, not auto-approval.
+- The privacy backstop runs over ALL rendered procurement text, including vendor names and raw money strings, in addition to the plate labels, personal contact fields, SSNs, home-address patterns, coordinates, and movement logs it already checks.
+- Pending, rejected, stale, or mismatched review state, or a missing allowlist category, removes the page/entry from the build with a visible "publication withheld pending review" note — never a partial page.
+- Published matters and procurement change alerts appear in the Atom feed under the identical gates.
+- `pnull procurement publish-ready <matter-id>` reports gate state (pending citations, allowlist status, privacy-backstop results) without publishing anything; it is the pre-publish checklist.
 
 ## HTTP and processing provenance
 

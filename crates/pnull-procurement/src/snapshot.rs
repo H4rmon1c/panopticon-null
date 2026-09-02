@@ -158,14 +158,19 @@ pub fn record_diff(
 
 /// Records a snapshot, its revision link to a prior snapshot, and coverage entry.
 ///
-/// `prior_snapshot` is the most recent snapshot of the same source, if any. The
+/// `prior_snapshot` is the most recent snapshot of the same source, if any.
+/// `old_rows` are the rows observed in the prior snapshot (empty for a first
+/// ingest); `new_rows` are the rows observed in the snapshot being recorded.
+/// The record-level diff between the two is computed and stored, so a later
+/// "what changed" section and coverage diff reflect real record changes. The
 /// old snapshot is never modified; only a new revision link is added.
 pub fn record_snapshot(
     store: &pnull_core::Store,
     acquisition: &Acquisition,
     prior_snapshot: Option<&SourceSnapshot>,
     record_count: Option<u64>,
-    rows: &[RecordRow],
+    old_rows: &[RecordRow],
+    new_rows: &[RecordRow],
 ) -> Result<(SourceSnapshot, Option<SnapshotDiff>), SnapshotError> {
     let snapshot = acquisition.snapshot(record_count, prior_snapshot.map(|s| s.id.clone()));
     let inserted = store.insert_source_snapshot(&snapshot)?;
@@ -191,8 +196,8 @@ pub fn record_snapshot(
                 &prior.id,
                 &snapshot.id,
                 &snapshot.source_id,
-                rows,
-                rows,
+                old_rows,
+                new_rows,
             ))
         }
     } else {
@@ -339,11 +344,12 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-old", "2026-08-17T00:00:00Z");
-        let (snap1, diff1) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
+        let (snap1, diff1) =
+            record_snapshot(&store, &first, None, Some(1), &[], &[]).expect("first");
         assert!(diff1.is_none());
         let second = acquisition_for("src", "https://x/a", "digest-new", "2026-08-17T01:00:00Z");
         let (snap2, diff2) =
-            record_snapshot(&store, &second, Some(&snap1), Some(1), &[]).expect("second");
+            record_snapshot(&store, &second, Some(&snap1), Some(1), &[], &[]).expect("second");
         assert!(diff2.is_some());
         assert_eq!(snap2.supersedes.as_deref(), Some(snap1.id.as_str()));
         // Both snapshots persisted immutably.
@@ -357,10 +363,10 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-same", "2026-08-17T00:00:00Z");
-        let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[], &[]).expect("first");
         let second = acquisition_for("src", "https://x/a", "digest-same", "2026-08-17T01:00:00Z");
         let (snap2, diff2) =
-            record_snapshot(&store, &second, Some(&snap1), Some(1), &[]).expect("second");
+            record_snapshot(&store, &second, Some(&snap1), Some(1), &[], &[]).expect("second");
         // Same digest -> snapshot is a duplicate; no diff.
         assert_eq!(snap2.persisted_digest, snap1.persisted_digest);
         assert!(diff2.is_none());
@@ -371,7 +377,7 @@ mod tests {
         let dir = tempdir().expect("temp");
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T00:00:00Z");
-        let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[]).expect("first");
+        let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[], &[]).expect("first");
         let unchanged = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T01:00:00Z");
         let unchanged_flag = record_unchanged(&store, &unchanged, &snap1).expect("unchanged");
         assert!(unchanged_flag);

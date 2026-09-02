@@ -136,14 +136,17 @@ Connections may be created automatically only through:
 - exact normalized identifiers (where **both** endpoints resolve to a stored snapshot with a
   valid SHA-256 digest);
 
-An "explicitly stated" relationship (a link declared directly by an official record) is **not
-yet supported** — the capability is unimplemented and is not advertised as working. An
-existing immutable relationship already supported by evidence is likewise carried through
-only when that evidence resolves to exact, digest-bound snapshots.
+An "explicitly stated" relationship (a link declared directly by an official record) is
+supported only when the link is evidence-backed: a declared reference field of one
+preserved record contains an EXACT match of an identifier stored for another record, and
+**both** endpoints resolve to stored snapshots with valid SHA-256 digests. The reference
+field must be one the source adapter declares for that purpose (see "Official-relationship
+links"); fields not declared are free-text and can never produce a link.
 
 All other relationships require human confirmation. Records are never connected
 automatically solely through similar vendor names, similar titles, equal dollar amounts,
-close dates, keyword overlap, or an LLM judgment.
+close dates, keyword overlap, or an LLM judgment. A near-miss (non-exact) reference never
+becomes a link automatically.
 
 A reconciliation-review queue holds candidate identifier matches, vendor aliases,
 conflicting award amounts, conflicting dates, duplicate or revised rows, missing documents,
@@ -153,6 +156,85 @@ decision is immutable and auditable.
 The chain builder's `Review suggestions` section is **not** the reconciliation queue: it lists
 in-memory candidate suggestions derived at read time and does not persist them. Only the
 `reconcile` command writes durable, auditable reconciliation items.
+
+## Official-relationship links
+
+A link between two preserved records is recorded only when an official record itself carries
+the reference. Each source adapter may DECLARE reference fields — a fixed allowlist of
+documented fields in which an official document may reference another official identifier
+(for example, a council matter's referenced-matter field, an ordinance's numbered citation
+of a solicitation number, an award row's notes field citing an ordinance number). Fields
+not declared are free-text and can never produce a link.
+
+A link is recorded only when a declared reference field of one preserved record contains an
+EXACT match of an identifier stored for another record AND both endpoints resolve to stored
+snapshots with valid SHA-256 digests. The stored link records: kind `official_relationship`,
+both endpoint identifiers, the source snapshot id + digest of the record whose field carries
+the reference, the exact quote and locator, and a citations pair (one per endpoint).
+
+Published phrasing is a comparison, not a conclusion: "The preserved record X (snapshot,
+digest) references Y in reference field Z." Never "X authorized Y" unless the preserved text
+itself says so in a cited field — in that case quote the official text and label it as the
+source's own statement. A near-miss (non-exact) reference becomes a CANDIDATE in the
+reconciliation-review queue, never an automatic link. The case file and site render a
+"documented relationships" section.
+
+## Change alerts
+
+Re-ingesting a reviewed surface that differs from the latest snapshot produces
+deterministic, idempotent change alerts: `record_added`, `record_modified`,
+`record_removed`. An award-row `record_modified` carries a field-level diff (field name,
+old raw value, new raw value).
+
+**Row identity rule.** A stable key identifies each row: the official identifier where
+present; otherwise a SHA-256 digest over the row's normalized field values. The digest rule
+is stable across row reorders because field order and values are normalized
+deterministically before hashing.
+
+Each alert records: source id, surface, old snapshot id + SHA-256, new snapshot id +
+SHA-256, row identity, change kind, field-level diff (raw strings), retrieval timestamp,
+coverage state, and affected procurement matter/identifiers when resolvable by the
+exact-identifier rule (never by similarity).
+
+**Phrasing discipline for removals.** A removal is a comparison, not a legal conclusion:
+"The row observed in snapshot N (digest …) is not present in snapshot M (digest …)."
+
+**Idempotent alert ids.** Alert ids are stable over source id + row identity + change kind +
+old/new snapshot ids. Re-ingesting the same snapshot pair never creates a second alert; a
+byte-identical re-ingest (304 path) creates no alerts.
+
+**No accusation.** A change alert reports a change in the public record. If a row title or
+vendor name matches the published surveillance taxonomy, it may appear only as optional
+metadata "surveillance-related terminology observed, rule `<rule-id>`" — never "surveillance
+purchase" or "surveillance award".
+
+Alerts flow into the existing Alert store; `pnull alerts` lists both kinds; X drafts reuse
+the existing pipeline verbatim.
+
+## Publication
+
+`pnull build-site` publishes the procurement chain from the same deterministic case-file
+JSON as `case build`. Every citation on a procurement page requires an Approved
+citation-review decision bound to the exact digests (the same mechanism as document pages).
+A structured publication-allowlist category `procurement_casefile` is required for
+procurement case-file content; an allowlist entry is not auto-approval. The privacy
+backstop (plate labels, personal contact fields, SSNs, home-address patterns, coordinates,
+movement logs) runs over ALL rendered procurement text, including vendor names and raw money
+strings. Pending, rejected, stale, or mismatched review state, or a missing allowlist
+category, removes the page/entry from the build with a visible "publication withheld pending
+review" note, not a partial page. Published matters and procurement change alerts appear in
+the Atom feed under the identical gates. `pnull procurement publish-ready <matter-id>`
+reports gate state (pending citations, allowlist status, privacy-backstop results) without
+publishing anything.
+
+## Refresh
+
+`pnull procurement refresh <source-id> [--live]` re-fetches a source. The dry-run default
+makes zero network calls; live refresh requires the persistent source-review gate (refusing
+on no review, expired review, config change, host change, or out-of-scope endpoint). It makes
+one request at a time, uses DNS-safe HTTPS, sends a conditional request where an ETag exists,
+and applies aggregate budgets. On refusal or failure it fails closed, states the reason, and
+changes nothing.
 
 ## Case file
 
@@ -189,6 +271,15 @@ operator/legal review is required and avoids requesting person-level data unless
 necessary and lawfully justified. This turns missing evidence into a precise next
 investigative action without pretending the evidence already exists.
 
+## CORA request ledger
+
+A fully local, append-only request ledger connects gaps → draft → submission → response →
+gap update. It never sends a request, never guesses a recipient, and never claims a legal
+deadline or entitlement. States are `drafted`, `submitted`, `response_received`,
+`gap_resolved`, and `still_unresolved`. Transitions are immutable events carrying operator,
+timestamp, and note; corrections are new events, and duplicate transitions and unknown
+evidence ids are refused.
+
 ## Limits
 
 This is not comprehensive procurement coverage. An informational mirror is not an
@@ -196,4 +287,9 @@ authoritative procurement system. Absence from checked sources is not proof of a
 Vendor appearance is not proof of procurement wrongdoing. A technology purchase is not
 automatically surveillance. OpenBook may not provide vendor-level payment evidence.
 Restricted records may require a lawful CORA request. Panopticon Null does not provide
-legal advice or a legal-compliance guarantee.
+legal advice or a legal-compliance guarantee. The second-snapshot demonstration
+(`fixtures/procurement/contract-awards-2.html`) is a labeled SYNTHETIC fixture derived from
+the preserved official snapshot, not a live re-fetch; it is not an official record. Zero
+official-relationship links are demonstrated in that demo — the absence is proven, not
+asserted. Refresh change detection reads prior rows from the preserved fixture on disk
+because snapshots store metadata, not raw bytes.

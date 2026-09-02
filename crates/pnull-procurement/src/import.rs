@@ -5,7 +5,7 @@
 //! role, an operator declaration of lawful possession, and an exact file digest,
 //! and it never publishes without human review.
 
-use pnull_core::{sha256_hex, stable_id};
+use pnull_core::{Store, sha256_hex, stable_id};
 use std::fs;
 use std::path::Path;
 use thiserror::Error;
@@ -125,6 +125,19 @@ pub fn import_supplied_record(
             declaration.operator, declaration.acquisition_date
         ),
     })
+}
+
+/// Persists an imported supplied record in the store so a later CORA response
+/// can link to evidence that provably exists (Item 3). Idempotent by record id.
+pub fn persist_supplied_record(
+    store: &Store,
+    record: &SuppliedRecord,
+) -> Result<bool, pnull_core::CoreError> {
+    store.insert_supplied_record_json(
+        &record.id,
+        &record.observed_digest,
+        &serde_json::to_string(record)?,
+    )
 }
 
 #[cfg(test)]

@@ -732,6 +732,220 @@ pub fn organization_exact_match(left: &str, right: &str) -> bool {
         && left.trim() == right.trim()
 }
 
+/// Kind of a procurement change alert (Item 1).
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcurementChangeKind {
+    RecordAdded,
+    RecordModified,
+    RecordRemoved,
+}
+
+impl ProcurementChangeKind {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::RecordAdded => "record_added",
+            Self::RecordModified => "record_modified",
+            Self::RecordRemoved => "record_removed",
+        }
+    }
+}
+
+/// A field-level change for a modified row: field name and old/new raw values.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FieldDiff {
+    pub field: String,
+    pub old_raw: String,
+    pub new_raw: String,
+}
+
+/// A single deterministic change between two procurement snapshots, suitable
+/// for a change alert. Row identity is a stable key (official identifier where
+/// present, else a digest over the row's normalized field values).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProcurementRecordChange {
+    pub change_kind: ProcurementChangeKind,
+    pub row_identity: String,
+    /// Present only for `RecordModified`: a field-level diff (raw strings).
+    pub field_diffs: Vec<FieldDiff>,
+    pub old_snapshot_id: String,
+    pub old_snapshot_digest: String,
+    pub new_snapshot_id: String,
+    pub new_snapshot_digest: String,
+    pub summary: String,
+}
+
+/// An immutable procurement change alert (Item 1). Shares the `stable_id`,
+/// append-only, and review-gate contract of the general `Alert` record.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProcurementAlert {
+    pub id: String,
+    pub source_id: String,
+    pub surface: String,
+    pub old_snapshot_id: String,
+    pub old_snapshot_digest: String,
+    pub new_snapshot_id: String,
+    pub new_snapshot_digest: String,
+    pub changes: Vec<ProcurementRecordChange>,
+    pub retrieved_at: String,
+    pub coverage_state: CoverageState,
+    /// Affected procurement matter/identifier ids when resolvable by the exact
+    /// identifier rule (never by similarity).
+    pub matter_ids: Vec<String>,
+    pub identifier_ids: Vec<String>,
+    /// Optional surveillance-related terminology observations with exact rule
+    /// citations. Never an accusation.
+    pub taxonomy_matches: Vec<String>,
+    /// The phrasing-disciplined summary rendered for humans / X drafts.
+    pub summary: String,
+}
+
+impl ProcurementAlert {
+    /// Stable, idempotent alert id over source + row identity + change kind +
+    /// old/new snapshot ids. Re-ingesting the same pair never creates a second
+    /// alert.
+    pub fn id_for(
+        source_id: &str,
+        surface: &str,
+        row_identity: &str,
+        change_kind: ProcurementChangeKind,
+        old_snapshot_id: &str,
+        new_snapshot_id: &str,
+    ) -> String {
+        stable_id(
+            "proc-alert",
+            &[
+                source_id,
+                surface,
+                row_identity,
+                change_kind.label(),
+                old_snapshot_id,
+                new_snapshot_id,
+            ],
+        )
+    }
+}
+
+/// The state of a CORA request in the local, append-only ledger (Item 3).
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoraRequestState {
+    Drafted,
+    Submitted,
+    ResponseReceived,
+    GapResolved,
+    StillUnresolved,
+}
+
+impl CoraRequestState {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Drafted => "drafted",
+            Self::Submitted => "submitted",
+            Self::ResponseReceived => "response_received",
+            Self::GapResolved => "gap_resolved",
+            Self::StillUnresolved => "still_unresolved",
+        }
+    }
+}
+
+/// An immutable transition event in a CORA request's lifecycle.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CoraRequestEvent {
+    pub id: String,
+    pub request_id: String,
+    pub state: CoraRequestState,
+    pub operator: String,
+    pub timestamp: String,
+    pub note: String,
+}
+
+/// A local, append-only records-request ledger entry (Item 3). The tool never
+/// sends anything and never claims a legal deadline or entitlement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CoraRequest {
+    pub id: String,
+    pub matter_id: String,
+    pub state: CoraRequestState,
+    /// Stable id over matter id + gap-set digest + creation timestamp.
+    pub gap_set_digest: String,
+    pub created_at: String,
+    /// Institution, identifiers, missing record types, narrow date range,
+    /// vendor/project name, sources already checked — the gap summary.
+    pub institution: String,
+    pub identifiers: Vec<String>,
+    pub missing_record_types: Vec<String>,
+    pub date_range: Option<(Option<String>, Option<String>)>,
+    pub vendor_or_project: Option<String>,
+    pub sources_checked: Vec<String>,
+    /// The draft text and its exact digest.
+    pub draft_text: String,
+    pub draft_digest: String,
+    /// Append-only event list; corrections are new events.
+    pub events: Vec<CoraRequestEvent>,
+}
+
+impl CoraRequest {
+    /// Stable request id over matter id + gap-set digest + creation timestamp.
+    pub fn id_for(matter_id: &str, gap_set_digest: &str, created_at: &str) -> String {
+        stable_id("cora-req", &[matter_id, gap_set_digest, created_at])
+    }
+}
+
+/// Kind of an official-relationship link (Item 5).
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OfficialRelationshipKind {
+    /// Record A references record B in a declared reference field.
+    OfficialRelationship,
+}
+
+/// A stored official-relationship link (Item 5). Recorded only when a declared
+/// reference field of one preserved record contains an exact match of an
+/// identifier stored for another record, and both endpoints resolve to stored
+/// snapshots with valid SHA-256 digests.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OfficialRelationship {
+    pub id: String,
+    pub kind: OfficialRelationshipKind,
+    /// The record whose declared reference field carries the reference.
+    pub source_record_id: String,
+    pub source_snapshot_id: String,
+    pub source_snapshot_digest: String,
+    /// The record referenced.
+    pub target_identifier: String,
+    pub target_matter_id: String,
+    /// The declared reference field that carried the exact match.
+    pub reference_field: String,
+    /// The exact quote and locator of the reference in the source record.
+    pub quote: String,
+    pub locator: String,
+    /// One citation per endpoint.
+    pub citations: Vec<String>,
+    /// Whether this link was confirmed by human review (exact matches are
+    /// recorded automatically; near-misses are candidates only).
+    pub reviewed: bool,
+}
+
+impl OfficialRelationship {
+    pub fn id_for(
+        source_record_id: &str,
+        reference_field: &str,
+        target_identifier: &str,
+        source_snapshot_id: &str,
+    ) -> String {
+        stable_id(
+            "official-rel",
+            &[
+                source_record_id,
+                reference_field,
+                target_identifier,
+                source_snapshot_id,
+            ],
+        )
+    }
+}
+
 /// Hash helper re-exported for convenience in the procurement domain.
 pub fn sha256_hex_bytes(bytes: &[u8]) -> String {
     sha256_hex(bytes)
