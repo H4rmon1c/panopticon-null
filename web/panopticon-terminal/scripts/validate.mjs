@@ -12,9 +12,13 @@ const scripts = [
   "scripts/11-globe-input.js", "scripts/13-civic-data.js", "scripts/14-civic-shell.js",
   "scripts/15-civic-actions.js", "scripts/16-civic-context.js", "scripts/17-civic-atlas-core.js",
   "scripts/18-civic-atlas-layout.js", "scripts/19-civic-atlas-ground.js", "scripts/20-civic-atlas-links.js",
-  "scripts/21-civic-atlas-helpers.js", "scripts/22-civic-runtime.js",
+  "scripts/21-civic-atlas-helpers.js", "scripts/22-civic-runtime.js", "scripts/23-civic-polish.js",
 ];
-const styles = Array.from({ length: 9 }, (_, index) => `styles/0${index}${index === 8 ? "-civic" : ""}.css`);
+const styles = [
+  ...Array.from({ length: 8 }, (_, index) => `styles/0${index}.css`),
+  "styles/08-civic.css",
+  "styles/09-civic-polish.css",
+];
 const required = ["index.html", "styles.css", "app.js", "api.js", "mock/public-snapshot.json", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
@@ -65,6 +69,11 @@ for (const phrase of ["THE PUBLIC RECORD, CONNECTED", "What is happening here?",
 const civicActions = contents.get("scripts/15-civic-actions.js") ?? "";
 for (const phrase of ["PEOPLE IN POWER", "documented public roles only", "No device-location access"]) {
   if (!civicActions.includes(phrase) && !civicShell.includes(phrase)) failures.push(`civic boundary: missing language: ${phrase}`);
+}
+
+const civicPolish = contents.get("scripts/23-civic-polish.js") ?? "";
+for (const phrase of ["POWER LEAVES A RECORD. WE CONNECT IT.", "No private-person tracking"]) {
+  if (!civicPolish.includes(phrase)) failures.push(`civic polish: missing boundary or identity: ${phrase}`);
 }
 
 let snapshot;
