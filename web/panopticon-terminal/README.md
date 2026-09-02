@@ -1,51 +1,80 @@
-# PANOPTICON.FAIL public intelligence terminal
+# PANOPTICON.FAIL Civic Intelligence Atlas
 
-A dependency-free frontend skeleton for Panopticon Null's public, read-only intelligence interface.
+> **Power leaves a record. We connect it.**
 
-The terminal is intentionally separate from the collector and its operational database. It first attempts to read `/api/v1`; when that API is absent, it falls back to the clearly labeled synthetic snapshot in `mock/public-snapshot.json`.
+PANOPTICON.FAIL is a public intelligence commons for navigating documented institutional power. It is designed for two audiences using the same publication-safe data:
 
-## What is included
+- Residents asking what is being built, funded, approved, owned, contracted, or changed in their community.
+- Journalists and researchers tracing the underlying organizations, decisions, money, infrastructure, sources, and revisions.
 
-- Search-first terminal home screen
-- Entity workspaces
-- Source-backed entity facts
-- Interactive depth-one relationship graph
-- Public timeline and source views
-- Evidence/source drawer
-- Keyboard navigation and command palette
-- Standard, dense, and terminal density modes
-- Responsive layout
-- No build step and no runtime dependencies
+The default surface is a place-first civic atlas. The wide-area globe is retained only as an optional reporter lens; it is not the product's identity.
 
-## Run locally
+## Public view
 
-From this directory:
+The public workspace begins with a manually entered town, county, or ZIP code and four ordinary questions:
 
-```console
-python3 -m http.server 4173
-```
+- What changed?
+- Where did money go?
+- Who approved it?
+- What is being built?
 
-Then open `http://127.0.0.1:4173`.
+Records include a plain-language public brief, why the record matters, documented connections, and an explicit list of facts the current public record does not yet establish. Unknowns remain unknown instead of being filled with inference.
 
-Opening `index.html` directly is not supported because browsers restrict module and JSON loading from `file://` URLs.
+## Reporter view
 
-## Public API boundary
+Reporter mode adds denser source tooling without changing the underlying claims:
 
-The client expects these read-only endpoints:
+- Advanced query syntax
+- Source-first and change-first reading modes
+- Evidence-pack export
+- Citation-pack copy
+- Optional wide-area relationship lens
+- Exact quote, authority, locator, retrieval time, review state, and content digest
+
+## Scope and safety boundary
+
+This system maps **institutional power through public records**. It does not provide private-person surveillance.
+
+- No device-location access
+- No private-person tracking
+- People appear only in documented public or organizational roles
+- No hidden collector state in the browser
+- No pending, rejected, or unpublished claims in the public read model
+- No relationship is presented as established without publication-safe evidence
+
+The interface may be visually powerful. The evidence must remain literal, review-bound, and one click away.
+
+## Data boundary
+
+The browser attempts the read-only public API first:
 
 ```text
-GET /api/v1/status
-GET /api/v1/activity?limit=12
-GET /api/v1/entities?limit=6&sort=updated
-GET /api/v1/search?q=<query>&limit=12
-GET /api/v1/entities/<id>
-GET /api/v1/evidence/<id>
-GET /api/v1/sources/<id>
+/api/v1/status
+/api/v1/activity
+/api/v1/entities
+/api/v1/search
+/api/v1/entities/:id
+/api/v1/evidence/:id
+/api/v1/sources/:id
 ```
 
-Responses may be direct arrays or `{ "items": [...] }` envelopes where a collection is expected.
+The intended same-VPS architecture remains:
 
-The frontend must never receive collector credentials, source-management controls, pending findings, rejected claims, operator notes, or access to Panopticon's private working database. A future `pnull-public` publisher should atomically produce a sanitized public read model; a future `pnull-api` process should expose only that read model.
+```text
+private collector state
+        |
+review + publication gates
+        |
+sanitized atomic public read model
+        |
+read-only loopback API
+        |
+PANOPTICON.FAIL civic atlas
+```
+
+The frontend must never query Panopticon's operational database directly.
+
+Until the public API exists, the branch falls back to `mock/public-snapshot.json`. Every bundled organization, facility, source, contract, and relationship is synthetic and marked `DEMO DATA`.
 
 See [`docs/api-contract.md`](docs/api-contract.md) for the draft response shapes and publication rules.
 
@@ -69,9 +98,16 @@ Caddy / nginx
 
 Run the collector, API, and reverse proxy under separate Unix users. The public API user should have read-only access to the sanitized public database and no access to collector secrets or private state.
 
-## Mock-data rule
+## Run locally
 
-Every item in the bundled snapshot is synthetic and visually labeled `DEMO DATA`. The mock entities demonstrate the intended datacenter/hyperscale expansion without claiming real-world facts.
+```console
+cd web/panopticon-terminal
+python3 -m http.server 4173
+```
+
+Open `http://127.0.0.1:4173`.
+
+Opening `index.html` directly is not supported because browsers restrict module and JSON loading from `file://` URLs. For deterministic CI rendering, use `http://127.0.0.1:4173/?ci=1`.
 
 ## Design rule
 
