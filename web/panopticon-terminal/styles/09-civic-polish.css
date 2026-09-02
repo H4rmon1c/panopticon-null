@@ -1,0 +1,61 @@
+/* Final civic-atlas hierarchy pass after browser inspection. */
+
+html[data-experience="civic"] .mission-bar > div:first-child::after {
+  content: "Filings · money · projects · votes · ownership · changes · proof attached";
+  margin-top: 4px;
+  color: #78929e;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+html[data-experience="civic"] .mission-bar strong {
+  max-width: 100%;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 12px;
+  line-height: 1.22;
+  letter-spacing: 0.07em;
+}
+
+html[data-experience="civic"] .dossier__hero h1 {
+  font-size: 22px;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+html[data-experience="civic"] .civic-principle {
+  min-height: 62px;
+  padding-top: 9px;
+  padding-bottom: 8px;
+}
+
+html[data-experience="civic"] .civic-principle strong {
+  margin-top: 3px;
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.28;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+html[data-experience="civic"] .civic-principle p {
+  margin-top: 4px;
+  font-size: 7px;
+}
+
+html[data-experience="civic"] .activity-panel.is-emphasized {
+  animation: civic-emphasis 700ms ease-out;
+}
+
+@keyframes civic-emphasis {
+  0% { box-shadow: 0 0 0 rgba(111, 225, 241, 0); }
+  35% { box-shadow: 0 0 34px rgba(111, 225, 241, 0.23), inset 0 0 0 1px rgba(111, 225, 241, 0.62); }
+  100% { box-shadow: 0 0 0 rgba(111, 225, 241, 0); }
+}
+
+@media (max-width: 1220px) {
+  html[data-experience="civic"] .mission-bar strong { font-size: 10px; }
+}
