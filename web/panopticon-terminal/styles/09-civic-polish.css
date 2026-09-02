@@ -1,5 +1,12 @@
 /* Final civic-atlas hierarchy pass after browser inspection. */
 
+html[data-experience="civic"] .mission-bar {
+  width: auto !important;
+  min-width: 0 !important;
+  transform: none !important;
+  clip-path: none;
+}
+
 html[data-experience="civic"] .mission-bar > div:first-child::after {
   content: "Filings · money · projects · votes · ownership · changes · proof attached";
   margin-top: 4px;
