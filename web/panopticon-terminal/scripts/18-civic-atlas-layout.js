@@ -46,7 +46,8 @@ CivicAtlas.prototype.layout = function layout() {
 
 CivicAtlas.prototype.frame = function frame(now) {
   this.draw(now);
-  requestAnimationFrame(this.frame);
+  this.frameCount += 1;
+  if (!this.ciMode || this.frameCount < 3) requestAnimationFrame(this.frame);
 };
 
 CivicAtlas.prototype.draw = function draw(now) {
