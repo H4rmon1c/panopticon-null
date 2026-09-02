@@ -54,6 +54,7 @@ jobs:
 
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$chrome"
+          test_url="http://127.0.0.1:4173/?ci=1"
 
           status=0
           timeout --signal=TERM 45s "$chrome" \
@@ -64,7 +65,7 @@ jobs:
             --disable-background-networking \
             --virtual-time-budget=6500 \
             --dump-dom \
-            http://127.0.0.1:4173/ \
+            "$test_url" \
             > /tmp/pnull-terminal-dom.html \
             2> /tmp/pnull-terminal-chrome.log || status=$?
           if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
@@ -92,7 +93,7 @@ jobs:
             --virtual-time-budget=6500 \
             --window-size=1440,1000 \
             --screenshot=/tmp/panopticon-civic-atlas.png \
-            http://127.0.0.1:4173/ \
+            "$test_url" \
             >> /tmp/pnull-terminal-chrome.log \
             2>&1 || status=$?
           if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
