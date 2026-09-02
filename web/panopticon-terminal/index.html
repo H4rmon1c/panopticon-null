@@ -3,184 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#071019" />
     <meta
       name="description"
-      content="Panopticon.fail public intelligence terminal. Every published claim is linked to its source."
+      content="PANOPTICON.FAIL connects public records about institutions, money, projects, ownership, decisions, infrastructure, and change."
     />
-    <title>PANOPTICON.FAIL // Public Intelligence Terminal</title>
+    <title>PANOPTICON.FAIL // The Public Record, Connected</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to terminal</a>
-
-    <div id="app" class="app-shell" data-density="standard">
-      <header class="topbar">
-        <button class="brand" id="home-button" type="button" aria-label="Open Panopticon home">
-          <span class="brand-mark" aria-hidden="true">P//F</span>
-          <span class="brand-name">PANOPTICON.FAIL</span>
-          <span class="brand-product">PUBLIC INTELLIGENCE TERMINAL</span>
-        </button>
-
-        <div class="topbar-actions">
-          <button class="quiet-button keyboard-only" id="command-button" type="button">
-            COMMAND <kbd>⌘K</kbd>
-          </button>
-          <button class="quiet-button" id="density-button" type="button" aria-label="Change interface density">
-            DENSITY <span id="density-label">STANDARD</span>
-          </button>
-          <div class="system-state" id="system-state" aria-live="polite">
-            <span class="state-dot" aria-hidden="true"></span>
-            <span id="state-label">CONNECTING</span>
-          </div>
-          <time class="utc-clock" id="utc-clock" datetime="">--:--:-- UTC</time>
-        </div>
-      </header>
-
-      <aside class="rail" aria-label="Terminal navigation">
-        <button class="rail-button is-active" data-action="home" type="button" aria-label="Home">
-          <span class="rail-glyph" aria-hidden="true">/</span>
-          <span class="rail-label">SEARCH</span>
-        </button>
-        <button class="rail-button" data-action="graph" type="button" aria-label="Graph view">
-          <span class="rail-glyph" aria-hidden="true">G</span>
-          <span class="rail-label">GRAPH</span>
-        </button>
-        <button class="rail-button" data-action="timeline" type="button" aria-label="Timeline view">
-          <span class="rail-glyph" aria-hidden="true">T</span>
-          <span class="rail-label">TIME</span>
-        </button>
-        <button class="rail-button" data-action="sources" type="button" aria-label="Sources view">
-          <span class="rail-glyph" aria-hidden="true">S</span>
-          <span class="rail-label">SOURCE</span>
-        </button>
-        <button class="rail-button" data-action="command" type="button" aria-label="Open command palette">
-          <span class="rail-glyph" aria-hidden="true">⌘</span>
-          <span class="rail-label">CMD</span>
-        </button>
-
-        <div class="rail-spacer"></div>
-        <div class="rail-version" id="dataset-version" title="Published dataset version">DATASET —</div>
-      </aside>
-
-      <main id="main-content" class="terminal" tabindex="-1">
-        <section id="home-view" class="view home-view" aria-labelledby="home-title">
-          <div class="home-heading">
-            <p class="eyebrow">SEARCH PUBLIC INTELLIGENCE</p>
-            <h1 id="home-title">Follow the record.</h1>
-            <p class="home-intro">
-              Search organizations, facilities, contracts, events, sources, and documented relationships.
-            </p>
-          </div>
-
-          <div class="search-zone">
-            <label class="search-shell" for="global-search">
-              <span class="search-prefix" aria-hidden="true">QUERY</span>
-              <input
-                id="global-search"
-                type="search"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="people, organizations, facilities, contracts, events, sources..."
-                aria-autocomplete="list"
-                aria-controls="search-results"
-                aria-expanded="false"
-              />
-              <span class="search-shortcut" aria-hidden="true">/</span>
-            </label>
-            <div id="search-results" class="search-results" role="listbox" hidden></div>
-            <div class="query-examples" aria-label="Example searches">
-              <button type="button" data-query="type:facility colorado">type:facility colorado</button>
-              <button type="button" data-query="type:contract power">type:contract power</button>
-              <button type="button" data-query="source:official changed:&lt;30d">source:official changed:&lt;30d</button>
-            </div>
-          </div>
-
-          <dl class="metric-strip" id="metric-strip" aria-label="Published dataset metrics">
-            <div><dt>ENTITIES</dt><dd id="metric-entities">—</dd></div>
-            <div><dt>RECORDS</dt><dd id="metric-records">—</dd></div>
-            <div><dt>SOURCES</dt><dd id="metric-sources">—</dd></div>
-            <div><dt>RELATIONS</dt><dd id="metric-relations">—</dd></div>
-            <div><dt>LAST PUBLISH</dt><dd id="metric-published">—</dd></div>
-          </dl>
-
-          <div class="home-grid">
-            <section class="panel activity-panel" aria-labelledby="activity-title">
-              <header class="panel-header">
-                <div><p class="eyebrow">STREAM</p><h2 id="activity-title">Recent public activity</h2></div>
-                <span class="panel-meta" id="activity-count">0 EVENTS</span>
-              </header>
-              <div id="activity-list" class="activity-list" aria-live="polite"></div>
-            </section>
-
-            <section class="panel system-panel" aria-labelledby="system-title">
-              <header class="panel-header">
-                <div><p class="eyebrow">PUBLICATION</p><h2 id="system-title">Dataset state</h2></div>
-                <span class="panel-meta" id="mode-label">READ ONLY</span>
-              </header>
-              <dl class="system-grid">
-                <div><dt>PUBLIC API</dt><dd id="api-mode">CONNECTING</dd></div>
-                <div><dt>LAST INGEST</dt><dd id="last-ingest">—</dd></div>
-                <div><dt>LAST PUBLISH</dt><dd id="last-publish">—</dd></div>
-                <div><dt>SCHEMA</dt><dd id="schema-version">—</dd></div>
-              </dl>
-              <div class="manifest-block">
-                <span>PUBLIC MANIFEST</span>
-                <code id="manifest-digest">—</code>
-              </div>
-              <p class="system-note">
-                The terminal reads only the sanitized public dataset. Collection state, credentials, pending findings,
-                and reviewer notes are not exposed here.
-              </p>
-            </section>
-          </div>
-
-          <footer class="terminal-motto">
-            <span>NOTHING HERE ASKS FOR YOUR TRUST.</span>
-            <strong>EVERY CLAIM HAS A SOURCE.</strong>
-          </footer>
-        </section>
-
-        <section id="entity-view" class="view entity-view" aria-live="polite" hidden>
-          <div id="entity-workspace"></div>
-        </section>
-      </main>
-
-      <aside id="evidence-drawer" class="evidence-drawer" aria-labelledby="evidence-title" aria-hidden="true">
-        <header class="drawer-header">
-          <div><p class="eyebrow">PUBLIC EVIDENCE</p><h2 id="evidence-title">Claim record</h2></div>
-          <button class="icon-button" id="close-evidence" type="button" aria-label="Close evidence drawer">ESC</button>
-        </header>
-        <div id="evidence-content" class="drawer-content"></div>
-      </aside>
-      <button id="drawer-scrim" class="drawer-scrim" type="button" aria-label="Close evidence drawer" hidden></button>
-
-      <dialog id="command-dialog" class="command-dialog" aria-labelledby="command-title">
-        <form method="dialog" class="command-shell">
-          <header class="command-header">
-            <span class="search-prefix">COMMAND</span>
-            <input id="command-input" autocomplete="off" placeholder="Search commands or type a query..." />
-            <button class="icon-button" value="cancel" aria-label="Close command palette">ESC</button>
-          </header>
-          <h2 id="command-title" class="visually-hidden">Command palette</h2>
-          <div id="command-results" class="command-results"></div>
-          <footer class="command-footer">
-            <span><kbd>↑</kbd><kbd>↓</kbd> SELECT</span>
-            <span><kbd>ENTER</kbd> OPEN</span>
-            <span><kbd>ESC</kbd> CLOSE</span>
-          </footer>
-        </form>
-      </dialog>
-
-      <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-    </div>
-
     <noscript>
-      <div class="noscript-message">
-        This exploratory terminal requires JavaScript. Canonical static evidence records remain independently publishable.
-      </div>
+      <main style="max-width: 52rem; margin: 4rem auto; padding: 1.5rem; font-family: system-ui; color: #e8eeee; background: #071019">
+        <h1>PANOPTICON.FAIL</h1>
+        <p>The Civic Intelligence Atlas requires JavaScript for interactive public-record search, evidence drawers, and relationship views.</p>
+      </main>
     </noscript>
-
     <script type="module" src="./app.js"></script>
   </body>
 </html>
