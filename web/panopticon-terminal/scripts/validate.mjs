@@ -9,9 +9,12 @@ const scripts = [
   "scripts/02-status-activity.js", "scripts/03-dossier.js", "scripts/04-evidence.js",
   "scripts/05-view-search.js", "scripts/06-commands.js", "scripts/07-timeline.js",
   "scripts/08-globe-base.js", "scripts/09-globe-world.js", "scripts/10-globe-data.js",
-  "scripts/11-globe-input.js",
+  "scripts/11-globe-input.js", "scripts/13-civic-data.js", "scripts/14-civic-shell.js",
+  "scripts/15-civic-actions.js", "scripts/16-civic-context.js", "scripts/17-civic-atlas-core.js",
+  "scripts/18-civic-atlas-layout.js", "scripts/19-civic-atlas-ground.js", "scripts/20-civic-atlas-links.js",
+  "scripts/21-civic-atlas-helpers.js", "scripts/22-civic-runtime.js",
 ];
-const styles = Array.from({ length: 8 }, (_, index) => `styles/0${index}.css`);
+const styles = Array.from({ length: 9 }, (_, index) => `styles/0${index}${index === 8 ? "-civic" : ""}.css`);
 const required = ["index.html", "styles.css", "app.js", "api.js", "mock/public-snapshot.json", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
@@ -47,10 +50,21 @@ for (const path of [...templates, ...scripts]) {
   if (!app.includes(`./${path}`)) failures.push(`app.js: missing module asset ./${path}`);
 }
 if (!app.includes("new PanopticonClient")) failures.push("app.js: missing PanopticonClient bootstrap");
+if (!app.includes("The Public Record, Connected")) failures.push("app.js: missing civic product identity");
 
 const rootStyles = contents.get("styles.css") ?? "";
 for (const path of styles) {
   if (!rootStyles.includes(`./${path}`)) failures.push(`styles.css: missing import ./${path}`);
+}
+
+const civicShell = contents.get("scripts/14-civic-shell.js") ?? "";
+for (const phrase of ["THE PUBLIC RECORD, CONNECTED", "What is happening here?", "PUBLIC INTELLIGENCE COMMONS"]) {
+  if (!civicShell.includes(phrase)) failures.push(`civic shell: missing product language: ${phrase}`);
+}
+
+const civicActions = contents.get("scripts/15-civic-actions.js") ?? "";
+for (const phrase of ["PEOPLE IN POWER", "documented public roles only", "No device-location access"]) {
+  if (!civicActions.includes(phrase) && !civicShell.includes(phrase)) failures.push(`civic boundary: missing language: ${phrase}`);
 }
 
 let snapshot;
