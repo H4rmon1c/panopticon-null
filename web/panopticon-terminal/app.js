@@ -14,8 +14,8 @@ const fragments = await Promise.all(templateParts.map(async (url) => {
 }));
 
 document.body.innerHTML = fragments.join("");
-document.title = "PANOPTICON.FAIL // Public Intelligence System";
-document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#020508");
+document.title = "PANOPTICON.FAIL // The Public Record, Connected";
+document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#071019");
 
 const classicScripts = [
   "./scripts/00-core.js",
@@ -31,6 +31,16 @@ const classicScripts = [
   "./scripts/09-globe-world.js",
   "./scripts/10-globe-data.js",
   "./scripts/11-globe-input.js",
+  "./scripts/13-civic-data.js",
+  "./scripts/14-civic-shell.js",
+  "./scripts/15-civic-actions.js",
+  "./scripts/16-civic-context.js",
+  "./scripts/17-civic-atlas-core.js",
+  "./scripts/18-civic-atlas-layout.js",
+  "./scripts/19-civic-atlas-ground.js",
+  "./scripts/20-civic-atlas-links.js",
+  "./scripts/21-civic-atlas-helpers.js",
+  "./scripts/22-civic-runtime.js",
 ];
 
 for (const src of classicScripts) {
