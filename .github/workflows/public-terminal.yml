@@ -78,7 +78,8 @@ jobs:
           grep --quiet 'id="civic-canvas"' /tmp/pnull-terminal-dom.html
           grep --quiet "What is happening here?" /tmp/pnull-terminal-dom.html
           grep --quiet "THE PUBLIC RECORD, CONNECTED" /tmp/pnull-terminal-dom.html
-          grep --quiet "EVERYTHING POWER FILES, FUNDS, BUILDS, OWNS, VOTES ON, AND CHANGES" /tmp/pnull-terminal-dom.html
+          grep --quiet "POWER LEAVES A RECORD. WE CONNECT IT." /tmp/pnull-terminal-dom.html
+          grep --quiet "No private-person tracking" /tmp/pnull-terminal-dom.html
 
           status=0
           timeout --signal=TERM 25s "$chrome" \
