@@ -56,9 +56,10 @@ jobs:
           test -n "$chrome"
 
           status=0
-          timeout --signal=TERM 25s "$chrome" \
+          timeout --signal=TERM 45s "$chrome" \
             --headless=new \
             --no-sandbox \
+            --disable-gpu \
             --disable-dev-shm-usage \
             --disable-background-networking \
             --virtual-time-budget=6500 \
@@ -82,9 +83,10 @@ jobs:
           grep --quiet "No private-person tracking" /tmp/pnull-terminal-dom.html
 
           status=0
-          timeout --signal=TERM 25s "$chrome" \
+          timeout --signal=TERM 45s "$chrome" \
             --headless=new \
             --no-sandbox \
+            --disable-gpu \
             --disable-dev-shm-usage \
             --disable-background-networking \
             --virtual-time-budget=6500 \
