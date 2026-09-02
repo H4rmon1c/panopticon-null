@@ -74,9 +74,11 @@ jobs:
 
           grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
           grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-dom.html
-          grep --quiet "OPEN PRIMARY EVIDENCE" /tmp/pnull-terminal-dom.html
-          grep --quiet 'id="world-canvas"' /tmp/pnull-terminal-dom.html
-          grep --quiet "Recent public activity" /tmp/pnull-terminal-dom.html
+          grep --quiet "READ THE PROOF" /tmp/pnull-terminal-dom.html
+          grep --quiet 'id="civic-canvas"' /tmp/pnull-terminal-dom.html
+          grep --quiet "What is happening here?" /tmp/pnull-terminal-dom.html
+          grep --quiet "THE PUBLIC RECORD, CONNECTED" /tmp/pnull-terminal-dom.html
+          grep --quiet "EVERYTHING POWER FILES, FUNDS, BUILDS, OWNS, VOTES ON, AND CHANGES" /tmp/pnull-terminal-dom.html
 
           status=0
           timeout --signal=TERM 25s "$chrome" \
@@ -86,7 +88,7 @@ jobs:
             --disable-background-networking \
             --virtual-time-budget=6500 \
             --window-size=1440,1000 \
-            --screenshot=/tmp/panopticon-command-center.png \
+            --screenshot=/tmp/panopticon-civic-atlas.png \
             http://127.0.0.1:4173/ \
             >> /tmp/pnull-terminal-chrome.log \
             2>&1 || status=$?
@@ -94,15 +96,15 @@ jobs:
             cat /tmp/pnull-terminal-chrome.log
             exit "$status"
           fi
-          test -s /tmp/panopticon-command-center.png
+          test -s /tmp/panopticon-civic-atlas.png
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-terminal-command-center
+          name: public-terminal-civic-atlas
           if-no-files-found: error
           path: |
-            /tmp/panopticon-command-center.png
+            /tmp/panopticon-civic-atlas.png
             /tmp/pnull-terminal-dom.html
             /tmp/pnull-terminal-server.log
             /tmp/pnull-terminal-chrome.log
