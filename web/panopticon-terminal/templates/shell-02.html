@@ -1,0 +1,51 @@
+            <p>Choose a marker, relationship, or query result to open its source-grounded dossier.</p>
+          </div>
+
+          <article id="dossier-record" hidden>
+            <div class="dossier__classification"><span>PUBLIC // SOURCE-GROUNDED</span><code id="entity-id">ENT-000</code></div>
+            <header class="dossier__hero">
+              <div><span id="entity-type" class="eyebrow">ENTITY</span><h1 id="entity-name">—</h1><p id="entity-subtitle">—</p></div>
+              <div id="confidence-orbit" class="confidence-orbit"><strong id="confidence-value">100</strong><span>CONF</span></div>
+            </header>
+            <div class="dossier__status">
+              <span id="entity-status">STATUS UNKNOWN</span><span id="entity-location">LOCATION UNKNOWN</span><span id="entity-updated">UPDATED —</span>
+            </div>
+            <nav class="dossier-tabs" aria-label="Dossier views">
+              <button class="is-active" data-tab="dossier" type="button">DOSSIER</button>
+              <button data-tab="relations" type="button">RELATIONS</button>
+              <button data-tab="sources" type="button">SOURCES</button>
+            </nav>
+            <section class="dossier-pane" data-pane="dossier">
+              <p id="entity-description" class="dossier__description"></p>
+              <div id="metric-grid" class="metric-grid"></div>
+              <div class="section-label"><span>VERIFIED ATTRIBUTES</span><span>CLICK FOR EVIDENCE</span></div>
+              <div id="attribute-list" class="record-list"></div>
+            </section>
+            <section class="dossier-pane" data-pane="relations" hidden>
+              <div class="section-label"><span>DOCUMENTED RELATIONSHIPS</span><span id="relation-count">0 LINKS</span></div>
+              <div id="relation-list" class="record-list"></div>
+            </section>
+            <section class="dossier-pane" data-pane="sources" hidden>
+              <div class="section-label"><span>PUBLIC SOURCE SET</span><span id="source-count">0 SOURCES</span></div>
+              <div id="source-list" class="record-list"></div>
+            </section>
+            <footer class="dossier__actions">
+              <button id="primary-evidence" class="primary-action" type="button">OPEN PRIMARY EVIDENCE</button>
+              <button id="copy-permalink" class="secondary-action" type="button">COPY PERMALINK</button>
+            </footer>
+          </article>
+        </aside>
+
+        <footer class="timeline" aria-label="Public record timeline">
+          <div class="timeline__transport">
+            <button id="timeline-play" type="button" aria-label="Play timeline">▶</button>
+            <div><span class="eyebrow">RECORD PLAYBACK</span><strong id="timeline-range">APR 03 — AUG 31, 2026</strong></div>
+          </div>
+          <div class="timeline__rail">
+            <div class="timeline__line"></div><div id="timeline-progress" class="timeline__progress"></div><div id="timeline-events" class="timeline__events"></div>
+            <input id="timeline-input" type="range" min="0" max="1000" value="1000" aria-label="Timeline position" />
+          </div>
+          <div class="timeline__stamp"><span>UTC</span><strong id="timeline-current">2026-08-31 23:41</strong><span id="timeline-state">LATEST VERIFIED PUBLICATION</span></div>
+        </footer>
+      </main>
+

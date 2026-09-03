@@ -1,0 +1,28 @@
+panopticon.fail {
+    encode zstd gzip
+
+    # The future API listens only on loopback or a Unix socket and reads only
+    # the sanitized public read model.
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8787
+    }
+
+    # Copy this directory to /var/www/panopticon.fail during deployment.
+    handle {
+        root * /var/www/panopticon.fail
+        file_server
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+    }
+
+    @immutable path_regexp immutable ^/(?:evidence|sources|entities)/[A-Za-z0-9._~-]+$
+    header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+    @dynamic path /api/v1/status /api/v1/search* /api/v1/activity*
+    header @dynamic Cache-Control "public, max-age=30, stale-while-revalidate=300"
+}

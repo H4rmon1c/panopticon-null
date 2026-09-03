@@ -1,0 +1,114 @@
+name: Public terminal
+
+on:
+  pull_request:
+    paths:
+      - "web/panopticon-terminal/**"
+      - ".github/workflows/public-terminal.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/panopticon-terminal/**"
+      - ".github/workflows/public-terminal.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/panopticon-terminal/api.js
+          node --check web/panopticon-terminal/app.js
+          node --check web/panopticon-terminal/scripts/validate.mjs
+          for script in web/panopticon-terminal/scripts/[0-9][0-9]-*.js; do
+            node --check "$script"
+          done
+      - name: Validate shell, snapshot, and references
+        run: node web/panopticon-terminal/scripts/validate.mjs
+      - name: Browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory web/panopticon-terminal \
+            >/tmp/pnull-terminal-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for _ in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 0.2
+          done
+          curl --fail --silent http://127.0.0.1:4173/ >/dev/null
+
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome"
+          test_url="http://127.0.0.1:4173/?ci=1"
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --dump-dom \
+            "$test_url" \
+            > /tmp/pnull-terminal-dom.html \
+            2> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/pnull-terminal-dom.html
+
+          grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
+          grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-dom.html
+          grep --quiet "READ THE PROOF" /tmp/pnull-terminal-dom.html
+          grep --quiet 'id="civic-canvas"' /tmp/pnull-terminal-dom.html
+          grep --quiet "What is happening here?" /tmp/pnull-terminal-dom.html
+          grep --quiet "THE PUBLIC RECORD, CONNECTED" /tmp/pnull-terminal-dom.html
+          grep --quiet "POWER LEAVES A RECORD. WE CONNECT IT." /tmp/pnull-terminal-dom.html
+          grep --quiet "No private-person tracking" /tmp/pnull-terminal-dom.html
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --window-size=1440,1000 \
+            --screenshot=/tmp/panopticon-civic-atlas.png \
+            "$test_url" \
+            >> /tmp/pnull-terminal-chrome.log \
+            2>&1 || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/panopticon-civic-atlas.png
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-terminal-civic-atlas
+          if-no-files-found: error
+          path: |
+            /tmp/panopticon-civic-atlas.png
+            /tmp/pnull-terminal-dom.html
+            /tmp/pnull-terminal-server.log
+            /tmp/pnull-terminal-chrome.log
