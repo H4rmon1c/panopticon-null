@@ -383,6 +383,68 @@ impl SourceSnapshot {
     }
 }
 
+/// A single parsed record row bound to an immutable snapshot (snapshot-row
+/// persistence, v0.0.4c).
+///
+/// Every immutable procurement snapshot persists the exact parsed row set that
+/// belongs to it, so later change detection can compare the previous snapshot's
+/// rows from the database without ever reading a mutable fixture or source file
+/// from disk. Each row carries the stable identity key, a canonical text form
+/// used for identity and equality, a deterministic digest of that canonical
+/// form, and the raw original values (as JSON) retained for evidence and
+/// field-level diffs.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SnapshotRow {
+    /// The stable row-identity key (official identifier, else a digest over the
+    /// row's normalized field values).
+    pub key: String,
+    /// Canonical text form of the row used for equality and comparison.
+    pub canonical: String,
+    /// Deterministic SHA-256 digest of `canonical` (per-row integrity).
+    pub row_digest: String,
+    /// The raw original values of the row, retained verbatim for evidence and
+    /// field-level diffs. Empty when only identity/comparison data is retained.
+    pub raw_json: String,
+}
+
+/// Completion metadata for a snapshot's stored row set (v0.0.4c).
+///
+/// Distinguishes a valid capture that happened to contain zero rows from a
+/// legacy snapshot whose rows were never preserved. Only snapshots written
+/// through `insert_snapshot_row_set_with_rows` carry this metadata.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SnapshotRowSet {
+    pub snapshot_id: String,
+    pub expected_count: u64,
+    /// Deterministic, order-independent, duplicate-preserving digest over the
+    /// exact stored rows (keys + canonicals).
+    pub row_set_digest: String,
+    pub parser_version: String,
+    pub schema_version: u32,
+}
+
+/// Deterministic digest over a set of snapshot rows.
+///
+/// Rows are sorted by `(key, canonical)` so the digest is order-independent;
+/// duplicates are preserved (a joint award can produce two rows sharing one
+/// identifier), so an added duplicate changes the digest.
+pub fn row_set_digest(rows: &[SnapshotRow]) -> String {
+    let mut sorted: Vec<&SnapshotRow> = rows.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.key
+            .cmp(&b.key)
+            .then_with(|| a.canonical.cmp(&b.canonical))
+    });
+    let mut stream: Vec<u8> = Vec::new();
+    for row in sorted {
+        stream.extend_from_slice(&(row.key.len() as u64).to_le_bytes());
+        stream.extend_from_slice(row.key.as_bytes());
+        stream.extend_from_slice(&(row.canonical.len() as u64).to_le_bytes());
+        stream.extend_from_slice(row.canonical.as_bytes());
+    }
+    sha256_hex(&stream)
+}
+
 /// A revision/supersession link between snapshots of the same source.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SnapshotRevision {

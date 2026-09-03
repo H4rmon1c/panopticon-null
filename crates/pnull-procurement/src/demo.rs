@@ -97,6 +97,7 @@ pub fn run_demo(
         .map_err(|e| format!("parse solicitations: {e}"))?;
 
     let sol_acquisition = solicitation_acquisition(&solicitation_digest);
+    let sol_rows = crate::solicitations::solicitation_record_rows(&solicitation_records);
     let (sol_snapshot, _) = record_snapshot(
         store,
         &sol_acquisition,
@@ -104,8 +105,8 @@ pub fn run_demo(
             .map_err(|e| e.to_string())?
             .as_ref(),
         Some(solicitation_records.len() as u64),
-        &[],
-        &[],
+        &sol_rows,
+        &sol_rows,
     )
     .map_err(|e| e.to_string())?;
     let sol_evidence = vec![sol_snapshot.id.clone()];

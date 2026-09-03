@@ -150,12 +150,42 @@ byte-for-byte, with the real 0.0.3 upgrade fixture and atomic-rollback failure-i
   preserved official snapshot, not a live re-fetch.
 - **Zero official-relationship links demonstrated.** The demo records no such links; that
   absence is proven, not fabricated.
-- **Refresh change detection reads prior rows from the preserved fixture on disk.** Snapshots
-  store metadata, not raw bytes, so removed/modified rows are compared against the preserved
-  fixture rather than a byte-level snapshot.
 - **No legal advice.** Panopticon Null provides no legal advice or legal-compliance guarantee.
 - **Privacy pattern checks are a backstop, not a guarantee.** Detection cannot reliably catch
   every sensitive value; human review remains a required boundary.
+
+## 0.0.4c (shipped: "Snapshot Row Persistence" — Phase 1, Make Main Trustworthy)
+
+Hardens the 0.0.4 procurement change-detection path so it compares immutable data stored for
+the exact previous snapshot, never reconstructed history from fixtures or files on disk. The
+0.0.4c scope was delivered:
+
+1. **Snapshot-row storage.** `snapshot_rows` (`snapshot_id`, `seq`, stable `row_key`,
+   normalized `canonical` fields, deterministic per-row `row_digest`, original `raw_json`) and
+   `snapshot_row_sets` (`expected_count`, `row_set_digest`, `parser_version`, `schema_version`).
+   `SCHEMA_VERSION = 4`; the transactional migration preserves every 0.0.1–0.0.4 row
+   byte-for-byte and never fabricates rows for legacy snapshots.
+2. **Eliminated filesystem-derived history.** `refresh_live_with` no longer reads
+   `prior_rows_from_disk`. Change detection loads the exact previous snapshot's rows from the
+   database via a metadata-verified loader (per-row digests, expected count, row-set digest;
+   fails closed on mismatch). A restart-and-delete test proves a second snapshot is still
+   compared correctly after the source fixture is gone.
+3. **Evidence integrity preserved.** Every change remains bound to the exact old and new
+   snapshots with both digests; alerts stay bound to the snapshots they were created against
+   even after a later snapshot is ingested. Legacy snapshots with no preserved rows degrade to
+   no reported diff (a documented evidence limitation), never a reconstruction. Row-set
+   conflicts on repersist fail closed.
+4. **CI repair.** `nix flake check` is wrapped in `.github/scripts/retry-nix-flake-check.sh`,
+   which retries only transient crates.io `.crate` download failures and fails immediately on
+   genuine source-code/eval errors.
+
+## Honest limitations at 0.0.4c
+
+- **Legacy snapshots have no stored rows.** Snapshots captured before 0.0.4c produce no diff
+  against a new snapshot until their rows are next captured; this is recorded as a coverage
+  limitation, never reconstructed.
+- **`processing_runs.completed_at` is wall-clock.** It is a non-deterministic timing field and
+  is the only output that differs between two byte-for-byte-reproducible demo runs.
 
 ## Future directions
 

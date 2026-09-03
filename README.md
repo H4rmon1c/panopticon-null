@@ -19,9 +19,18 @@ Version 0.0.4 ("The Public Ledger") turns the procurement chain public. Changes 
 - **CORA request ledger.** Append-only, fully local, never sends. States: `drafted`/`submitted`/`response_received`/`gap_resolved`/`still_unresolved`. No transition is reversed or edited; corrections are new events. The tool never guesses a recipient and never claims a legal deadline.
 - **Second snapshot in-place-edit demonstration.** `fixtures/procurement/contract-awards-2.html` is a labeled SYNTHETIC demonstration fixture derived from the preserved official snapshot (not an official record): it edits one amount + one vendor name + adds notes on `Q25-130ZM` (record_modified), removes `R24-T114JD` (record_removed), and adds `R25-044AB` (record_added). The demo re-ingests it and shows supersession + diff + alerts + RecordCorrected/RecordRemoved events + "what changed".
 - **Explicit official-relationship links ("who authorized it").** Source adapters may declare reference fields; a link (kind `official_relationship`) is recorded only when a declared reference field of one preserved record contains an exact match of an identifier stored for another record AND both endpoints resolve to stored snapshots with valid SHA-256 digests. Near-miss identifiers become candidates in the reconciliation review queue, never auto-links. The demo records ZERO such links (absence proven, not fabricated).
-- **`pnull procurement refresh`.** `pnull procurement refresh <source-id> [--live]`. `--dry-run` is the default and prints the planned fetch with zero network. `--live` requires the persistent source-review gate (refuse on no review, expired review, config change, host change, out-of-scope endpoint), one request at a time, DNS-safe HTTPS, conditional request where an ETag exists, and aggregate budgets. Live path: fetch → new snapshot (or 304 provenance) → change detection → alert count + matter ids → coverage-ledger entry. Fails closed on refusal/failure. The demo never invokes this command.
+- **`pnull procurement refresh`.** `pnull procurement refresh <source-id> [--live]`. `--dry-run` is the default and prints the planned fetch with zero network. `--live` requires the persistent source-review gate (refuse on no review, expired review, config change, host change, out-of-scope endpoint), one request at a time, DNS-safe HTTPS, conditional request where an ETag exists, and aggregate budgets. Live path: fetch → new snapshot (or 304 provenance) → change detection → alert count + matter ids → coverage-ledger entry. Fails closed on refusal/failure. The demo never invokes this command. Change detection compares the exact previous snapshot's stored rows (see schema v4); a refresh remains correct across process restarts and fixture deletion because it never re-reads source files from disk.
 
 Schema v3 adds four tables — `procurement_alerts`, `cora_requests`, `official_relationships`, `supplied_records` — via a transactional migration that preserves every 0.0.1/0.0.2/0.0.3 row byte-for-byte.
+
+Schema v4 (0.0.4c) adds two snapshot-row storage tables — `snapshot_rows` and
+`snapshot_row_sets` — so every immutable procurement snapshot persists the exact parsed row
+set it captured (stable row key, normalized canonical fields, deterministic per-row and
+row-set digests, original raw values, parser/schema version). Change detection now compares
+the exact previous snapshot's rows from the database, never reconstructing history from
+fixtures or files on disk. The migration is additive, preserves every 0.0.1–0.0.4 row
+byte-for-byte, and never fabricates rows for legacy snapshots whose rows were never
+preserved (those degrade to no reported diff as a documented evidence limitation).
 
 ## What 0.0.3 does
 
@@ -215,7 +224,10 @@ sha256sum -c fixtures/co/SHA256SUMS          # run from the repository root
 
 The two fixture SUMS files verify that every preserved official byte under `fixtures/co/`
 and `fixtures/co2/` is intact and unmodified, and `fixtures/procurement/SHA256SUMS` verifies
-the v0.0.3 procurement fixtures.
+the v0.0.3 procurement fixtures. `fixtures/migration/v0.0.4-minimal.sql` is a committed
+v0.0.4 (schema version 3) database fixture used by the migration tests to prove the
+transactional v3→v4 upgrade preserves every canonical row byte-for-byte and rolls back
+atomically on failure.
 
 `cargo deny check` is provided by the pinned Nix environment; it runs inside
 `nix flake check` as the `dependency-policy` check.

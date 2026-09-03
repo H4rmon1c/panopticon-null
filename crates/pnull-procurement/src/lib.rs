@@ -32,7 +32,8 @@ pub use chain::{
     EvidenceGap, LinkKind, build_chain, linked_by_exact_identifier, render as render_chain,
 };
 pub use changealert::{
-    ChangeAlertError, build_change_alerts, field_diffs, persist_change_alerts, row_identity,
+    ChangeAlertError, award_record_rows, award_row_from_record_row, build_change_alerts,
+    field_diffs, persist_change_alerts, row_identity,
 };
 pub use cora::{
     CITY_DEPARTMENT, REVIEW_REQUIRED, build_draft as build_cora_draft,
@@ -70,9 +71,9 @@ pub use relationships::{
 };
 pub use snapshot::{
     Acquisition, RecordRow, SnapshotError, latest_snapshot, record_diff, record_snapshot,
-    record_unchanged, row_key,
+    record_unchanged, row_key, snapshot_rows,
 };
 pub use solicitations::{
     ABSENCE_PHRASING, INCOMPLETENESS_WARNING, SolicitationRecord, parse_solicitations,
-    solicitation_identifier,
+    solicitation_identifier, solicitation_record_rows,
 };

@@ -2,6 +2,40 @@
 
 All notable changes to Panopticon Null are documented here. This project adheres to semantic versioning.
 
+## 0.0.4c — "Snapshot Row Persistence" (Phase 1: Make Main Trustworthy)
+
+Hardens the 0.0.4 procurement change-detection path so it compares immutable data stored for
+the exact previous snapshot, never reconstructed history from fixtures or files on disk.
+Remains correct across process restarts, fixture deletion, upgrades, and repeated ingestion.
+
+1. **Snapshot-row storage.** Every immutable procurement snapshot now persists the exact
+   parsed row set it captured: `snapshot_rows` (`snapshot_id`, `seq`, stable `row_key`,
+   normalized `canonical` fields, deterministic per-row `row_digest`, original `raw_json`) and
+   `snapshot_row_sets` (`expected_count`, `row_set_digest`, `parser_version`, `schema_version`)
+   to distinguish a valid zero-row capture from a legacy snapshot whose rows were never
+   preserved. `SCHEMA_VERSION = 4`; the transactional migration preserves every 0.0.1–0.0.4
+   row byte-for-byte and never fabricates rows for legacy snapshots.
+2. **Eliminated filesystem-derived history.** `refresh_live_with` no longer reads
+   `prior_rows_from_disk` from preserved fixtures. Change detection loads the exact previous
+   snapshot's rows from the database via a metadata-verified loader that checks per-row
+   digests, expected count, and the row-set digest, and fails closed on any mismatch. A
+   restart-and-delete test proves a second snapshot is still compared correctly after the
+   source fixture is gone.
+3. **Evidence integrity preserved.** Every change remains bound to the exact old and new
+   snapshots with both digests; alerts stay bound to the snapshots they were created against
+   even after a later snapshot is ingested. Legacy snapshots with no preserved rows degrade to
+   no reported diff (a documented evidence limitation), never a reconstruction. Row-set
+   conflicts on repersist fail closed.
+4. **CI repair.** The `nix flake check` step wraps in `.github/scripts/retry-nix-flake-check.sh`,
+   which retries only transient crates.io `.crate` download failures (HTTP 403/5xx from
+   `static.crates.io` on a fresh Nix store) and fails immediately on genuine source-code/eval
+   errors, so real defects are never masked and the check stays required.
+
+Honest limitation resolved: 0.0.4's refresh read prior rows from the preserved fixture on
+disk; 0.0.4c removes that path entirely. Remaining limitation: legacy snapshots captured
+before 0.0.4c have no stored rows and produce no diff until their rows are next captured;
+`processing_runs.completed_at` remains a wall-clock, non-deterministic field.
+
 ## 0.0.4 — "The Public Ledger"
 
 Closes the four gaps left when 0.0.3's procurement chain ended in local state: the chain

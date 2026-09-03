@@ -10,6 +10,8 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use thiserror::Error;
 
+use crate::RecordRow;
+
 /// The source's own incompleteness warning, preserved verbatim and carried on
 /// every record and in every case-file coverage summary.
 pub const INCOMPLETENESS_WARNING: &str = "Solicitations are provided on this page for information \
@@ -165,6 +167,33 @@ pub fn solicitation_identifier(
         normalization_rule: rule,
         known: false,
     })
+}
+
+/// Converts solicitation records to snapshot `RecordRow`s for a record-level
+/// diff and persistence. The key is the official identifier when present,
+/// otherwise a digest over the title and linked documents.
+pub fn solicitation_record_rows(records: &[SolicitationRecord]) -> Vec<RecordRow> {
+    records
+        .iter()
+        .map(|record| {
+            let canonical = format!(
+                "{}\u{1f}{}\u{1f}{}",
+                record.identifier,
+                record.title,
+                record.linked_documents.join("\u{1f}")
+            );
+            let key = if record.identifier.trim().is_empty() {
+                pnull_core::sha256_hex(canonical.as_bytes())
+            } else {
+                record.identifier.clone()
+            };
+            RecordRow {
+                key,
+                canonical,
+                raw_json: serde_json::to_string(record).unwrap_or_default(),
+            }
+        })
+        .collect()
 }
 
 fn absolutize(href: &str) -> String {

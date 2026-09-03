@@ -198,47 +198,58 @@ fn refresh_live_with(
         observations: fetched.observations.clone(),
     };
 
-    // Prior rows for change detection come from the preserved bytes of the
-    // most recent snapshot. Procurement snapshots retain metadata (digest) but
-    // not the raw bytes, so the preserved fixture is re-read when present. In
-    // offline operation the prior fixture is on disk; a live fetch without a
-    // preserved prior fixture diff (and thus alerts) would be limited to
-    // additions, which is documented as a known limitation.
-    let prior_rows = prior_rows_from_disk(store, source_id);
+    // Prior rows for change detection come from the database's stored rows of
+    // the exact previous snapshot — never reconstructed from a fixture or any
+    // file currently on disk. If the prior snapshot's rows were never preserved
+    // (a legacy capture), no prior rows are available and change detection
+    // cannot fabricate a diff; the snapshot is still recorded and its own rows
+    // are persisted for future comparisons.
+    let prior_stored = latest
+        .as_ref()
+        .and_then(|p| pnull_procurement::snapshot_rows(store, &p.id).ok());
+    let new_rows = pnull_procurement::award_record_rows(&rows);
     let (new_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         latest.as_ref(),
         Some(rows.len() as u64),
-        &pnull_procurement::changealert::award_record_rows(&prior_rows),
-        &pnull_procurement::changealert::award_record_rows(&rows),
+        &prior_stored.clone().unwrap_or_default(),
+        &new_rows,
     )
     .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
-    // Change detection only applies against a prior snapshot. With no prior
-    // snapshot there is nothing to diff against, so no alerts are produced.
+    // Change detection only applies against a prior snapshot whose rows were
+    // preserved in the database. The stored rows are reconstructed back into
+    // award rows from their persisted raw JSON. Rows without a raw value source
+    // are skipped (never fabricated); if that leaves no comparable prior rows,
+    // no alerts are produced.
     let mut alerts = Vec::new();
     let mut prior_for_alerts: Option<pnull_core::SourceSnapshot> = None;
-    if let Some(prior) = latest
-        .as_ref()
-        .filter(|p| p.persisted_digest != new_snapshot.persisted_digest)
+    if let (Some(prior), Some(prior_rows)) = (latest.as_ref(), prior_stored)
+        && prior.persisted_digest != new_snapshot.persisted_digest
     {
-        let built = build_change_alerts(
-            source_id,
-            "contract-award-table",
-            &prior.id,
-            &prior.persisted_digest,
-            &new_snapshot.id,
-            &new_snapshot.persisted_digest,
-            &fetched_retrieved_at(),
-            new_snapshot.coverage_state,
-            &prior_rows,
-            &rows,
-            &[],
-            &[],
-        );
-        alerts = built;
-        prior_for_alerts = Some(prior.clone());
+        let prior_award_rows: Vec<pnull_procurement::AwardRow> = prior_rows
+            .iter()
+            .filter_map(pnull_procurement::award_row_from_record_row)
+            .collect();
+        if !prior_award_rows.is_empty() {
+            let built = build_change_alerts(
+                source_id,
+                "contract-award-table",
+                &prior.id,
+                &prior.persisted_digest,
+                &new_snapshot.id,
+                &new_snapshot.persisted_digest,
+                &fetched_retrieved_at(),
+                new_snapshot.coverage_state,
+                &prior_award_rows,
+                &rows,
+                &[],
+                &[],
+            );
+            alerts = built;
+            prior_for_alerts = Some(prior.clone());
+        }
     }
 
     // Resolve affected matter ids by the exact-identifier rule (never similarity).
@@ -303,33 +314,6 @@ fn parser_version(source_id: &str) -> String {
         "colorado-springs-solicitation-mirror" => "solicitations-1.0".to_owned(),
         _ => "awards-1.0".to_owned(),
     }
-}
-
-/// Parses the rows of the most recent snapshot from its preserved fixture.
-///
-/// Procurement snapshots store metadata (digest, retrieval) but not the raw
-/// bytes, so the prior rows are re-read from the preserved fixture on disk when
-/// it is present (offline). Returns empty rows when no prior snapshot exists or
-/// no preserved fixture is available, in which case change detection can only
-/// report additions.
-fn prior_rows_from_disk(store: &Store, source_id: &str) -> Vec<pnull_procurement::AwardRow> {
-    let Some((_, fixture)) = surface_url(source_id) else {
-        return Vec::new();
-    };
-    let has_prior = matches!(latest_snapshot(store, source_id), Ok(Some(_)));
-    if !has_prior {
-        return Vec::new();
-    }
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("fixtures/procurement")
-        .join(fixture);
-    let Ok(bytes) = std::fs::read(&path) else {
-        return Vec::new();
-    };
-    let html = String::from_utf8_lossy(&bytes);
-    let digest = sha256_hex(&bytes);
-    parse_awards_table(&html, &digest).unwrap_or_default()
 }
 
 /// Runs the refresh command. `live=false` is the dry-run default (no network).
@@ -711,5 +695,51 @@ mod tests {
         let mut transport = FakeTransport::new(&awards_bytes());
         let out = refresh_live_with(&store, "not-a-source", &mut transport);
         assert!(out.is_err());
+    }
+
+    #[test]
+    fn refresh_uses_database_rows_not_the_deleted_fixture() {
+        // The exact regression this phase fixes: change detection must compare
+        // the immutable rows stored for the previous snapshot, never reconstruct
+        // them from a fixture file on disk. Here snapshot A is ingested, the
+        // store is reopened (process restart), and the fixture file is deleted.
+        // Snapshot B is then compared using database state alone, and the
+        // change alerts are still produced.
+        let dir = tempdir().expect("tempdir");
+        let data_dir = dir.path().join("data");
+        let store = Store::open(&data_dir).expect("open");
+        insert_review(&store, "colorado-springs-contract-awards", AWARDS_HOST);
+
+        // Write snapshot A's fixture to a temp file we control, ingest it, then
+        // delete the file so no fixture remains on disk.
+        let fixture_a = dir.path().join("contract-awards.html");
+        let a_bytes = std::fs::read(baseline_path()).expect("read baseline fixture");
+        std::fs::write(&fixture_a, &a_bytes).expect("write temp fixture A");
+        crate::procurement_cmd::ingest_awards(&store, &fixture_a.to_string_lossy(), false)
+            .expect("ingest baseline");
+        std::fs::remove_file(&fixture_a).expect("delete fixture A");
+
+        // Reopen the store, simulating a process restart. The prior snapshot's
+        // rows must be loaded from the database, not from the deleted fixture.
+        drop(store);
+        let store = Store::open(&data_dir).expect("reopen store");
+
+        // Snapshot B differs from A: edit an amount, remove a row, add a row.
+        let changed = std::fs::read(changed_path()).expect("read changed fixture");
+        let mut transport = FakeTransport::new(&changed);
+        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        assert!(out.is_ok(), "live refresh should succeed: {:?}", out.err());
+
+        let alerts = store.all_procurement_alerts().expect("alerts");
+        let kinds: std::collections::BTreeSet<&str> = alerts
+            .iter()
+            .filter_map(|a| a.changes.first().map(|c| c.change_kind.label()))
+            .collect();
+        assert!(
+            kinds.contains("record_added")
+                && kinds.contains("record_modified")
+                && kinds.contains("record_removed"),
+            "change detection must work without the fixture on disk; got {kinds:?}"
+        );
     }
 }

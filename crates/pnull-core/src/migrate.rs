@@ -10,13 +10,20 @@
 //! v0.0.4 introduces `user_version = 3` and adds the public-ledger tables
 //! (procurement change alerts, the CORA request ledger, and official-
 //! relationship links) without rewriting any prior canonical rows.
+//! v0.0.4c introduces `user_version = 4` and adds the snapshot-row storage
+//! tables (`snapshot_rows`, `snapshot_row_sets`) so every immutable procurement
+//! snapshot persists the exact parsed row set it captured, and later change
+//! detection can compare the exact previous snapshot's rows from the database
+//! without reconstructing history from fixtures or files on disk. The migration
+//! is additive: it never fabricates rows for snapshots whose rows were never
+//! preserved, and it never rewrites any prior canonical rows.
 
 use rusqlite::{Connection, Transaction};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 /// The highest schema version this build understands.
-pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 3;
+pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -34,7 +41,7 @@ pub fn current_version(connection: &Connection) -> Result<u32, MigrationError> {
     Ok(u32::try_from(version).unwrap_or(u32::MAX))
 }
 
-/// Runs the v0.0.1 -> v0.0.2 -> v0.0.3 -> v0.0.4 migration inside a
+/// Runs the v0.0.1 -> v0.0.2 -> v0.0.3 -> v0.0.4 -> v0.0.4c migration inside a
 /// transaction.
 ///
 /// This is a no-op for a fresh database (which is created at the target schema).
@@ -48,7 +55,7 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     if version > MAX_SUPPORTED_SCHEMA_VERSION {
         return Err(MigrationError::UnsupportedVersion(version));
     }
-    // version is 0 (v0.0.1), 1 (v0.0.2), or 2 (v0.0.3) here.
+    // version is 0 (v0.0.1), 1 (v0.0.2), 2 (v0.0.3), or 3 (v0.0.4) here.
     let transaction = connection.transaction()?;
     if version < 1 {
         apply_v1(&transaction)?;
@@ -58,6 +65,9 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     }
     if version < 3 {
         apply_v3(&transaction)?;
+    }
+    if version < 4 {
+        apply_v4(&transaction)?;
     }
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
@@ -252,6 +262,38 @@ fn apply_v3(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
     )
 }
 
+/// Creates the v0.0.4c snapshot-row storage tables.
+///
+/// Every immutable procurement snapshot persists the exact parsed row set it
+/// captured (`snapshot_rows`), plus completion metadata (`snapshot_row_sets`)
+/// that distinguishes a valid zero-row capture from a legacy snapshot whose
+/// rows were never preserved. This is additive only: it never rewrites any
+/// prior canonical rows, and it never fabricates rows for snapshots whose rows
+/// were not preserved (legacy snapshots load as a documented evidence
+/// limitation rather than a reconstructed history).
+fn apply_v4(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS snapshot_rows (
+           snapshot_id TEXT NOT NULL REFERENCES source_snapshots(id),
+           seq INTEGER NOT NULL,
+           row_key TEXT NOT NULL,
+           canonical TEXT NOT NULL,
+           row_digest TEXT NOT NULL,
+           raw_json TEXT NOT NULL,
+           PRIMARY KEY (snapshot_id, seq)
+         );
+         CREATE INDEX IF NOT EXISTS idx_srows_snapshot ON snapshot_rows(snapshot_id);
+         CREATE INDEX IF NOT EXISTS idx_srows_snapshot_key ON snapshot_rows(snapshot_id, row_key);
+         CREATE TABLE IF NOT EXISTS snapshot_row_sets (
+           snapshot_id TEXT PRIMARY KEY REFERENCES source_snapshots(id),
+           expected_count INTEGER NOT NULL,
+           row_set_digest TEXT NOT NULL,
+           parser_version TEXT NOT NULL,
+           schema_version INTEGER NOT NULL
+         );",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,12 +454,12 @@ mod tests {
         let runs_before = rows_of(&connection, "processing_runs", 2);
         let xrec_before = rows_of(&connection, "x_reconciliations", 3);
 
-        migrate(&mut connection).expect("migrate v0.0.2 -> v0.0.3");
+        migrate(&mut connection).expect("migrate v0.0.2 -> latest");
         assert_eq!(
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 3);
+        assert_eq!(SCHEMA_VERSION, 4);
 
         // Every canonical v0.0.1 and v0.0.2 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -453,6 +495,12 @@ mod tests {
         ] {
             assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
         }
+
+        // The v0.0.4c snapshot-row tables now exist and are empty (no rows are
+        // fabricated for snapshots whose rows were never preserved).
+        for table in ["snapshot_rows", "snapshot_row_sets"] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
     }
 
     #[test]
@@ -474,12 +522,12 @@ mod tests {
         let snapshots_before = rows_of(&connection, "source_snapshots", 3);
         let case_files_before = rows_of(&connection, "case_files", 3);
 
-        migrate(&mut connection).expect("migrate v0.0.3 -> v0.0.4");
+        migrate(&mut connection).expect("migrate v0.0.3 -> latest");
         assert_eq!(
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 3);
+        assert_eq!(SCHEMA_VERSION, 4);
 
         // Every canonical v0.0.1, v0.0.2, and v0.0.3 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -504,6 +552,103 @@ mod tests {
         ] {
             assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
         }
+
+        // The v0.0.4c snapshot-row tables now exist and are empty (no rows are
+        // fabricated for snapshots whose rows were never preserved).
+        for table in ["snapshot_rows", "snapshot_row_sets"] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
+    }
+
+    #[test]
+    fn v04_database_upgrades_to_v04c_preserving_all_rows() {
+        // Load the committed minimal v0.0.4 (schema version 3) fixture database
+        // representing the current pre-change 0.0.4 schema.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.4-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.4 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.4 fixture");
+
+        assert_eq!(current_version(&connection).expect("version"), 3);
+        let evidence_before = read_evidence(&connection);
+        let snapshots_before = rows_of(&connection, "source_snapshots", 3);
+        let alerts_before = rows_of(&connection, "procurement_alerts", 3);
+        let cora_before = rows_of(&connection, "cora_requests", 3);
+        let rel_before = rows_of(&connection, "official_relationships", 3);
+        let supplied_before = rows_of(&connection, "supplied_records", 3);
+
+        migrate(&mut connection).expect("migrate v0.0.4 -> v0.0.4c");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            SCHEMA_VERSION
+        );
+        assert_eq!(SCHEMA_VERSION, 4);
+
+        // Every canonical v0.0.4 row survives byte-for-byte, including the
+        // public-ledger tables that this version introduces.
+        assert_eq!(read_evidence(&connection), evidence_before);
+        assert_eq!(
+            rows_of(&connection, "source_snapshots", 3),
+            snapshots_before
+        );
+        assert_eq!(rows_of(&connection, "procurement_alerts", 3), alerts_before);
+        assert_eq!(rows_of(&connection, "cora_requests", 3), cora_before);
+        assert_eq!(
+            rows_of(&connection, "official_relationships", 3),
+            rel_before
+        );
+        assert_eq!(rows_of(&connection, "supplied_records", 3), supplied_before);
+
+        // The v0.0.4c snapshot-row tables now exist and are empty: no rows are
+        // fabricated for pre-existing snapshots whose rows were never preserved.
+        // This is the documented coverage/evidence limitation.
+        for table in ["snapshot_rows", "snapshot_row_sets"] {
+            assert_eq!(count_table(&connection, table), 0, "table {table} is empty");
+        }
+    }
+
+    #[test]
+    fn v04_to_v04c_migration_rolls_back_atomically() {
+        // Load a real v0.0.4 (version 3) fixture, then sabotage the v4 migration
+        // by claiming the index name idx_srows_snapshot with a table. apply_v4's
+        // CREATE INDEX must fail, rolling back the whole transaction: user_version
+        // stays at 3 and no partial snapshot-row table survives.
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/migration/v0.0.4-minimal.sql");
+        let sql = std::fs::read_to_string(&fixture).expect("read v0.0.4 fixture");
+
+        let dir = tempdir().expect("temp dir");
+        let mut connection = Connection::open(dir.path().join("pnull.db")).expect("open");
+        connection.execute_batch(&sql).expect("load v0.0.4 fixture");
+        // Sabotage: a table claims the index name idx_srows_snapshot.
+        connection
+            .execute_batch(
+                "CREATE TABLE idx_srows_snapshot (x TEXT);
+                 INSERT INTO idx_srows_snapshot VALUES ('sabotage');",
+            )
+            .expect("sabotage schema");
+
+        assert!(migrate(&mut connection).is_err(), "migration must fail");
+        assert_eq!(
+            current_version(&connection).expect("version"),
+            3,
+            "user_version must roll back to 3 on failure"
+        );
+        // No v0.0.4c table may persist.
+        let exists: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('snapshot_rows','snapshot_row_sets')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("check partial tables");
+        assert_eq!(exists, 0, "no partial v0.0.4c tables may remain");
+        // Canonical rows untouched.
+        assert_eq!(count_table(&connection, "procurement_alerts"), 1);
+        assert_eq!(count_table(&connection, "source_snapshots"), 1);
     }
 
     #[test]

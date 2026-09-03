@@ -21,8 +21,9 @@ pub use procurement::{
     ProcurementChangeKind, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
     ProcurementMatter, ProcurementOrganization, ProcurementRecordChange, ReconciliationDecision,
     ReconciliationItem, ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision,
-    SourceAuthority, SourceSnapshot, identifier_match_key, normalize_identifier,
-    organization_alias_candidate, organization_exact_match, parse_money, sha256_manifest,
+    SnapshotRow, SnapshotRowSet, SourceAuthority, SourceSnapshot, identifier_match_key,
+    normalize_identifier, organization_alias_candidate, organization_exact_match, parse_money,
+    row_set_digest, sha256_manifest,
 };
 pub use types::{
     Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
@@ -53,6 +54,12 @@ pub enum CoreError {
     },
     #[error("schema migration failed: {0}")]
     Migration(#[from] migrate::MigrationError),
+    #[error(
+        "snapshot {snapshot_id} already has stored rows that disagree with the rows being persisted"
+    )]
+    SnapshotRowSetConflict { snapshot_id: String },
+    #[error("stored snapshot rows for {snapshot_id} violate integrity: {detail}")]
+    SnapshotRowIntegrity { snapshot_id: String, detail: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1005,6 +1012,139 @@ impl Store {
         )
     }
 
+    /// Persists a snapshot's complete row set plus its completion metadata in a
+    /// single transaction (v0.0.4c).
+    ///
+    /// Rows are written first, the completion marker last. Re-persisting an
+    /// identical logical row set is a no-op (idempotent retry). Re-persisting a
+    /// *different* row set for a snapshot that already has rows returns
+    /// `SnapshotRowSetConflict` and changes nothing — historical rows are never
+    /// silently overwritten.
+    pub fn insert_snapshot_row_set_with_rows(
+        &self,
+        meta: &SnapshotRowSet,
+        rows: &[SnapshotRow],
+    ) -> Result<(), CoreError> {
+        self.transaction(|tx| {
+            let existing_meta: Option<String> = tx
+                .query_row(
+                    "SELECT row_set_digest FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                    [&meta.snapshot_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let existing_rows: Vec<SnapshotRow> = {
+                let mut statement = tx.prepare(
+                    "SELECT row_key, canonical, row_digest, raw_json FROM snapshot_rows \
+                     WHERE snapshot_id = ?1 ORDER BY seq",
+                )?;
+                let mapped = statement.query_map([&meta.snapshot_id], |row| {
+                    Ok(SnapshotRow {
+                        key: row.get(0)?,
+                        canonical: row.get(1)?,
+                        row_digest: row.get(2)?,
+                        raw_json: row.get(3)?,
+                    })
+                })?;
+                mapped.collect::<Result<_, _>>()?
+            };
+            let already_present = existing_meta.is_some() || !existing_rows.is_empty();
+            if already_present {
+                let identical_rows = row_set_digest(&existing_rows) == meta.row_set_digest;
+                let stored_meta = snapshot_row_set_from_tx(tx, &meta.snapshot_id)?;
+                let identical_meta = matches!(
+                    stored_meta,
+                    Some(m)
+                        if m.expected_count == meta.expected_count
+                            && m.row_set_digest == meta.row_set_digest
+                            && m.parser_version == meta.parser_version
+                            && m.schema_version == meta.schema_version
+                );
+                if identical_rows && identical_meta {
+                    return Ok(());
+                }
+                return Err(CoreError::SnapshotRowSetConflict {
+                    snapshot_id: meta.snapshot_id.clone(),
+                });
+            }
+            for (index, row) in rows.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_digest, raw_json) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        meta.snapshot_id,
+                        i64::try_from(index).unwrap_or(i64::MAX),
+                        row.key,
+                        row.canonical,
+                        row.row_digest,
+                        row.raw_json
+                    ],
+                )?;
+            }
+            tx.execute(
+                "INSERT INTO snapshot_row_sets(snapshot_id, expected_count, row_set_digest, parser_version, schema_version) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    meta.snapshot_id,
+                    i64::try_from(meta.expected_count).unwrap_or(i64::MAX),
+                    meta.row_set_digest,
+                    meta.parser_version,
+                    i64::from(meta.schema_version)
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Returns the completion metadata for a snapshot's stored row set, if any.
+    pub fn snapshot_row_set(&self, snapshot_id: &str) -> Result<Option<SnapshotRowSet>, CoreError> {
+        let meta = self
+            .connection
+            .query_row(
+                "SELECT snapshot_id, expected_count, row_set_digest, parser_version, schema_version \
+                 FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                [snapshot_id],
+                |row| {
+                    Ok(SnapshotRowSet {
+                        snapshot_id: row.get(0)?,
+                        expected_count: u64::try_from(row.get::<_, i64>(1)?)
+                            .unwrap_or(u64::MAX),
+                        row_set_digest: row.get(2)?,
+                        parser_version: row.get(3)?,
+                        schema_version: u32::try_from(row.get::<_, i64>(4)?)
+                            .unwrap_or(u32::MAX),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(meta)
+    }
+
+    /// Returns the stored rows of a snapshot, ordered by insertion sequence.
+    ///
+    /// This is the raw loader; callers that need integrity verification should
+    /// use `pnull_procurement::snapshot::snapshot_rows`, which validates the
+    /// completion metadata, count, and digest before returning rows.
+    pub fn snapshot_rows(&self, snapshot_id: &str) -> Result<Vec<SnapshotRow>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT row_key, canonical, row_digest, raw_json FROM snapshot_rows \
+             WHERE snapshot_id = ?1 ORDER BY seq",
+        )?;
+        let mapped = statement.query_map([snapshot_id], |row| {
+            Ok(SnapshotRow {
+                key: row.get(0)?,
+                canonical: row.get(1)?,
+                row_digest: row.get(2)?,
+                raw_json: row.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in mapped {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
     pub fn insert_snapshot_diff(&self, diff: &SnapshotDiff) -> Result<bool, CoreError> {
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO snapshot_diffs(id, old_snapshot_id, new_snapshot_id, diff_json) VALUES (?1, ?2, ?3, ?4)",
@@ -1258,6 +1398,41 @@ impl Store {
         transaction.commit()?;
         Ok(result)
     }
+
+    /// Low-level access to the underlying `SQLite` connection.
+    ///
+    /// Exposed as an inspection and administration escape hatch (migrations,
+    /// diagnostics, and tests). It deliberately bypasses the Store's
+    /// high-level integrity helpers, so callers are responsible for preserving
+    /// the invariants those helpers enforce. Normal reads and writes should use
+    /// the dedicated methods.
+    pub fn connection(&self) -> &Connection {
+        &self.connection
+    }
+}
+
+/// Reads a snapshot's row-set completion metadata from an open transaction.
+fn snapshot_row_set_from_tx(
+    tx: &Transaction<'_>,
+    snapshot_id: &str,
+) -> Result<Option<SnapshotRowSet>, rusqlite::Error> {
+    let meta = tx
+        .query_row(
+            "SELECT snapshot_id, expected_count, row_set_digest, parser_version, schema_version \
+             FROM snapshot_row_sets WHERE snapshot_id = ?1",
+            [snapshot_id],
+            |row| {
+                Ok(SnapshotRowSet {
+                    snapshot_id: row.get(0)?,
+                    expected_count: u64::try_from(row.get::<_, i64>(1)?).unwrap_or(u64::MAX),
+                    row_set_digest: row.get(2)?,
+                    parser_version: row.get(3)?,
+                    schema_version: u32::try_from(row.get::<_, i64>(4)?).unwrap_or(u32::MAX),
+                })
+            },
+        )
+        .optional()?;
+    Ok(meta)
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), std::io::Error> {

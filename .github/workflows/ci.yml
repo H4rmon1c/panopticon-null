@@ -17,7 +17,14 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v17
       - name: Check flake
-        run: nix flake check --print-build-logs
+        # `nix flake check` resolves Cargo.lock through importCargoLock and
+        # fetches .crate archives from static.crates.io. The crates.io CDN can
+        # transiently return HTTP 403/5xx for a specific crate (an upstream
+        # availability failure, not a source-code error). This wrapper retries
+        # only those transient download failures and fails immediately on any
+        # genuine source-code/eval/build error, so a real defect is never
+        # masked and `nix flake check` stays required.
+        run: bash .github/scripts/retry-nix-flake-check.sh
       - name: Format
         run: nix develop --command cargo fmt --all --check
       - name: Clippy

@@ -150,18 +150,44 @@ matter's page contains no surveillance-category text.
 
 ## Migration
 
-The schema advances to `SCHEMA_VERSION = 3` (`MAX_SUPPORTED_SCHEMA_VERSION = 3`) through a
-transactional migration that preserves all 0.0.1, 0.0.2, and 0.0.3 rows byte-for-byte and
-never rewrites old evidence or processing history. The migration is additive: it creates the
-v0.0.4 tables `procurement_alerts`, `cora_requests`, `official_relationships`, and
-`supplied_records`.
+The schema advances to `SCHEMA_VERSION = 4` (`MAX_SUPPORTED_SCHEMA_VERSION = 4`) through a
+transactional migration that preserves all 0.0.1, 0.0.2, 0.0.3, and 0.0.4 rows byte-for-byte
+and never rewrites old evidence or processing history. The v0.0.4 step (`user_version = 3`)
+is additive: it created the tables `procurement_alerts`, `cora_requests`,
+`official_relationships`, and `supplied_records`. The v0.0.4c step (`user_version = 4`) is
+also additive: it adds the snapshot-row storage tables `snapshot_rows` and
+`snapshot_row_sets` (see "Snapshot-row persistence" below).
 
-- The upgrade test loads the committed fixture `fixtures/migration/v0.0.3-minimal.sql` (a
-  real 0.0.3 database) and proves every canonical row is preserved byte-for-byte.
+- The upgrade tests load the committed fixtures `fixtures/migration/v0.0.3-minimal.sql` (a
+  real 0.0.3 database) and `fixtures/migration/v0.0.4-minimal.sql` (a real 0.0.4 database)
+  and prove every canonical row, including the v0.0.4 public-ledger rows, is preserved
+  byte-for-byte.
 - Ledger entries (CORA requests, change alerts, official-relationship links, supplied
   records) survive migration byte-for-byte.
 - Failure-injection tests prove migration failure rolls back atomically.
 - Migration is idempotent; a newer unsupported schema is rejected.
+
+## Snapshot-row persistence (0.0.4c)
+
+Every immutable procurement snapshot now stores the exact parsed row set it captured, bound
+to the snapshot id:
+
+- `snapshot_rows` — one row per captured record with a stable `row_key`, normalized
+  `canonical` fields, a deterministic per-row `row_digest`, and the original `raw_json`.
+- `snapshot_row_sets` — completion metadata (`expected_count`, `row_set_digest`,
+  `parser_version`, `schema_version`) that distinguishes a valid zero-row capture from a
+  legacy snapshot whose rows were never preserved.
+
+Loading rows verifies the completion metadata, per-row digests, expected count, and row-set
+digest, and fails closed on any mismatch. Change detection compares the exact previous
+snapshot's stored rows from the database — never a reconstruction from fixtures, current
+source files, or a mutable cache. Re-persisting a snapshot id with different rows fails
+closed instead of overwriting historical rows. Alerts stay bound to the old and new snapshot
+ids with both digests, and are never rebound to a later snapshot.
+
+**Coverage limitation.** Snapshots captured before v0.0.4c have no stored rows; change
+detection against such a legacy snapshot degrades to no reported diff (a documented
+evidence limitation), never a reconstruction.
 
 ## Security and epistemic controls added or strengthened
 
@@ -191,6 +217,12 @@ v0.0.4 tables `procurement_alerts`, `cora_requests`, `official_relationships`, a
 - **Refresh fails closed.** `--live` refuses on no review, expired review, config change,
   host change, or out-of-scope endpoint, one request at a time under aggregate budgets.
   `--dry-run` (the default) makes zero transport calls.
+- **Snapshot-row integrity (0.0.4c).** Change detection never reconstructs history from
+  fixtures, current source files, or a mutable cache; it compares the exact previous
+  snapshot's rows loaded from the database. The loader verifies completion metadata,
+  per-row digests, expected count, and the row-set digest and fails closed on any mismatch.
+  Re-persisting a snapshot id with different rows fails closed; alerts stay bound to the
+  old/new snapshot ids with both digests and are never rebound to a later snapshot.
 
 ## Test results
 
@@ -223,6 +255,13 @@ All tests across the nine-crate workspace pass. New test coverage includes:
   with identical bytes → 304-style provenance, no alerts; live path with no source review →
   refused, nothing written; expired review refused; idempotent re-ingest; unknown source
   refused.
+- **Snapshot-row persistence (0.0.4c):** snapshot A ingested → process exits → fixture
+  deleted → snapshot B ingested and compared using database state alone; idempotent
+  re-ingestion of the same snapshot pair; row reordering stability (identical row-set
+  digest); duplicate keys handled as a multiset; parser-version changes recorded; malformed
+  stored rows fail closed; missing legacy rows degrade to no diff (documented limitation);
+  corrupted per-row or row-set digest fails closed; a conflicting re-persist fails closed;
+  migration preserves all v0.0.4 rows byte-for-byte and rolls back atomically on failure.
 - **pnull-x:** procurement change-alert drafts link the affected matter's case-file page
   (and fall back to the change-alert page when no matter id resolves) while reusing the
   existing pipeline gates.
@@ -268,12 +307,10 @@ SQLite rather than canonical evidence JSON).
   demo records zero `official_relationship` links and proves that absence rather than
   fabricating a link. The mechanism is tested, not yet demonstrated against preserved
   official bytes.
-- **Refresh change detection for removed/modified rows reads prior rows from the preserved
-  fixture on disk.** Source snapshots store metadata and a persisted-byte digest, not the
-  raw row bytes, so a live refresh compares the newly fetched surface against the preserved
-  prior fixture (offline) rather than a byte re-parse of the prior snapshot. Without the
-  prior fixture on disk, only added rows are reported. This is an honest limitation of the
-  live refresh path, not a claim of full historical diffing from snapshot metadata.
+- **Legacy snapshots have no stored rows (0.0.4c).** Snapshots captured before v0.0.4c
+  produce no diff against a new snapshot until their rows are next captured; this is a
+  recorded coverage limitation, never a reconstruction. This resolved the 0.0.4 limitation
+  in which live refresh read prior rows from the preserved fixture on disk.
 - **Legal compliance.** No legal conclusions are made, and this report offers no guarantee
   that any republication or data-handling practice is lawful in every jurisdiction.
 - **Boundary robustness.** Sandbox, HTTP, privacy-backstop, and review-gate tests prove the
@@ -297,9 +334,11 @@ deliberate gaps this release accepts are:
   procurement-identifier reference in a declared reference field, so the demo records zero
   links and proves absence. A future preserved record containing such a reference would
   close this gap.
-- **Refresh change detection reads prior rows from the preserved fixture on disk (Item 6).**
-  Source snapshots do not store raw row bytes, so removed/modified-row detection in a live
-  refresh depends on the prior fixture being present offline. Storing raw persisted bytes in
-  snapshots (an additive schema change) would close this gap.
+- **Legacy snapshots have no stored rows (0.0.4c).** The 0.0.4 refresh limitation (prior
+  rows read from the preserved fixture on disk) is closed: snapshots now persist their exact
+  rows and refresh compares stored rows from the database. The remaining 0.0.4c limitation
+  is that snapshots captured before v0.0.4c have no stored rows and produce no diff until
+  their rows are next captured. This is recorded as a coverage limitation, never
+  reconstructed.
 
 These gaps are recorded here so they are not mistaken for claims of completeness.

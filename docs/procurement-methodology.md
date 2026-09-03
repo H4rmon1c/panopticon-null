@@ -236,6 +236,34 @@ one request at a time, uses DNS-safe HTTPS, sends a conditional request where an
 and applies aggregate budgets. On refusal or failure it fails closed, states the reason, and
 changes nothing.
 
+Change detection in refresh compares the exact previous snapshot's **stored rows** loaded
+from the database (see "Snapshot-row persistence"), not rows reconstructed from the source
+fixture on disk. A refresh therefore stays correct across process restarts and fixture
+deletion.
+
+## Snapshot-row persistence
+
+Every immutable procurement snapshot persists the exact parsed row set it captured, bound to
+the snapshot id:
+
+- `snapshot_rows` — one row per captured record with a stable `row_key`, normalized
+  `canonical` fields, a deterministic per-row `row_digest` over those normalized fields, and
+  the original `raw_json` value.
+- `snapshot_row_sets` — completion metadata per snapshot (`expected_count`,
+  `row_set_digest`, `parser_version`, `schema_version`) that distinguishes a valid zero-row
+  capture from a legacy snapshot whose rows were never preserved.
+
+Loading rows verifies the completion metadata, the per-row digests, the expected count, and
+the row-set digest, and fails closed on any mismatch (corruption is never silently ignored).
+This makes change detection compare immutable data stored for the exact previous snapshot,
+never a reconstruction from fixtures, current source files, or a mutable cache.
+
+**Coverage limitation.** Snapshots captured before v0.0.4c have no preserved rows; loading
+them is reported as a documented evidence limitation and change detection against such a
+legacy snapshot degrades to *no diff reported* rather than reconstructing history. Row
+persistence is a commit-time integrity contract: re-persisting a snapshot id with different
+rows fails closed instead of overwriting historical rows.
+
 ## Case file
 
 A procurement matter produces a deterministic case file in machine-readable JSON and
@@ -291,5 +319,6 @@ legal advice or a legal-compliance guarantee. The second-snapshot demonstration
 (`fixtures/procurement/contract-awards-2.html`) is a labeled SYNTHETIC fixture derived from
 the preserved official snapshot, not a live re-fetch; it is not an official record. Zero
 official-relationship links are demonstrated in that demo — the absence is proven, not
-asserted. Refresh change detection reads prior rows from the preserved fixture on disk
-because snapshots store metadata, not raw bytes.
+asserted. Change detection compares exact stored rows from the database; the only remaining
+coverage limitation is that legacy snapshots captured before v0.0.4c have no stored rows and
+produce no diff until their rows are next captured.

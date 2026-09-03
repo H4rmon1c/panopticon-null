@@ -51,13 +51,14 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
+    let sol_rows = pnull_procurement::solicitation_record_rows(&records);
     let (sol_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(records.len() as u64),
-        &[],
-        &[],
+        &sol_rows,
+        &sol_rows,
     )?;
     let sol_evidence = vec![sol_snapshot.id.clone()];
 
@@ -110,13 +111,14 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
+    let award_rows = pnull_procurement::award_record_rows(&rows);
     let (award_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(rows.len() as u64),
-        &[],
-        &[],
+        &award_rows,
+        &award_rows,
     )?;
     let award_evidence = vec![award_snapshot.id.clone()];
 
@@ -391,21 +393,22 @@ pub fn coverage_diff(store: &Store, old_snapshot: &str, new_snapshot: &str) -> R
             new.source_id
         );
     }
-    // Deterministic placeholder rows: both snapshots store their record counts.
-    let old_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            old.record_count, old.persisted_digest
-        ),
-    }];
-    let new_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            new.record_count, new.persisted_digest
-        ),
-    }];
+    // Rows come from the database's stored snapshot rows, never from files.
+    // Legacy snapshots with no preserved rows report a coverage limitation.
+    let old_rows = match pnull_procurement::snapshot_rows(store, old_snapshot) {
+        Ok(rows) => rows,
+        Err(e) => {
+            println!("old snapshot has no preserved row evidence: {e}");
+            return Ok(());
+        }
+    };
+    let new_rows = match pnull_procurement::snapshot_rows(store, new_snapshot) {
+        Ok(rows) => rows,
+        Err(e) => {
+            println!("new snapshot has no preserved row evidence: {e}");
+            return Ok(());
+        }
+    };
     let diff = pnull_procurement::record_diff(
         old_snapshot,
         new_snapshot,

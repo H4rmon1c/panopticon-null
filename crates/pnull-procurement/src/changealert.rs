@@ -88,8 +88,20 @@ pub fn award_record_rows(rows: &[AwardRow]) -> Vec<RecordRow> {
                 "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
                 row.project_name, row.contractor, row.raw_amount, row.start_date, row.notes
             ),
+            raw_json: serde_json::to_string(row).unwrap_or_default(),
         })
         .collect()
+}
+
+/// Reconstructs an `AwardRow` from a stored snapshot `RecordRow`, using the raw
+/// JSON that was persisted at ingestion time. Returns `None` when the stored
+/// row has no raw value source (e.g. a placeholder or legacy row), so change
+/// detection never fabricates an award row from incomplete evidence.
+pub fn award_row_from_record_row(row: &RecordRow) -> Option<AwardRow> {
+    if row.raw_json.trim().is_empty() {
+        return None;
+    }
+    serde_json::from_str(&row.raw_json).ok()
 }
 
 /// Produces the deterministic field-level diff between two award rows for the
@@ -513,5 +525,68 @@ mod tests {
         assert!(alerts(&old, &new).is_empty());
         // MoneyState remains parseable and non-float.
         assert_eq!(old[0].amount.state, MoneyState::IdiqCeiling);
+    }
+
+    #[test]
+    fn alerts_stay_bound_to_original_snapshots_after_snapshot_c() {
+        // Alerts produced between snapshots A and B must remain bound to A and B
+        // (old and new snapshot ids and digests) even after snapshot C's alerts
+        // are created and persisted. A historical alert is never rebound.
+        let dir = tempdir().expect("tempdir");
+        let store = pnull_core::Store::open(dir.path()).expect("open");
+
+        let a_rows = vec![row("R26-023AB", "Acme", "$1,000.00", "Project A")];
+        let b_rows = vec![row("R26-023AB", "Acme", "$2,500.00", "Project A")];
+        let c_rows = vec![row("R26-023AB", "Acme", "$3,000.00", "Project A")];
+
+        // Snapshot A -> B alert, bound to exact old (A) and new (B) evidence.
+        let ab = build_change_alerts(
+            SRC,
+            SURFACE,
+            "snap:A",
+            "digest-A",
+            "snap:B",
+            "digest-B",
+            "2026-08-17T00:00:00Z",
+            CoverageState::InformationalOnly,
+            &a_rows,
+            &b_rows,
+            &[],
+            &[],
+        );
+        assert_eq!(ab.len(), 1);
+        persist_change_alerts(&store, &ab).expect("persist A->B");
+        let ab_id = ab[0].id.clone();
+
+        // Snapshot B -> C alert.
+        let bc = build_change_alerts(
+            SRC,
+            SURFACE,
+            "snap:B",
+            "digest-B",
+            "snap:C",
+            "digest-C",
+            "2026-08-17T01:00:00Z",
+            CoverageState::InformationalOnly,
+            &b_rows,
+            &c_rows,
+            &[],
+            &[],
+        );
+        assert_eq!(bc.len(), 1);
+        persist_change_alerts(&store, &bc).expect("persist B->C");
+
+        // The A->B alert is still stored, still bound to A and B exactly.
+        let stored: Vec<ProcurementAlert> = store.all_procurement_alerts().expect("alerts");
+        let ab_stored = stored
+            .iter()
+            .find(|a| a.id == ab_id)
+            .expect("A->B alert still present");
+        assert_eq!(ab_stored.old_snapshot_id, "snap:A");
+        assert_eq!(ab_stored.old_snapshot_digest, "digest-A");
+        assert_eq!(ab_stored.new_snapshot_id, "snap:B");
+        assert_eq!(ab_stored.new_snapshot_digest, "digest-B");
+        assert_eq!(ab_stored.changes[0].old_snapshot_id, "snap:A");
+        assert_eq!(ab_stored.changes[0].new_snapshot_id, "snap:B");
     }
 }

@@ -181,6 +181,13 @@ kinds include `RecordCorrected`, `RecordRemoved`, and additions; a removed row i
 Alerts are idempotent: the same snapshot-to-snapshot transition produces the same alert
 deterministically, and re-running against an unchanged store changes nothing.
 
+**Snapshot-row persistence (v0.0.4c).** Every snapshot now stores the exact parsed row set it
+captured (`snapshot_rows` + `snapshot_row_sets`). Change detection compares the exact previous
+snapshot's stored rows from the database, so alerts remain correct across process restarts and
+fixture deletion, and they stay bound to the old and new snapshot ids with both digests. Alerts
+created against an earlier snapshot are never rebound to a later one. Snapshots captured before
+v0.0.4c have no stored rows and produce no diff until their rows are next captured.
+
 The general `pnull alerts` command now lists **both** the v0.0.1 taxonomy alerts and the
 procurement change alerts in one listing, so an operator sees every alert in a single place.
 
@@ -203,6 +210,10 @@ the affected matter ids, and writes a coverage-ledger entry.
 On any refusal or failure the live path **fails closed**: it states the reason and changes
 nothing. The two reviewed procurement surfaces (the contract-award table and the solicitation
 mirror) are already configured; the offline demo never invokes `refresh`.
+
+Change detection in refresh loads the exact previous snapshot's rows from the database (see
+"Change alerts" above) and never re-reads the source fixture from disk, so a refresh stays
+correct even if the fixture is deleted or the process restarts between snapshots.
 
 ## CORA request ledger
 
