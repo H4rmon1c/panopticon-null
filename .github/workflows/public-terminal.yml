@@ -74,14 +74,37 @@ jobs:
           fi
           test -s /tmp/pnull-terminal-dom.html
 
-          grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html
-          grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-dom.html
+          grep --quiet "Ordinance 25-93" /tmp/pnull-terminal-dom.html
+          grep --quiet "Colorado Springs" /tmp/pnull-terminal-dom.html
+          if grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html; then
+            echo "public default unexpectedly loaded demonstration data" >&2
+            exit 1
+          fi
           grep --quiet "READ THE PROOF" /tmp/pnull-terminal-dom.html
           grep --quiet 'id="civic-canvas"' /tmp/pnull-terminal-dom.html
           grep --quiet "What is happening here?" /tmp/pnull-terminal-dom.html
           grep --quiet "THE PUBLIC RECORD, CONNECTED" /tmp/pnull-terminal-dom.html
           grep --quiet "POWER LEAVES A RECORD. WE CONNECT IT." /tmp/pnull-terminal-dom.html
           grep --quiet "No private-person tracking" /tmp/pnull-terminal-dom.html
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --dump-dom \
+            "http://127.0.0.1:4173/?ci=1&demo=1" \
+            > /tmp/pnull-terminal-demo-dom.html \
+            2>> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          grep --quiet "DEMO DATA" /tmp/pnull-terminal-demo-dom.html
+          grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-demo-dom.html
 
           status=0
           timeout --signal=TERM 45s "$chrome" \
@@ -110,5 +133,6 @@ jobs:
           path: |
             /tmp/panopticon-civic-atlas.png
             /tmp/pnull-terminal-dom.html
+            /tmp/pnull-terminal-demo-dom.html
             /tmp/pnull-terminal-server.log
             /tmp/pnull-terminal-chrome.log
