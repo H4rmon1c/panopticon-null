@@ -359,6 +359,33 @@ pub fn provenance_fetch(
     transport: &dyn Transport,
     request: &FetchRequest,
 ) -> Result<FetchResult, HttpError> {
+    provenance_fetch_inner(config, resolver, transport, request, false)
+}
+
+/// Capture a robots.txt response through the same DNS-safe path. A missing
+/// robots file is preserved as a 404 receipt and body for an operator to review;
+/// it does not authorize subsequent source retrieval by itself.
+pub fn provenance_fetch_robots(
+    config: &FetchConfig,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+    request: &FetchRequest,
+) -> Result<FetchResult, HttpError> {
+    let url = Url::parse(&request.requested_url)
+        .map_err(|error| HttpError::InvalidUrl(error.to_string()))?;
+    if url.path() != "/robots.txt" {
+        return Err(HttpError::UnreviewedEndpoint(url.path().to_owned()));
+    }
+    provenance_fetch_inner(config, resolver, transport, request, true)
+}
+
+fn provenance_fetch_inner(
+    config: &FetchConfig,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+    request: &FetchRequest,
+    allow_robots_not_found: bool,
+) -> Result<FetchResult, HttpError> {
     let url =
         Url::parse(&request.requested_url).map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
     validate_url_scope(config, &url)?;
@@ -404,7 +431,9 @@ pub fn provenance_fetch(
         observations.push(observation);
 
         match response.status_code {
-            200..=204 => {
+            status
+                if (200..=204).contains(&status) || (allow_robots_not_found && status == 404) =>
+            {
                 if response.body.len() > config.max_bytes {
                     return Err(HttpError::Oversized(config.max_bytes));
                 }
@@ -752,6 +781,41 @@ mod tests {
         assert!(result.body.is_none());
         let conditional = conditional_result(&result, Some("src"), None);
         assert!(conditional.unchanged);
+    }
+
+    #[test]
+    fn robots_404_is_preserved_only_by_explicit_capture_path() {
+        let resolver = FakeResolver(vec!["93.184.216.34".parse().unwrap()]);
+        let mut robots = request(None);
+        robots.requested_url = "https://example.test/robots.txt".to_owned();
+        for bytes in [b"not found".as_slice(), b"".as_slice()] {
+            let transport = FakeTransport {
+                responses: vec![response(404, bytes)],
+            };
+            assert!(matches!(
+                provenance_fetch(&config(), &resolver, &transport, &robots),
+                Err(HttpError::Transport)
+            ));
+            let captured = provenance_fetch_robots(&config(), &resolver, &transport, &robots)
+                .expect("404 robots capture");
+            assert_eq!(captured.body.as_deref(), Some(bytes));
+            assert_eq!(captured.observations[0].status_code, 404);
+            assert_eq!(
+                captured.observations[0].body_digest.as_deref(),
+                Some(sha256_hex(bytes).as_str())
+            );
+            assert!(matches!(
+                provenance_fetch_robots(&config(), &resolver, &transport, &request(None)),
+                Err(HttpError::UnreviewedEndpoint(_))
+            ));
+        }
+        let oversized = FakeTransport {
+            responses: vec![response(404, &vec![b'x'; 4096])],
+        };
+        assert!(matches!(
+            provenance_fetch_robots(&config(), &resolver, &oversized, &robots),
+            Err(HttpError::Oversized(1024))
+        ));
     }
 
     #[test]

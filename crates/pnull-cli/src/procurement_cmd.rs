@@ -729,6 +729,7 @@ pub(crate) fn require_review_for_live_at(
                     review.expires_at
                 );
             }
+            crate::require_preserved_robots_capture(store, source_id, &review)?;
             Ok(review)
         }
         None => bail!(

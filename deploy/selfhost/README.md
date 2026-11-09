@@ -38,6 +38,25 @@ sudo install -d -o root -g panopticon -m 0750 /etc/panopticon
 
 Place the checked-out repository at `/srv/panopticon/repo`. Restore the approved collector state from an encrypted backup to `/var/lib/panopticon`, owned by `panopticon` with mode `0700`. The local `.pnull` directory contains the already recorded case approval and release allowlist; its database and evidence blobs are private operational state. A fresh empty store cannot export the case until that approval and allowlist are recorded. Do not put `.pnull` in the web tree or a public git repository. Back up the SQLite database, evidence blobs, source reviews, and release directories to encrypted off-host storage; test a restore before relying on the timer.
 
+If you start with an empty private store instead of restoring `.pnull`, record
+the approval already given for this exact Colorado Springs case in the new
+store. Run `atlas requirements` against the **same manifest** first and use the
+ID and binding it prints; do not copy an old binding from this guide:
+
+```console
+cd /srv/panopticon/repo
+sudo -u panopticon /usr/local/bin/pnull --data-dir /var/lib/panopticon atlas requirements
+sudo -u panopticon /usr/local/bin/pnull --data-dir /var/lib/panopticon atlas review \
+  --id '<requirement-id-from-output>' --binding '<binding-from-output>' \
+  --decision approve --reviewer h4rmon1c \
+  --note 'Approved this exact Colorado Springs case and official sources in Codex chat on 2026-11-09'
+sudo -u panopticon /usr/local/bin/pnull --data-dir /var/lib/panopticon atlas allow-release \
+  --reviewer h4rmon1c --note 'Release the approved Colorado Springs atlas case'
+```
+
+If the manifest or its cited source digests differ from the approved case,
+stop and obtain a new case-level approval before recording that review.
+
 Install the example environment file and units, then edit the paths and domain:
 
 ```console
@@ -48,11 +67,11 @@ sudo systemctl daemon-reload
 
 The example uses `PNUL_SITE_URL=https://panopticon.fail`. The released decision page currently has matching static social metadata. If the host changes, update that metadata and the configured URL together before publishing; the validator rejects a mismatch. `PNUL_CONFIG_PATH` and `PNUL_MANIFEST_PATH` are resolved from the repository working directory.
 
-Install `web/panopticon-terminal/deploy/Caddyfile.example` as the Caddy site. Its root is `/srv/panopticon/site/current`, and it refuses the preview snapshot path. Point the domain's A/AAAA records at **your VPS IP**, then let Caddy obtain TLS. Do not use the earlier ChatGPT Site DNS targets. The `panopticon` user must be able to write the release directory; the Caddy user needs read/traverse access only to `/srv/panopticon/site/current` and its release target.
+Install `web/panopticon-terminal/deploy/Caddyfile.example` as the Caddy site. Its root is `/srv/panopticon/site/current`, and it refuses the preview snapshot path. In Namecheap Advanced DNS, remove the existing apex URL Redirect/parking A record and parked `www` CNAME before the cutover; URL Redirect can create a hidden A record. Then point the domain's A record at **your VPS IP** (and add an AAAA only if the VPS has working IPv6), and let Caddy obtain TLS. Do not use the earlier ChatGPT Site DNS targets. The `panopticon` user must be able to write the release directory; the Caddy user needs read/traverse access only to `/srv/panopticon/site/current` and its release target. See [Namecheap's redirect-record instructions](https://www.namecheap.com/support/knowledgebase/article.aspx/385/2237/how-to-set-up-a-url-redirect-for-a-domain/).
 
 ## First release and daily checks
 
-Before enabling collection, capture and record current source reviews as described in [`../../docs/operator-guide-source-review.md`](../../docs/operator-guide-source-review.md). The configured source reviews currently say they are not ready for unattended retrieval. A review expires or becomes invalid if its source configuration changes; the collector then stops fetching that source and logs the reason.
+Before enabling collection, capture and record current source reviews as described in [`../../docs/operator-guide-source-review.md`](../../docs/operator-guide-source-review.md). The configured source reviews currently say they are not ready for unattended retrieval. The Legistar API currently returns HTTP 404 for `robots.txt`; the capture preserves that status and its bytes, and the reviewer must explicitly address it and the source's terms in the note before collection can begin. A 404 is not automatic permission. A review expires or becomes invalid if its source configuration changes; the collector then stops fetching that source and logs the reason.
 
 ```console
 sudo systemctl start panopticon-publish.service

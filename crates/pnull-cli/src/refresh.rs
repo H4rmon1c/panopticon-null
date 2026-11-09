@@ -686,6 +686,8 @@ mod tests {
         expires: &str,
         host: &str,
     ) -> SourceReview {
+        const ROBOTS_BYTES: &[u8] = b"User-agent: *\nAllow: /\n";
+        const CAPTURED_AT: &str = "2026-08-01T00:00:00Z";
         let source = config
             .sources
             .iter()
@@ -703,8 +705,12 @@ mod tests {
                     .to_owned(),
             ],
             robots_url: format!("https://{host}/robots.txt"),
-            robots_snapshot_digest: "digest".to_owned(),
-            robots_provenance: None,
+            robots_snapshot_digest: sha256_hex(ROBOTS_BYTES),
+            robots_provenance: Some(FetchObservation::id_for(
+                &format!("https://{host}/robots.txt"),
+                CAPTURED_AT,
+                200,
+            )),
             terms_urls: Vec::new(),
             terms_snapshot_digests: Vec::new(),
             reviewer: "tester".to_owned(),
@@ -717,11 +723,41 @@ mod tests {
         }
     }
 
+    fn insert_review_record(store: &Store, review: &SourceReview) {
+        const ROBOTS_BYTES: &[u8] = b"User-agent: *\nAllow: /\n";
+        const CAPTURED_AT: &str = "2026-08-01T00:00:00Z";
+        store
+            .persist_content(&review.robots_snapshot_digest, ROBOTS_BYTES)
+            .expect("preserved robots");
+        store
+            .insert_fetch_observation(&FetchObservation {
+                id: review.robots_provenance.clone().expect("robots fetch id"),
+                source_id: Some(review.source_id.clone()),
+                requested_url: review.robots_url.clone(),
+                resolved_ips: vec!["203.0.113.10".to_owned()],
+                retrieved_at: CAPTURED_AT.to_owned(),
+                method: "GET".to_owned(),
+                status_code: 200,
+                redirect_target: None,
+                final_url: review.robots_url.clone(),
+                allowlisted_headers: Vec::new(),
+                content_type: Some("text/plain".to_owned()),
+                content_length: Some(ROBOTS_BYTES.len() as u64),
+                etag: None,
+                last_modified: None,
+                body_digest: Some(review.robots_snapshot_digest.clone()),
+                error: None,
+            })
+            .expect("robots receipt");
+        store.insert_source_review(review).expect("review");
+    }
+
     fn insert_review(store: &Store, source_id: &str, host: &str) {
         let config = test_config();
-        store
-            .insert_source_review(&review(&config, source_id, "2027-01-01T00:00:00Z", host))
-            .expect("insert review");
+        insert_review_record(
+            store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", host),
+        );
     }
 
     fn refresh_test(
@@ -895,14 +931,15 @@ mod tests {
     fn live_expired_review_is_refused() {
         let dir = tempdir().expect("tempdir");
         let store = Store::open(dir.path()).expect("open");
-        store
-            .insert_source_review(&review(
+        insert_review_record(
+            &store,
+            &review(
                 &test_config(),
                 "colorado-springs-contract-awards",
                 "2026-09-01T00:00:00Z",
                 AWARDS_HOST,
-            ))
-            .expect("review");
+            ),
+        );
         let mut transport = FakeTransport::new(&awards_bytes());
         let out = refresh_test(
             &store,
@@ -912,6 +949,46 @@ mod tests {
         );
         assert!(out.is_err());
         assert_eq!(store.all_procurement_alerts().expect("alerts").len(), 0);
+    }
+
+    #[test]
+    fn live_refuses_unbound_or_changed_robots_review_before_transport() {
+        let source_id = "colorado-springs-contract-awards";
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let mut legacy = review(
+            &test_config(),
+            source_id,
+            "2027-01-01T00:00:00Z",
+            AWARDS_HOST,
+        );
+        legacy.robots_snapshot_digest.clear();
+        legacy.robots_provenance = None;
+        store.insert_source_review(&legacy).expect("legacy review");
+        let mut transport = FakeTransport::new(&awards_bytes());
+        let error = refresh_test(&store, source_id, &mut transport, 8).unwrap_err();
+        assert!(error.to_string().contains("robots snapshot digest"));
+        assert_eq!(transport.calls, 0);
+
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let valid = review(
+            &test_config(),
+            source_id,
+            "2027-01-01T00:00:00Z",
+            AWARDS_HOST,
+        );
+        insert_review_record(&store, &valid);
+        std::fs::write(
+            store
+                .content_path(&valid.robots_snapshot_digest)
+                .expect("path"),
+            b"changed",
+        )
+        .expect("tamper saved bytes");
+        let error = refresh_test(&store, source_id, &mut transport, 8).unwrap_err();
+        assert!(error.to_string().contains("do not match the review digest"));
+        assert_eq!(transport.calls, 0);
     }
 
     #[test]
@@ -946,7 +1023,7 @@ mod tests {
             AWARDS_HOST,
         );
         wrong_scope.endpoint_patterns = vec!["/some-other-page".to_owned()];
-        store.insert_source_review(&wrong_scope).expect("review");
+        insert_review_record(&store, &wrong_scope);
         let result = refresh_test(&store, source_id, &mut transport, 8);
         assert!(
             result
@@ -1139,14 +1216,10 @@ mod tests {
             .find(|source| source.id == source_id)
             .expect("source")
             .minimum_interval_seconds = 86_400;
-        store
-            .insert_source_review(&review(
-                &config,
-                source_id,
-                "2027-01-01T00:00:00Z",
-                AWARDS_HOST,
-            ))
-            .expect("review");
+        insert_review_record(
+            &store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST),
+        );
         let mut failed = FailingTransport::default();
         let first = refresh_live_with(&store, &config, source_id, &mut failed, test_now(8));
         assert!(
@@ -1184,14 +1257,10 @@ mod tests {
             .find(|source| source.id == source_id)
             .expect("source")
             .minimum_interval_seconds = 86_400;
-        store
-            .insert_source_review(&review(
-                &config,
-                source_id,
-                "2027-01-01T00:00:00Z",
-                AWARDS_HOST,
-            ))
-            .expect("review");
+        insert_review_record(
+            &store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST),
+        );
         let mut malformed = FakeTransport::new(b"<main>no award table</main>");
         assert!(
             refresh_live_with(&store, &config, source_id, &mut malformed, test_now(8)).is_err()
@@ -1402,7 +1471,7 @@ mod tests {
             .expect("source");
         source.minimum_interval_seconds = 86_400;
         let review = review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST);
-        store.insert_source_review(&review).expect("review");
+        insert_review_record(&store, &review);
         let bytes = std::fs::read(baseline_path()).expect("baseline fixture");
         refresh_live_with(
             &store,

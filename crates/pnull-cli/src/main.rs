@@ -14,7 +14,10 @@ use pnull_detect::{
     extract_matter_subjects_and_actions, load_rules, rules_digest, scan,
 };
 use pnull_geometry::render_review_image;
-use pnull_http::PriorEvidence;
+use pnull_http::{
+    FetchConfig, FetchRequest, PriorEvidence, ReqwestTransport, SystemResolver,
+    provenance_fetch_robots,
+};
 use pnull_ingest::{
     Budgets, BuildMetadata, DEFAULT_MAX_BYTES, IngestRequest, LegistarPagination, RealSandbox,
     Tracker, cite_quote, fetch_source, ingest_bytes,
@@ -559,6 +562,7 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn atlas_command(
     data_dir: &Path,
     config: &StateConfig,
@@ -926,24 +930,47 @@ fn source_review_command(
             let timestamp = OffsetDateTime::now_utc().format(&Rfc3339)?;
             let robots_url = format!("https://{}/robots.txt", reviewed_host(source));
             let reviewed_hosts = vec![reviewed_host(source).clone()];
-            let (body, observations) = fetch_source(
-                &store,
-                Some(&source_id),
-                &reviewed_hosts,
-                &robots_url,
-                &timestamp,
-                source.maximum_bytes,
-                None,
+            let max_bytes = source.maximum_bytes.min(1_048_576);
+            let result = provenance_fetch_robots(
+                &FetchConfig {
+                    reviewed_hosts,
+                    reviewed_paths: None,
+                    max_bytes,
+                },
+                &SystemResolver,
+                &ReqwestTransport::new(max_bytes)?,
+                &FetchRequest {
+                    source_id: Some(source_id.clone()),
+                    requested_url: robots_url.clone(),
+                    retrieved_at: timestamp,
+                    prior: None,
+                },
             )?;
+            for observation in &result.observations {
+                store.insert_fetch_observation(observation)?;
+            }
+            let body = result
+                .body
+                .ok_or_else(|| anyhow!("robots capture returned no body"))?;
+            let status = result
+                .observations
+                .last()
+                .map_or(0, |item| item.status_code);
             let snapshot_digest = sha256_hex(&body);
             println!(
-                "captured robots snapshot from {} ({}, {} observations, {} bytes)",
+                "captured robots response from {} (HTTP {}, {}, {} observations, {} bytes)",
                 robots_url,
+                status,
                 snapshot_digest,
-                observations.len(),
+                result.observations.len(),
                 body.len()
             );
             store.persist_content(&snapshot_digest, &body)?;
+            if status == 404 {
+                println!(
+                    "robots.txt was absent; HTTP 404 is not permission to retrieve the source. Review terms and document the 404 in your note."
+                );
+            }
             println!(
                 "snapshot preserved locally; run `source review record` to record the human review"
             );
@@ -960,17 +987,32 @@ fn source_review_command(
                 .iter()
                 .find(|source| source.id == source_id)
                 .ok_or_else(|| anyhow!("unknown source: {source_id}"))?;
-            let reviewed_at = OffsetDateTime::now_utc().format(&Rfc3339)?;
+            let reviewed_at_time = OffsetDateTime::now_utc();
+            let reviewed_at = reviewed_at_time.format(&Rfc3339)?;
             let host = reviewed_host(source);
+            let robots_url = format!("https://{host}/robots.txt");
+            let previous = store.current_source_review(&source_id)?;
+            let (robots_snapshot_digest, robots_provenance, robots_status) = latest_robots_capture(
+                &store,
+                &source_id,
+                &robots_url,
+                previous.as_ref(),
+                reviewed_at_time,
+            )?;
+            if robots_status == 404 && !note.contains("404") {
+                bail!(
+                    "source review refused: note must acknowledge the HTTP 404 robots.txt response and explain the policy review"
+                );
+            }
             let review = SourceReview {
                 id: SourceReview::id_for(&source_id, &reviewed_at),
                 source_id: source_id.clone(),
                 source_config_digest: source_config_digest(source),
                 reviewed_hosts: vec![host.clone()],
                 endpoint_patterns: vec![url::Url::parse(&source.url)?.path().to_owned()],
-                robots_url: format!("https://{host}/robots.txt"),
-                robots_snapshot_digest: String::new(),
-                robots_provenance: None,
+                robots_url,
+                robots_snapshot_digest,
+                robots_provenance: Some(robots_provenance),
                 terms_urls: Vec::new(),
                 terms_snapshot_digests: Vec::new(),
                 reviewer,
@@ -979,8 +1021,9 @@ fn source_review_command(
                 expires_at: expires,
                 minimum_interval_seconds: source.minimum_interval_seconds,
                 restrictions: Vec::new(),
-                supersedes: None,
+                supersedes: previous.map(|item| item.id),
             };
+            require_preserved_robots_capture(&store, &source_id, &review)?;
             let inserted = store.insert_source_review(&review)?;
             println!(
                 "{} source review {} for {} (expires {})",
@@ -1005,6 +1048,12 @@ fn source_review_command(
             println!("  config digest: {}", review.source_config_digest);
             println!("  hosts: {}", review.reviewed_hosts.join(", "));
             println!("  endpoints: {}", review.endpoint_patterns.join(", "));
+            println!("  robots: {}", review.robots_url);
+            println!("  robots SHA-256: {}", review.robots_snapshot_digest);
+            println!(
+                "  robots fetch: {}",
+                review.robots_provenance.as_deref().unwrap_or("missing")
+            );
             println!("  min interval: {}s", review.minimum_interval_seconds);
             println!("  restrictions: {}", review.restrictions.join(", "));
             Ok(())
@@ -1023,6 +1072,154 @@ fn reviewed_host(source: &SourceConfig) -> String {
         .ok()
         .and_then(|url| url.host_str().map(str::to_owned))
         .unwrap_or_else(|| "coloradosprings.legistar.com".to_owned())
+}
+
+/// Bind a new source review to the latest complete robots capture after the
+/// previous review. Capture records are keyed by their source and fetch time;
+/// redirect chains share the same fetch time and end in one preserved body.
+fn latest_robots_capture(
+    store: &Store,
+    source_id: &str,
+    robots_url: &str,
+    previous: Option<&SourceReview>,
+    reviewed_at: OffsetDateTime,
+) -> Result<(String, String, u16)> {
+    let observations = store.fetch_observations(source_id)?;
+    let previous_at = previous
+        .map(|item| OffsetDateTime::parse(&item.reviewed_at, &Rfc3339))
+        .transpose()
+        .context("previous source review has an invalid timestamp")?;
+    let mut starts = observations
+        .iter()
+        .filter(|item| item.requested_url == robots_url && item.error.is_none())
+        .filter_map(|item| {
+            OffsetDateTime::parse(&item.retrieved_at, &Rfc3339)
+                .ok()
+                .map(|at| (at, item))
+        })
+        .collect::<Vec<_>>();
+    starts.sort_by_key(|(at, _)| *at);
+    for (captured_at, start) in starts.into_iter().rev() {
+        if previous_at.is_some_and(|at| captured_at <= at)
+            || captured_at > reviewed_at
+            || reviewed_at - captured_at > time::Duration::hours(24)
+        {
+            continue;
+        }
+        if let Some(body) = observations.iter().find(|item| {
+            item.retrieved_at == start.retrieved_at
+                && ((200..=204).contains(&item.status_code) || item.status_code == 404)
+                && item.error.is_none()
+                && item.body_digest.is_some()
+        }) {
+            let digest = body.body_digest.as_ref().expect("filtered body digest");
+            return Ok((digest.clone(), body.id.clone(), body.status_code));
+        }
+    }
+    bail!(
+        "source review refused: capture and preserve robots.txt for {source_id} within 24 hours before recording review"
+    )
+}
+
+/// Legacy reviews with an empty digest or absent provenance fail closed. A
+/// recorded review must still point to the exact saved bytes and HTTP receipt.
+pub(crate) fn require_preserved_robots_capture(
+    store: &Store,
+    source_id: &str,
+    review: &SourceReview,
+) -> Result<()> {
+    let robots_url = url::Url::parse(&review.robots_url)
+        .with_context(|| format!("live retrieval refused: invalid robots URL for {source_id}"))?;
+    let host = robots_url.host_str().unwrap_or_default();
+    if robots_url.scheme() != "https"
+        || robots_url.path() != "/robots.txt"
+        || !review
+            .reviewed_hosts
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(host))
+    {
+        bail!(
+            "live retrieval refused: source review for {source_id} has an invalid robots URL or host"
+        );
+    }
+    let digest = &review.robots_snapshot_digest;
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!(
+            "live retrieval refused: source review for {source_id} has no valid robots snapshot digest; capture and record a new review"
+        );
+    }
+    let provenance = review.robots_provenance.as_deref().filter(|id| !id.is_empty())
+        .ok_or_else(|| anyhow!("live retrieval refused: source review for {source_id} has no robots fetch provenance; capture and record a new review"))?;
+    let observations = store.fetch_observations(source_id)?;
+    let body = observations.iter().find(|item| item.id == provenance
+        && item.source_id.as_deref() == Some(source_id)
+                && ((200..=204).contains(&item.status_code) || item.status_code == 404)
+        && item.method == "GET"
+        && item.error.is_none()
+        && item.body_digest.as_deref() == Some(digest.as_str()))
+        .ok_or_else(|| anyhow!("live retrieval refused: source review for {source_id} has no matching robots fetch receipt"))?;
+    let captured_at = OffsetDateTime::parse(&body.retrieved_at, &Rfc3339).with_context(|| {
+        format!("live retrieval refused: invalid robots capture time for {source_id}")
+    })?;
+    let reviewed_at = OffsetDateTime::parse(&review.reviewed_at, &Rfc3339).with_context(|| {
+        format!("live retrieval refused: invalid source review time for {source_id}")
+    })?;
+    if captured_at > reviewed_at {
+        bail!(
+            "live retrieval refused: robots capture occurred after the source review for {source_id}"
+        );
+    }
+    if body.status_code == 404 && !review.note.contains("404") {
+        bail!(
+            "live retrieval refused: source review for {source_id} does not acknowledge the robots.txt HTTP 404"
+        );
+    }
+    let final_url = url::Url::parse(&body.final_url).with_context(|| {
+        format!("live retrieval refused: invalid robots fetch URL for {source_id}")
+    })?;
+    if final_url.scheme() != "https" || final_url.host_str() != Some(host) {
+        bail!(
+            "live retrieval refused: source review for {source_id} has a mismatched robots fetch host"
+        );
+    }
+    let mut step_url = robots_url;
+    let mut reached_body = false;
+    for _ in 0..=5 {
+        let Some(step) = observations.iter().find(|item| {
+            item.source_id.as_deref() == Some(source_id)
+                && item.retrieved_at == body.retrieved_at
+                && item.requested_url == step_url.as_str()
+                && item.method == "GET"
+                && item.error.is_none()
+        }) else {
+            break;
+        };
+        if step.id == body.id {
+            reached_body = true;
+            break;
+        }
+        if !matches!(step.status_code, 301 | 302 | 303 | 307 | 308) {
+            break;
+        }
+        let Some(target) = step.redirect_target.as_deref() else {
+            break;
+        };
+        step_url = step_url.join(target)?;
+    }
+    if !reached_body {
+        bail!(
+            "live retrieval refused: source review for {source_id} is not bound to a robots.txt request chain"
+        );
+    }
+    let bytes = fs::read(store.content_path(digest)?).with_context(|| {
+        format!("live retrieval refused: preserved robots bytes are missing for {source_id}")
+    })?;
+    if sha256_hex(&bytes) != *digest {
+        bail!(
+            "live retrieval refused: preserved robots bytes do not match the review digest for {source_id}"
+        );
+    }
+    Ok(())
 }
 
 fn verify_source_review(
@@ -1045,6 +1242,10 @@ fn verify_source_review(
         bail!(
             "live retrieval refused: host {host} is not within the reviewed scope for {source_id}"
         );
+    }
+    let path = url::Url::parse(&source.url)?.path().to_owned();
+    if !review.endpoint_patterns.iter().any(|item| item == &path) {
+        bail!("live retrieval refused: endpoint is outside reviewed scope for {source_id}");
     }
     if !review.restrictions.is_empty() {
         bail!("live retrieval refused: a prior response announced restrictions for {source_id}");
@@ -2539,6 +2740,228 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
     use tempfile::tempdir;
+
+    fn record_fake_robots_capture(
+        store: &Store,
+        source_id: &str,
+        url: &str,
+        status: u16,
+        bytes: &[u8],
+        retrieved_at: &str,
+    ) -> (String, String) {
+        let digest = sha256_hex(bytes);
+        let id = pnull_core::FetchObservation::id_for(url, retrieved_at, status);
+        store.persist_content(&digest, bytes).expect("robots bytes");
+        store
+            .insert_fetch_observation(&pnull_core::FetchObservation {
+                id: id.clone(),
+                source_id: Some(source_id.to_owned()),
+                requested_url: url.to_owned(),
+                resolved_ips: vec!["203.0.113.10".to_owned()],
+                retrieved_at: retrieved_at.to_owned(),
+                method: "GET".to_owned(),
+                status_code: status,
+                redirect_target: None,
+                final_url: url.to_owned(),
+                allowlisted_headers: Vec::new(),
+                content_type: Some("text/plain".to_owned()),
+                content_length: Some(bytes.len() as u64),
+                etag: None,
+                last_modified: None,
+                body_digest: Some(digest.clone()),
+                error: None,
+            })
+            .expect("robots receipt");
+        (digest, id)
+    }
+
+    #[test]
+    fn source_review_records_exact_robots_capture_and_rejects_missing_or_mismatched_bytes() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = load_config(&root.join(DEFAULT_CONFIG_PATH)).expect("config");
+        let source_id = "colorado-springs-legistar-events";
+        let robots_url = "https://webapi.legistar.com/robots.txt";
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let missing = source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "checked policy".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        );
+        assert!(
+            missing
+                .unwrap_err()
+                .to_string()
+                .contains("capture and preserve")
+        );
+
+        let captured_at = OffsetDateTime::now_utc().format(&Rfc3339).expect("time");
+        let (digest, _) = record_fake_robots_capture(
+            &store,
+            source_id,
+            robots_url,
+            200,
+            b"User-agent: *\nAllow: /\n",
+            &captured_at,
+        );
+        source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "checked policy".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        )
+        .expect("recorded review");
+        let review = store
+            .current_source_review(source_id)
+            .expect("review query")
+            .expect("review");
+        assert_eq!(review.robots_snapshot_digest, digest);
+        assert!(review.robots_provenance.is_some());
+        verify_source_review(&store, &config, source_id).expect("current source review");
+
+        fs::write(store.content_path(&digest).expect("path"), b"tampered").expect("tamper bytes");
+        let error = verify_source_review(&store, &config, source_id).unwrap_err();
+        assert!(error.to_string().contains("do not match the review digest"));
+    }
+
+    #[test]
+    fn robots_404_needs_explicit_note_and_stale_capture_cannot_be_reviewed() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = load_config(&root.join(DEFAULT_CONFIG_PATH)).expect("config");
+        let source_id = "colorado-springs-legistar-events";
+        let robots_url = "https://webapi.legistar.com/robots.txt";
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let captured_at = OffsetDateTime::now_utc().format(&Rfc3339).expect("time");
+        record_fake_robots_capture(
+            &store,
+            source_id,
+            robots_url,
+            404,
+            b"not found",
+            &captured_at,
+        );
+        let error = source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "checked policy".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("acknowledge the HTTP 404"));
+        source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "robots.txt returned HTTP 404; checked API terms".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        )
+        .expect("reviewed absent robots file");
+        verify_source_review(&store, &config, source_id)
+            .expect("404 review bound to preserved response");
+
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let stale_at = (OffsetDateTime::now_utc() - time::Duration::hours(25))
+            .format(&Rfc3339)
+            .expect("time");
+        record_fake_robots_capture(
+            &store,
+            source_id,
+            robots_url,
+            200,
+            b"User-agent: *\nAllow: /\n",
+            &stale_at,
+        );
+        let error = source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "checked policy".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("within 24 hours"));
+    }
+
+    #[test]
+    fn legacy_empty_binding_and_unreviewed_endpoint_fail_closed() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = load_config(&root.join(DEFAULT_CONFIG_PATH)).expect("config");
+        let source_id = "colorado-springs-legistar-events";
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let mut review = SourceReview {
+            id: "source-review:legacy".to_owned(),
+            source_id: source_id.to_owned(),
+            source_config_digest: source_config_digest(&config.sources[0]),
+            reviewed_hosts: vec!["webapi.legistar.com".to_owned()],
+            endpoint_patterns: vec!["/v1/coloradosprings/events".to_owned()],
+            robots_url: "https://webapi.legistar.com/robots.txt".to_owned(),
+            robots_snapshot_digest: String::new(),
+            robots_provenance: None,
+            terms_urls: Vec::new(),
+            terms_snapshot_digests: Vec::new(),
+            reviewer: "legacy".to_owned(),
+            note: "old artifact".to_owned(),
+            reviewed_at: "2026-11-09T00:00:00Z".to_owned(),
+            expires_at: "2099-01-01".to_owned(),
+            minimum_interval_seconds: 86_400,
+            restrictions: Vec::new(),
+            supersedes: None,
+        };
+        store.insert_source_review(&review).expect("legacy review");
+        assert!(
+            verify_source_review(&store, &config, source_id)
+                .unwrap_err()
+                .to_string()
+                .contains("robots snapshot digest")
+        );
+
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let captured_at = OffsetDateTime::now_utc().format(&Rfc3339).expect("time");
+        let (digest, provenance) = record_fake_robots_capture(
+            &store,
+            source_id,
+            &review.robots_url,
+            200,
+            b"User-agent: *\nAllow: /\n",
+            &captured_at,
+        );
+        review.robots_snapshot_digest = digest;
+        review.robots_provenance = Some(provenance);
+        review.reviewed_at = captured_at;
+        review.endpoint_patterns = vec!["/different-path".to_owned()];
+        store
+            .insert_source_review(&review)
+            .expect("wrong path review");
+        assert!(
+            verify_source_review(&store, &config, source_id)
+                .unwrap_err()
+                .to_string()
+                .contains("outside reviewed scope")
+        );
+    }
 
     #[test]
     fn deployment_settings_are_explicit_global_flags() {

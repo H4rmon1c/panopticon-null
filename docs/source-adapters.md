@@ -24,7 +24,7 @@ Colorado Springs was selected because the City officially links a stable, ID-add
 
 Live retrieval requires a persistent, expiring source review rather than an ephemeral flag. The review workflow:
 
-- `pnull source review capture <id>` — snapshot current robots/terms state.
+- `pnull source review capture <id>` — preserve the current robots.txt bytes and HTTP receipt. The configured sources do not currently snapshot separate terms pages.
 - `pnull source review record <id> --reviewer <name> --note <text> --expires <date>` — record an immutable review artifact (source ID, source-config digest, reviewed hosts, robots URL + snapshot digest + provenance, terms URLs, reviewer, note, review/expiration timestamps, minimum request interval, restrictions, superseded review).
 - `pnull source review show <id>` — display the current review.
 - `pnull source review verify <id>` — verify the review is current and applicable.

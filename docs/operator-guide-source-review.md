@@ -14,7 +14,7 @@ The project only retrieves from a source after an operator has examined the sour
 pnull source review capture <source_id>
 ```
 
-This retrieves `https://<reviewed-host>/robots.txt` through the DNS-safe HTTP layer, computes its SHA-256, and preserves the snapshot locally as content-addressed evidence bytes. It reports the snapshot digest, the number of fetch observations, and the byte count. A snapshot is preserved locally; recording the human review is a separate step.
+This retrieves `https://<reviewed-host>/robots.txt` through the DNS-safe HTTP layer, computes its SHA-256, and preserves the response bytes and HTTP receipt locally. It reports the status, digest, observations, and byte count. A 404 response (including an empty body) is preserved as an explicit *absent robots file* receipt; it is not treated as an automatic permission to fetch the source. Other 4xx and 5xx responses fail capture. Recording the human review is a separate step.
 
 ### 2. Record the human review
 
@@ -22,20 +22,34 @@ This retrieves `https://<reviewed-host>/robots.txt` through the DNS-safe HTTP la
 pnull source review record <source_id> --reviewer <name> --note <text> --expires <date>
 ```
 
-This records an immutable review artifact containing:
+This refuses to record a review until a `source review capture` within the last
+24 hours has preserved `robots.txt` bytes and a matching HTTP fetch receipt. It
+binds the latest capture made after the previous review to an immutable artifact
+containing:
 
 - source ID and source-config digest;
 - reviewed hosts;
 - reviewed endpoint patterns;
-- robots URL, snapshot digest, and provenance;
-- terms URLs;
+- robots URL, verified snapshot digest, and fetch receipt ID;
+- terms URLs and digests when supported (the current configured sources do not
+  provide terms URLs or capture terms snapshots; document the terms you checked
+  in the reviewer note);
 - reviewer, note, and review timestamp;
 - expiration timestamp;
 - minimum request interval;
 - restrictions;
 - the superseded review (none on first record).
 
-If a review already exists for the same source and timestamp, the insert is a duplicate and is not applied.
+When the robots response is 404, the reviewer note must explicitly mention
+`404` and explain what policy and terms were checked. This follows the
+[robots.txt standard](https://www.rfc-editor.org/rfc/rfc9309.html#section-2.3.1):
+an unavailable 4xx robots file does not by itself grant permission from the
+source owner, and unreachable 5xx/network failures are not treated as 404.
+
+An old review with an empty robots digest or missing receipt is invalid for live
+retrieval. Capture and record a new review; historical rows stay intact. If a
+review already exists for the same source and timestamp, the insert is a duplicate
+and is not applied.
 
 ### 3. Show the current review
 
@@ -51,13 +65,17 @@ Displays the current review: reviewer, note, review/expiration timestamps, confi
 pnull source review verify <source_id>
 ```
 
-Checks that the review is present, current, and in scope, and prints `source <source_id> is reviewable and in scope`.
+Checks that the review is present, current, in scope for the configured endpoint,
+and still bound to the exact preserved robots bytes and HTTP receipt. On success
+it prints `source <source_id> is reviewable and in scope`.
 
 ## What live retrieval refuses
 
 Live retrieval (for example `pnull ingest` against a live source) refuses when any of the following holds:
 
 - no source review exists for the source;
+- the review lacks a matching preserved robots snapshot or fetch receipt;
+- a 404 robots response was not explicitly acknowledged in the review note;
 - the review is expired;
 - the source configuration digest changed since the review (source configuration changed);
 - the reviewed hosts no longer include the source's reviewed host (allowed hosts changed);
