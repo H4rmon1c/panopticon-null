@@ -1,22 +1,1164 @@
 {
-  "schema_version": "pnull-public-snapshot-v1",
+  "activity": [],
   "demo": false,
+  "entities": [
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_agency",
+          "label": "Ordinance reference",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "agency named in signed ordinance"
+        }
+      ],
+      "description": "agency named in signed ordinance",
+      "geo": {
+        "label": "Approximate Colorado Springs map anchor; not an evidenced site location",
+        "lat": 38.8339,
+        "lon": -104.8214
+      },
+      "id": "agency_colorado_springs_police_department",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Colorado Springs Police Department",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_signed_ordinance_25_93"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Agency named in signed ordinance",
+      "tags": [
+        "police"
+      ],
+      "timeline": [],
+      "type": "AGENCY",
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [
+        "25-581"
+      ],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_decision_action",
+          "label": "Outcome",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Pass"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_decision_action",
+          "label": "Vote tally",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "6 Aye, 3 No"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_decision_ordinance",
+          "label": "Surcharge in ordinance",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Police Department Technology Surcharge"
+        }
+      ],
+      "description": "The City Council finally passed Ordinance 25-93, amending city code to assess a Police Department Technology Surcharge.",
+      "geo": {
+        "label": "Approximate Colorado Springs map anchor; not an evidenced site location",
+        "lat": 38.8339,
+        "lon": -104.8214
+      },
+      "id": "decision_co_colorado_springs_25_581_2025_11_25",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Ordinance 25-93",
+      "relation_count": 11,
+      "relationships": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_jurisdiction",
+          "id": "decision_jurisdiction",
+          "label": "Colorado Springs jurisdiction",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "jurisdiction_co_colorado_springs",
+          "type": "WITHIN_JURISDICTION"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_agency",
+          "id": "decision_agency",
+          "label": "agency named in signed ordinance",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "agency_colorado_springs_police_department",
+          "type": "NAMES_AGENCY"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84633",
+          "id": "decision_vote_84633",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_678",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84634",
+          "id": "decision_vote_84634",
+          "label": "Recorded No vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_610",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84635",
+          "id": "decision_vote_84635",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_549",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84636",
+          "id": "decision_vote_84636",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_680",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84637",
+          "id": "decision_vote_84637",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_551",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84638",
+          "id": "decision_vote_84638",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_611",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84639",
+          "id": "decision_vote_84639",
+          "label": "Recorded Aye vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_681",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84640",
+          "id": "decision_vote_84640",
+          "label": "Recorded No vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_609",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84641",
+          "id": "decision_vote_84641",
+          "label": "Recorded No vote on Ordinance 25-93",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_679",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "share_url": "https://panopticon.fail/decision.html?decision=co-colorado-springs-25-581-2025-11-25",
+      "slug": "co-colorado-springs-25-581-2025-11-25",
+      "source_count": 4,
+      "source_ids": [
+        "source_co_event_2660",
+        "source_co_votes_103550",
+        "source_co_signed_ordinance_25_93",
+        "source_co_staff_presentation"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "2025-11-25 • 6–3",
+      "tags": [
+        "technology surcharge",
+        "recorded vote"
+      ],
+      "technology_context": [
+        {
+          "context": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "name": "Body Worn Camera (Axon)",
+          "review_state": "SOURCE_VERIFIED"
+        },
+        {
+          "context": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "name": "Digital Evidence System & Storage (Axon)",
+          "review_state": "SOURCE_VERIFIED"
+        },
+        {
+          "context": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "name": "AI Transcription & Reporting (Axon)",
+          "review_state": "SOURCE_VERIFIED"
+        },
+        {
+          "context": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "name": "Vehicle Intelligence Cameras (Flock)",
+          "review_state": "SOURCE_VERIFIED"
+        }
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-11-25",
+          "evidence_id": "evidence_decision_action",
+          "id": "decision_final_passage",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Ordinance 25-93 finally passed, 6–3",
+          "type": "FINAL_PASSAGE"
+        }
+      ],
+      "type": "DECISION",
+      "unknowns": [
+        {
+          "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance.",
+          "kind": "contract_award",
+          "state": "not_established"
+        }
+      ],
+      "unresolved_question": "Which specific contracts and payments, if any, will be funded from the surcharge proceeds?",
+      "updated_at": "2025-11-25",
+      "votes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84633",
+          "name": "Tom Bailey",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84634",
+          "name": "Lynette Crow-Iverson",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "No"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84635",
+          "name": "Dave Donelson",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84636",
+          "name": "Kimberly Gold",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84637",
+          "name": "Nancy Henjum",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84638",
+          "name": "David Leinweber",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84639",
+          "name": "Roland Rainey Jr.",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Aye"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84640",
+          "name": "Brian Risley",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "No"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84641",
+          "name": "Brandy Williams",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "No"
+        }
+      ]
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_jurisdiction",
+          "label": "Governing body",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Colorado Springs City Council"
+        }
+      ],
+      "description": "Jurisdiction of the recorded City Council action",
+      "geo": {
+        "label": "Approximate Colorado Springs map anchor; not an evidenced site location",
+        "lat": 38.8339,
+        "lon": -104.8214
+      },
+      "id": "jurisdiction_co_colorado_springs",
+      "jurisdiction_ids": [],
+      "name": "Colorado Springs, Colorado",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_signed_ordinance_25_93"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Colorado municipal jurisdiction",
+      "tags": [
+        "Colorado"
+      ],
+      "timeline": [],
+      "type": "JURISDICTION",
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84635",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "Dave Donelson appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_549",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Dave Donelson",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84637",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "Nancy Henjum appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_551",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Nancy Henjum",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84640",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "No"
+        }
+      ],
+      "description": "Brian Risley appears in the official roll call with a recorded No vote.",
+      "id": "recorded_voter_co_609",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Brian Risley",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84634",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "No"
+        }
+      ],
+      "description": "Lynette Crow-Iverson appears in the official roll call with a recorded No vote.",
+      "id": "recorded_voter_co_610",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Lynette Crow-Iverson",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84638",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "David Leinweber appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_611",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "David Leinweber",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84633",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "Tom Bailey appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_678",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Tom Bailey",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84641",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "No"
+        }
+      ],
+      "description": "Brandy Williams appears in the official roll call with a recorded No vote.",
+      "id": "recorded_voter_co_679",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Brandy Williams",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84636",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "Kimberly Gold appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_680",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Kimberly Gold",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_vote_84639",
+          "label": "Recorded vote",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Aye"
+        }
+      ],
+      "description": "Roland Rainey Jr. appears in the official roll call with a recorded Aye vote.",
+      "id": "recorded_voter_co_681",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Roland Rainey Jr.",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_votes_103550"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded vote on Ordinance 25-93; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "label": "Presentation context",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "systems named in a supporting staff cost presentation; not contracts approved by this vote"
+        }
+      ],
+      "description": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+      "id": "technology_co_ai_transcription_reporting_axon",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "AI Transcription & Reporting (Axon)",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_staff_presentation"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Staff cost presentation context; contract link not established",
+      "tags": [
+        "presentation context"
+      ],
+      "timeline": [],
+      "type": "TECHNOLOGY",
+      "unknowns": [
+        {
+          "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance.",
+          "kind": "contract_award",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "label": "Presentation context",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "systems named in a supporting staff cost presentation; not contracts approved by this vote"
+        }
+      ],
+      "description": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+      "id": "technology_co_body_worn_camera_axon",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Body Worn Camera (Axon)",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_staff_presentation"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Staff cost presentation context; contract link not established",
+      "tags": [
+        "presentation context"
+      ],
+      "timeline": [],
+      "type": "TECHNOLOGY",
+      "unknowns": [
+        {
+          "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance.",
+          "kind": "contract_award",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "label": "Presentation context",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "systems named in a supporting staff cost presentation; not contracts approved by this vote"
+        }
+      ],
+      "description": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+      "id": "technology_co_digital_evidence_system_storage_axon",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Digital Evidence System & Storage (Axon)",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_staff_presentation"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Staff cost presentation context; contract link not established",
+      "tags": [
+        "presentation context"
+      ],
+      "timeline": [],
+      "type": "TECHNOLOGY",
+      "unknowns": [
+        {
+          "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance.",
+          "kind": "contract_award",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_technology_context",
+          "label": "Presentation context",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "systems named in a supporting staff cost presentation; not contracts approved by this vote"
+        }
+      ],
+      "description": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+      "id": "technology_co_vehicle_intelligence_cameras_flock",
+      "jurisdiction_ids": [
+        "jurisdiction_co_colorado_springs"
+      ],
+      "name": "Vehicle Intelligence Cameras (Flock)",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "source_co_staff_presentation"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Staff cost presentation context; contract link not established",
+      "tags": [
+        "presentation context"
+      ],
+      "timeline": [],
+      "type": "TECHNOLOGY",
+      "unknowns": [
+        {
+          "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance.",
+          "kind": "contract_award",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-11-25"
+    }
+  ],
+  "evidence": [
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "agency named in signed ordinance",
+      "corrections": [],
+      "id": "evidence_agency",
+      "locator": "PDF p. 1, title and Section 1(H)(1)",
+      "quote": "police department technology surcharge",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "source_id": "source_co_signed_ordinance_25_93",
+      "verification_digest": "sha256:fabd1265a2b8d3a40fc7a354d278f2122d1aed4bc349fcac20703e3c7447a670"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "The City Council finally passed Ordinance 25-93, amending city code to assess a Police Department Technology Surcharge.",
+      "corrections": [],
+      "id": "evidence_decision_action",
+      "locator": "$.EventItems[38].EventItemActionText",
+      "quote": "Motion by Councilmember Henjum, seconded by Councilmember Gold, that the Ordinance 25-93 amending Section 201 (General Penalty) of Part 2 (General Penalty) of Article 1 (Administration) of Chapter 1 (Administration, Personnel And Finance) of the Code of the City of Colorado Springs 2001, as amended be finally passed. The motion passed by a vote of 6-3-0-0",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "f11a5712daf21f8f7d345d772995efb1cbeb495da7981bd1a1a6aa22b57a6759",
+      "source_id": "source_co_event_2660",
+      "verification_digest": "sha256:fa650bdf618553d02429704089ee5920969cf1792a4dacc32a797ce7347ff0b6"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Signed Ordinance 25-93 amends city code to assess the Police Department Technology Surcharge",
+      "corrections": [],
+      "id": "evidence_decision_ordinance",
+      "locator": "PDF p. 1, Section 1(H)(1)",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "source_id": "source_co_signed_ordinance_25_93",
+      "verification_digest": "sha256:d96e840d93f53ae0c4c0db46d4be5d1b94fc1d26ea5e784796bcaaa2835360e0"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Colorado Springs, Colorado",
+      "corrections": [],
+      "id": "evidence_jurisdiction",
+      "locator": "PDF p. 1, enacting clause: City Council of the City of Colorado Springs",
+      "quote": "City Council of the City of Colorado Springs",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "source_id": "source_co_signed_ordinance_25_93",
+      "verification_digest": "sha256:7733f1ab3ec89bd80e2c016ab80be9e5cc2a94115ee6e25368e85cf3f3921334"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+      "corrections": [],
+      "id": "evidence_technology_context",
+      "locator": "PDF p. 7, 2026 Major Systems Costs table",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8",
+      "source_id": "source_co_staff_presentation",
+      "verification_digest": "sha256:d70735b112ccb4b5312b8d9df11ce2b42a0185a34a639341e537eb35239acf3a"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Tom Bailey recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84633",
+      "locator": "$[0].VotePersonName; $[0].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:a3a5317db644c2bf57546ed19d98842e46a7c805b6a21cf12c4090b40f94ade3"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Lynette Crow-Iverson recorded No on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84634",
+      "locator": "$[1].VotePersonName; $[1].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:2a4c537c5284f6f298dd4e4c94c2f845b3f2214d1fdcd23528fd456562b1cf0d"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Dave Donelson recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84635",
+      "locator": "$[2].VotePersonName; $[2].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:c81f6c3a247ef3ab3ef7639a56a30f7f1f60f8865feddea1715337c1dd088b56"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Kimberly Gold recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84636",
+      "locator": "$[3].VotePersonName; $[3].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:56c7cf63059f4bcf2674dc0af29cca29a6064f83f52048d55079ae56814de6fc"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Nancy Henjum recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84637",
+      "locator": "$[4].VotePersonName; $[4].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:b8e511847b0c1d8c446b882233502f9096d7e3569311cb47659cb4a672e21f67"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "David Leinweber recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84638",
+      "locator": "$[5].VotePersonName; $[5].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:abbd5cbb82fbab504f26a4132bcc14d17c2ebec6d8a3bd604ee52127054bcaab"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Roland Rainey Jr. recorded Aye on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84639",
+      "locator": "$[6].VotePersonName; $[6].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:e003047794e4c062514c2d81f7f5edc72d04d855330356578e754859b4a46827"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Brian Risley recorded No on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84640",
+      "locator": "$[7].VotePersonName; $[7].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:95bb20b6d989bea4471b36754bbb9eaeaa23fd09bbc945a507db33870b3122a1"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "claim": "Brandy Williams recorded No on Ordinance 25-93",
+      "corrections": [],
+      "id": "evidence_vote_84641",
+      "locator": "$[8].VotePersonName; $[8].VoteValueName",
+      "quote": "",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_id": "source_co_votes_103550",
+      "verification_digest": "sha256:9155aca82e0ae6bec2bdffd1041628da05ab3772bcecb6d7c579fffa7ddeab3e"
+    }
+  ],
   "preview": false,
+  "release_review": {
+    "bound_digest": "sha256:64e23d56e655f81c4b525af97f1d0712dce63bc7f8b911bd793c9695e8deca59",
+    "corrections": [],
+    "reviewed_at": "2026-11-09T08:02:08.954663618Z",
+    "state": "APPROVED"
+  },
+  "schema_version": "pnull-public-snapshot-v1",
+  "sources": [
+    {
+      "authority": "City of Colorado Springs",
+      "canonical_url": "https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "description": "Preserved official record; SHA-256 verified against local raw bytes",
+      "document_date": null,
+      "id": "source_co_event_2660",
+      "retrieved_at": null,
+      "sha256": "f11a5712daf21f8f7d345d772995efb1cbeb495da7981bd1a1a6aa22b57a6759",
+      "source_type": "official_record",
+      "title": "Colorado Springs City Council final vote event"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "canonical_url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+      "description": "Preserved official record; SHA-256 verified against local raw bytes",
+      "document_date": null,
+      "id": "source_co_signed_ordinance_25_93",
+      "retrieved_at": null,
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "source_type": "official_record",
+      "title": "Signed Ordinance 25-93"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "canonical_url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D",
+      "description": "Preserved official record; SHA-256 verified against local raw bytes",
+      "document_date": null,
+      "id": "source_co_staff_presentation",
+      "retrieved_at": null,
+      "sha256": "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8",
+      "source_type": "official_record",
+      "title": "Police Technology Surcharge staff presentation"
+    },
+    {
+      "authority": "City of Colorado Springs",
+      "canonical_url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+      "description": "Preserved official record; SHA-256 verified against local raw bytes",
+      "document_date": null,
+      "id": "source_co_votes_103550",
+      "retrieved_at": null,
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "source_type": "official_record",
+      "title": "Colorado Springs City Council roll call"
+    }
+  ],
   "status": {
-    "state": "empty",
-    "dataset_version": "empty-2026-11-09",
+    "counts": {
+      "entities": 16,
+      "records": 14,
+      "relationships": 11,
+      "sources": 4
+    },
+    "dataset_version": "fac4062e8b66e8efe72c60554b2d75f140abc9fe9a011ab43df6d601e1857688",
     "last_ingest": null,
     "last_publish": null,
-    "manifest_digest": "sha256:f4acbc76b5a00b8996885c9f4c258626b93ff56acf08ba88c63918ba87c66449",
-    "counts": {
-      "entities": 0,
-      "records": 0,
-      "sources": 0,
-      "relationships": 0
-    }
-  },
-  "activity": [],
-  "entities": [],
-  "evidence": [],
-  "sources": []
+    "manifest_digest": "fac4062e8b66e8efe72c60554b2d75f140abc9fe9a011ab43df6d601e1857688",
+    "state": "released"
+  }
 }

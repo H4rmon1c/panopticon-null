@@ -59,7 +59,7 @@ function applyCivicShell() {
       <div class="civic-question-grid" aria-label="Common public questions">
         <button type="button" data-civic-action="changes">WHAT CHANGED?</button>
         <button type="button" data-civic-action="money">WHERE DID MONEY GO?</button>
-        <button type="button" data-civic-action="decisions">WHO APPROVED IT?</button>
+        <button type="button" data-civic-action="decisions">WHO VOTED?</button>
         <button type="button" data-civic-action="building">WHAT IS BEING BUILT?</button>
       </div>
       <p class="civic-place-privacy">Manual place search. No device-location access.</p>
@@ -73,7 +73,7 @@ function applyCivicShell() {
     </div>
     <section class="civic-principle" aria-live="polite">
       <span>CURRENT PUBLIC BRIEF</span>
-      <strong id="civic-brief-text">Loading the reviewed public record…</strong>
+      <strong id="civic-brief-text">Loading the source-verified public record…</strong>
       <p id="civic-brief-proof">Published claims have source links and preserved digests.</p>
     </section>
   `);

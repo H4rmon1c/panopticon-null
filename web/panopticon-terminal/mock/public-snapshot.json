@@ -376,8 +376,8 @@
       "authority": "OFFICIAL REGISTRY",
       "retrieved_at": "2026-08-31T23:18:10Z",
       "sha256": "1d6f9a96901385540f1b6f9ee542c111c0b5657e54931a6cb97b3eadfda73e2d",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:54a1218a697e0a4cf2ef7d4cbddcabcb43577f444f61c58a7ae81b22e94d3429",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:54a1218a697e0a4cf2ef7d4cbddcabcb43577f444f61c58a7ae81b22e94d3429",
       "demo": true
     },
     {
@@ -390,8 +390,8 @@
       "authority": "OPERATOR-PUBLISHED RECORD",
       "retrieved_at": "2026-08-31T23:24:42Z",
       "sha256": "f0b4cbb88b81f8c471d894b6fceccba48a07a75c201812782cc795c06212cc0b",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:8152481e675521a6e934f7fe2f4c1b8327c22bdb4cc1887e0693139bc5ad9e2a",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:8152481e675521a6e934f7fe2f4c1b8327c22bdb4cc1887e0693139bc5ad9e2a",
       "demo": true
     },
     {
@@ -404,8 +404,8 @@
       "authority": "OFFICIAL PERMIT RECORD",
       "retrieved_at": "2026-08-31T23:14:17Z",
       "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:085c23078f0a18a2f673c278e18ac41b7f0ec32222ddb55d3b57b288b28ff5ec",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:085c23078f0a18a2f673c278e18ac41b7f0ec32222ddb55d3b57b288b28ff5ec",
       "demo": true
     },
     {
@@ -418,8 +418,8 @@
       "authority": "OFFICIAL PERMIT RECORD",
       "retrieved_at": "2026-08-31T23:14:17Z",
       "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:c14e3a5ab6dd09163f1f31c82701ba5e1dbc2cdeff73c9898ae158e90b4cf851",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:c14e3a5ab6dd09163f1f31c82701ba5e1dbc2cdeff73c9898ae158e90b4cf851",
       "demo": true
     },
     {
@@ -432,8 +432,8 @@
       "authority": "OFFICIAL UTILITY RECORD",
       "retrieved_at": "2026-08-31T23:30:12Z",
       "sha256": "9e1f0058b062df15b8d15df3dd182e931b7d3f1ff663d89628729c2463b9365a",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:a6bb11a8e56dd0d92531adf8e02cbe2213265f1ca60dd75bff78eac558ca1e3a",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:a6bb11a8e56dd0d92531adf8e02cbe2213265f1ca60dd75bff78eac558ca1e3a",
       "demo": true
     },
     {
@@ -446,8 +446,8 @@
       "authority": "OFFICIAL PERMIT RECORD",
       "retrieved_at": "2026-08-31T23:14:17Z",
       "sha256": "a4ce6b17e6b91014161707841f4c1122ad09939d29c040771c9f1af6c3148a25",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:14d0937640af2e28df5fa17216bca23df3a121ff50d1f08d0ad6747074df76af",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:14d0937640af2e28df5fa17216bca23df3a121ff50d1f08d0ad6747074df76af",
       "demo": true
     },
     {
@@ -460,8 +460,8 @@
       "authority": "OFFICIAL REGULATORY RECORD",
       "retrieved_at": "2026-08-31T23:07:28Z",
       "sha256": "44b1a6f6700a8ebdf450fe8c95d6dd663ca33af8138565b5f71fb7aa0799943b",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:b6e2d82d60ca8e7818d35a40837d42040959cb26cbb2d983af1bbadb22700c98",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:b6e2d82d60ca8e7818d35a40837d42040959cb26cbb2d983af1bbadb22700c98",
       "demo": true
     },
     {
@@ -474,8 +474,8 @@
       "authority": "COMPANY-PUBLISHED RECORD",
       "retrieved_at": "2026-08-31T22:48:31Z",
       "sha256": "7342b4f5595c40ce8b9a73c43a0ba115c89303324e1f22037ef72f4f5581d2f5",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:6ed7bbd8184cf984c355d83036275276a90e02c8d6fbac9dd26373dd216ff44e",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:6ed7bbd8184cf984c355d83036275276a90e02c8d6fbac9dd26373dd216ff44e",
       "demo": true
     },
     {
@@ -488,8 +488,8 @@
       "authority": "OFFICIAL UTILITY RECORD",
       "retrieved_at": "2026-08-31T23:12:02Z",
       "sha256": "9f4cb9c606f1516a8e3f1e64c4f97234b703381b582361c150369135c657e597",
-      "review_state": "APPROVED",
-      "review_bound_digest": "sha256:305d2a980517909664f286034ed75764c30dd78c27382ecf2216ec96111b57aa",
+      "review_state": "DEMO",
+      "verification_digest": "sha256:305d2a980517909664f286034ed75764c30dd78c27382ecf2216ec96111b57aa",
       "demo": true
     }
   ]

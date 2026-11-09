@@ -71,7 +71,7 @@ export class PanopticonClient {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Unable to load ${this.demo ? "demo" : this.preview ? "private preview" : "reviewed public"} snapshot (${response.status})`);
+    if (!response.ok) throw new Error(`Unable to load ${this.demo ? "demo" : this.preview ? "private preview" : "released public"} snapshot (${response.status})`);
 
     const snapshot = await response.json();
     validateSnapshot(snapshot, { demo: this.demo, preview: this.preview });
@@ -109,11 +109,22 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
   if (snapshot.schema_version !== SNAPSHOT_SCHEMA) throw new Error("Unsupported public snapshot schema");
   if (snapshot.demo !== demo) throw new Error("Public and demonstration datasets must stay separate");
   if (Boolean(snapshot.preview) !== preview) throw new Error("Preview and published datasets must stay separate");
-  if (!preview && /pending|draft|rejected/i.test(String(snapshot.status?.state ?? ""))) {
-    throw new Error("Pending-review data cannot be loaded as a published snapshot");
-  }
   if (!snapshot.status || !Array.isArray(snapshot.entities) || !Array.isArray(snapshot.evidence) || !Array.isArray(snapshot.sources)) {
     throw new Error("Public snapshot is missing status, entities, evidence, or sources");
+  }
+  if (snapshot.activity && !Array.isArray(snapshot.activity)) throw new Error("Public activity must be a list");
+  const hasRecords = snapshot.entities.length + snapshot.evidence.length + snapshot.sources.length + (snapshot.activity?.length ?? 0) > 0;
+  if (preview && (snapshot.status.state !== "pending_release" || snapshot.release_review?.state !== "PENDING_RELEASE")) {
+    throw new Error("Private preview lacks a pending case release");
+  }
+  if (!demo && !preview && hasRecords && (snapshot.status.state !== "released" || snapshot.release_review?.state !== "APPROVED" || !snapshot.release_review.reviewed_at)) {
+    throw new Error("Public snapshot lacks an approved case release");
+  }
+  if (!demo && !preview && snapshot.status.state === "empty" && hasRecords) {
+    throw new Error("Empty public snapshot contains records");
+  }
+  if (!demo && (preview || hasRecords) && !/^sha256:[a-f0-9]{64}$/.test(snapshot.release_review?.bound_digest ?? "")) {
+    throw new Error("Case release lacks a bound digest");
   }
 
   const entities = new Set(snapshot.entities.map((entity) => entity.id));
@@ -130,30 +141,35 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
   }
   for (const record of snapshot.evidence) {
     if (Boolean(record.demo) !== demo) throw new Error(`Evidence ${record.id ?? "?"} crosses the demonstration boundary`);
-    if (!record.id || !sources.has(record.source_id) || (!preview && record.review_state !== "APPROVED") || !record.locator) {
-      throw new Error(`Evidence ${record.id ?? "?"} is not publication ready`);
+    const expectedState = demo ? "DEMO" : preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED";
+    if (!record.id || !sources.has(record.source_id) || record.review_state !== expectedState || !record.locator) {
+      throw new Error(`Evidence ${record.id ?? "?"} has an invalid source-verification state`);
     }
-    if (!/^sha256:[a-f0-9]{64}$/.test(record.review_bound_digest ?? "") || record.sha256 !== sources.get(record.source_id).sha256) {
-      throw new Error(`Evidence ${record.id} lacks a matching review-bound digest`);
+    if (!/^sha256:[a-f0-9]{64}$/.test(record.verification_digest ?? "") || record.sha256 !== sources.get(record.source_id).sha256) {
+      throw new Error(`Evidence ${record.id} lacks a matching verification digest`);
     }
   }
   for (const entity of snapshot.entities) {
     if (!entity.id || !entity.type || !entity.name) throw new Error("Public entity lacks an ID, type, or name");
     if (!demo && (entity.tags ?? []).includes("DEMO DATA")) throw new Error(`Entity ${entity.id} crosses the demonstration boundary`);
-    if (!preview && /pending|draft|rejected/i.test(String(entity.review_state ?? entity.publication_state ?? ""))) {
-      throw new Error(`Entity ${entity.id} is not publication ready`);
-    }
     for (const id of entity.source_ids ?? []) if (!sources.has(id)) throw new Error(`Entity ${entity.id} has an unknown source`);
     for (const relation of entity.relationships ?? []) {
       if (!entities.has(relation.target_entity_id) || !evidence.has(relation.evidence_id)) {
         throw new Error(`Entity ${entity.id} has an unsupported relationship`);
       }
+      if (!demo && relation.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid relationship verification state`);
     }
     for (const item of [...(entity.attributes ?? []), ...(entity.timeline ?? [])]) {
       if (item.evidence_id && !evidence.has(item.evidence_id)) throw new Error(`Entity ${entity.id} has unknown evidence`);
+      if (!demo && item.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid fact verification state`);
     }
     for (const vote of entity.votes ?? []) {
       if (!evidence.has(vote.evidence_id)) throw new Error(`Entity ${entity.id} has a vote without evidence`);
+      if (!demo && vote.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid vote verification state`);
+    }
+    for (const context of entity.technology_context ?? []) {
+      if (!evidence.has(context.evidence_id)) throw new Error(`Entity ${entity.id} has technology context without evidence`);
+      if (!demo && context.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid technology-context verification state`);
     }
   }
   return snapshot;

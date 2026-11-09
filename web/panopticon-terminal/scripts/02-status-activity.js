@@ -7,12 +7,12 @@ function renderStatus() {
     $("#system-state-label").textContent = "DEMO DATA";
   } else if (state.mode === "preview") {
     node.classList.add("is-demo");
-    $("#system-state-label").textContent = "PENDING REVIEW // PRIVATE PREVIEW";
+    $("#system-state-label").textContent = "PENDING CASE RELEASE // PRIVATE PREVIEW";
   } else if (state.status?.state === "empty") {
     $("#system-state-label").textContent = "NO PUBLISHED CASES";
   } else {
     node.classList.toggle("is-stale", state.status?.state === "stale");
-    $("#system-state-label").textContent = state.status?.state === "stale" ? "STALE SNAPSHOT" : "REVIEWED SNAPSHOT";
+    $("#system-state-label").textContent = state.status?.state === "stale" ? "STALE SNAPSHOT" : "CASE RELEASED // SOURCES VERIFIED";
   }
   updateVisibleCounts();
 }

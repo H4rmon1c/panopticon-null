@@ -13,18 +13,18 @@ cargo run -p pnull-cli -- atlas requirements
 cargo run --locked -p pnull-cli -- atlas export --preview
 ```
 
-The preview has `preview:true`, `demo:false`, and pending evidence states. The atlas only reads it through its explicit `?preview=1` route. Keep `preview-snapshot.json` out of the public PR and public deployment. A synthetic manifest, if used in a preview, is marked `demo:true` and cannot pass production export.
+The preview has `preview:true`, `demo:false`, and `PENDING_RELEASE` evidence states. The atlas only reads it through its explicit `?preview=1` route. Keep `preview-snapshot.json` out of the public PR and public deployment. A synthetic manifest, if used in a preview, is marked `demo:true` and cannot pass production export.
 
 ## Public release gate
 
 Production export requires all of these, in order:
 
-1. Set the manifest's `review_state` to `approved` after checking the cited records and public wording.
-2. Run `atlas requirements` again. Its 14 claim rows and separate release row show the current review IDs, exact bindings, source URLs, locators, and SHA-256 values.
-3. Record a human review for every current claim binding and for the release binding using `atlas review --id ... --binding ... --decision approve --reviewer ... --note ...`. Any later rejection, supersession, or changed binding blocks release.
-4. Record a separate `atlas_release` publication allowlist using `atlas allow-release --reviewer ... --note ...`.
+1. Set the manifest's `review_state` to `approved` after checking the cited case and public wording.
+2. Run `atlas requirements` again. It returns **one case-level release binding** for the complete manifest, not a task for each vote or source claim.
+3. Record the case-level human decision once with `atlas review --id ... --binding ... --decision approve --reviewer ... --note ...`. A later rejection or changed manifest binding blocks release.
+4. Record the `atlas_release` publication allowlist once with `atlas allow-release --reviewer ... --note ...`.
 5. Export with an explicit non-placeholder HTTPS origin: `cargo run --locked -p pnull-cli -- --site-url "$PNUL_SITE_URL" atlas export`.
 
-Set `PNUL_SITE_URL` to the actual deployment origin. The exporter validates all gates before atomically replacing the output. The public snapshot has `preview:false`, `demo:false`, reviewed evidence, and a shareable `decision.html?decision=co-colorado-springs-25-581-2025-11-25` link.
+Set `PNUL_SITE_URL` to the actual deployment origin. The exporter verifies every preserved byte digest, JSON locator, vote, identity, and privacy rule automatically before atomically replacing the output. The public snapshot has `preview:false`, `demo:false`, `SOURCE_VERIFIED` evidence, case-level release metadata, and a shareable `decision.html?decision=co-colorado-springs-25-581-2025-11-25` link. `SOURCE_VERIFIED` does not claim a person approved each individual record.
 
 The staff cost presentation names Axon and Flock systems as context. Those records do not establish that this ordinance approved a named vendor contract, award, or payment. The static graph therefore has no contract-approval edge. It keeps technology context and an explicit unresolved question for later research.

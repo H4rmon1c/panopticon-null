@@ -141,6 +141,8 @@ cargo run --locked -p pnull-cli -- build-site --output /absolute/path/to/site
 
 The first Chino approval chain is an **offline, pending-review ledger**, separate from the Colorado Springs site. It preserves the City's consent-calendar motion, the specific Axon item, five recorded votes, office roles and published term years, and explicit unknowns. See [the approval-chain guide](docs/approval-chain.md) before making public claims.
 
+The first civic atlas release reads a sanitized static JSON snapshot from the Rust exporter. Its Colorado Springs case records Ordinance 25-93 and the 6–3 surcharge vote, with a specific vendor contract explicitly **not established**. The exporter checks source bytes, exact JSON locators, votes, and public text automatically. Atlas release uses one human decision bound to the complete case manifest; it does not require a separate review click for each vote or citation. Individual public evidence is labeled `SOURCE_VERIFIED`, and synthetic demo data is available only through an explicit demo mode. See [atlas export](docs/atlas-export.md) and the [launch case](docs/launch-case.md).
+
 ```console
 cargo run --locked -p pnull-cli -- approval import-chino
 cargo run --locked -p pnull-cli -- approval show <contract-id>

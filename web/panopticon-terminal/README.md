@@ -15,7 +15,7 @@ The public workspace begins with a manually entered town, county, or ZIP code an
 
 - What changed?
 - Where did money go?
-- Who approved it?
+- Who voted?
 - What is being built?
 
 Records include a plain-language public brief, why the record matters, documented connections, and an explicit list of facts the current public record does not yet establish. Unknowns remain unknown instead of being filled with inference.
@@ -29,7 +29,7 @@ Reporter mode adds denser source tooling without changing the underlying claims:
 - Evidence-pack export
 - Citation-pack copy
 - Optional wide-area relationship lens
-- Exact quote, authority, locator, retrieval time, review state, and content digest
+- Exact quote, authority, locator, retrieval time, source-verification state, and content digest
 
 ## Scope and safety boundary
 
@@ -42,24 +42,24 @@ This system maps **institutional power through public records**. It does not pro
 - No pending, rejected, or unpublished claims in the public read model
 - No relationship is presented as established without publication-safe evidence
 
-The interface may be visually powerful. The evidence must remain literal, review-bound, and one click away.
+The interface may be visually powerful. The evidence must remain literal, source-bound, and one click away.
 
 ## Data boundary
 
-The browser loads the reviewed static snapshot at `public/public-snapshot.json` by default. The checked-in file is an empty published dataset. The Colorado Springs draft stays in private preview until publication review completes. A missing or invalid public snapshot produces an unavailable state; it never substitutes synthetic data.
+The browser loads the released static snapshot at `public/public-snapshot.json` by default. The checked-in file is an empty published dataset. The Colorado Springs draft stays in private preview until the case-level release gate completes. A missing or invalid public snapshot produces an unavailable state; it never substitutes synthetic data.
 
-`?demo=1` loads only `mock/public-snapshot.json`. All bundled demo entities and sources are synthetic. For owner-only editorial QA, `?preview=1` loads `preview-snapshot.json` and displays a prominent pending-review label. The preview file is gitignored and must be supplied only to the private build.
+`?demo=1` loads only `mock/public-snapshot.json`. All bundled demo entities and sources are synthetic. For owner-only editorial QA, `?preview=1` loads `preview-snapshot.json` and displays a prominent pending-case-release label. The preview file is gitignored and must be supplied only to the private build.
 
 The shareable decision route is `decision.html?decision=<stable-id>`. A decision dossier in the atlas links to that route. It shows each sourced relationship, recorded votes on the ordinance, exact evidence locators and digests, corrections, and specific links still not established. It does not turn a funding ordinance into an inferred vendor contract.
 
-After human approval, the Rust CLI writes the release artifact with `cargo run -p pnull-cli -- --site-url "$PNUL_SITE_URL" atlas export --output /absolute/path/to/web/panopticon-terminal/public/public-snapshot.json`. Draft editorial QA uses `atlas export --preview --output /absolute/path/to/web/panopticon-terminal/preview-snapshot.json` and only a private site build. Run the publisher's requirements, claim reviews, release review, and allow-release gate before the public export. See the Rust repository's `docs/atlas-export.md` for the gate sequence.
+After source verification and one case-level release approval, the Rust CLI writes the release artifact with `cargo run -p pnull-cli -- --site-url "$PNUL_SITE_URL" atlas export --output /absolute/path/to/web/panopticon-terminal/public/public-snapshot.json`. Draft editorial QA uses `atlas export --preview --output /absolute/path/to/web/panopticon-terminal/preview-snapshot.json` and only a private site build. Run the publisher's requirements and allow-release gate before the public export. Individual evidence records carry verification digests; the snapshot carries the case release decision. See the Rust repository's `docs/atlas-export.md` for the gate sequence.
 
 The intended same-VPS architecture remains:
 
 ```text
 private collector state
         |
-review + publication gates
+source verification + case release gate
         |
 sanitized atomic public snapshot
         |

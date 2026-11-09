@@ -1,9 +1,9 @@
 function updateCivicContext(entity = currentState().selected) {
   if (!entity) {
     const brief = civic$("#civic-brief-text");
-    if (brief) brief.textContent = "No reviewed decisions have been published yet.";
+    if (brief) brief.textContent = "No source-verified cases have been released yet.";
     const proof = civic$("#civic-brief-proof");
-    if (proof) proof.textContent = "A pending case stays out of the public atlas until publication review is complete.";
+    if (proof) proof.textContent = "A pending case stays out of the public atlas until its release gate is complete.";
     updatePlaceLabel();
     return;
   }
@@ -145,7 +145,7 @@ async function exportEvidencePacket() {
   const packet = {
     exported_at: new Date().toISOString(),
     application: "PANOPTICON.FAIL",
-    publication_boundary: "sanitized public dataset only",
+    publication_boundary: snapshot.mode === "preview" ? "private case pending release" : snapshot.mode === "demo" ? "synthetic demonstration" : "source-verified released public dataset",
     entity,
     sources,
     evidence,
@@ -167,7 +167,7 @@ async function copyCitationPack() {
   if (!entity) return announce("SELECT A RECORD FIRST");
   const sources = (entity.source_ids ?? []).map((id) => snapshot.sources?.get?.(id)).filter(Boolean);
   const lines = [
-    `PANOPTICON.FAIL PUBLIC RECORD: ${entity.name}`,
+    `PANOPTICON.FAIL ${snapshot.mode === "preview" ? "PRIVATE CASE PREVIEW" : snapshot.mode === "demo" ? "SYNTHETIC DEMONSTRATION" : "RELEASED PUBLIC CASE"}: ${entity.name}`,
     `Record ID: ${entity.id}`,
     `Permanent link: ${location.href}`,
     "",

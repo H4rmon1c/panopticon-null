@@ -4,7 +4,7 @@ Status: future read-only API proposal. The current atlas reads a gated static JS
 
 Base path: `/api/v1`
 
-This document defines a possible future public, read-only boundary for the PANOPTICON.FAIL Civic Intelligence Atlas. The API is not an administrative interface and must never query Panopticon's private working database on behalf of a public request. Every response comes from a sanitized publication artifact created only after review and publication gates succeed.
+This document defines a possible future public, read-only boundary for the PANOPTICON.FAIL Civic Intelligence Atlas. The API is not an administrative interface and must never query Panopticon's private working database on behalf of a public request. Every response comes from a sanitized publication artifact created only after source verification and a case-level release gate succeed.
 
 ## Product model
 
@@ -18,9 +18,9 @@ Presentation mode never changes which claims are public.
 ## Publication invariants
 
 1. Collection does not imply publication.
-2. Every public claim has a current approved review binding.
+2. Every public claim has a source-verification digest bound to preserved source bytes.
 3. Every public claim points to a source and exact evidence locator.
-4. No pending, rejected, superseded, stale, or mismatched review is exposed.
+4. No pending case release or stale, superseded, or mismatched source verification is exposed.
 5. No collector credentials, operator notes, internal paths, reconciliation candidates, private source configuration, or unpublished evidence appear in responses.
 6. Public IDs are stable and safe for URLs.
 7. A failed publish leaves the previous public dataset untouched.
@@ -29,7 +29,7 @@ Presentation mode never changes which claims are public.
 10. People appear only in documented public or organizational roles; private-person surveillance is outside this API.
 11. Unknowns remain explicit and must not be converted into allegations.
 
-A future publisher should build `public.sqlite.tmp`, validate it, fsync it, then atomically replace `public.sqlite`. The API should reopen or reload only after a complete successful replacement.
+A future publisher should build a sanitized public artifact, validate it, then replace the previous artifact atomically. The API should reopen or reload only after a complete successful replacement.
 
 ## Core objects
 
@@ -161,7 +161,7 @@ The browser should not request device geolocation. A place is selected through d
 }
 ```
 
-Activity is publication activity, not a raw collector log. It must not reveal records that failed or are waiting for review.
+Activity is publication activity, not a raw collector log. It must not reveal records from a case still pending release.
 
 ## `GET /entities?limit=100&sort=updated`
 
@@ -260,18 +260,18 @@ Every public fact, relationship, and timeline event should be evidence-addressab
   "id": "evidence_...",
   "source_id": "source_...",
   "claim": "The public claim text.",
-  "quote": "The exact approved source excerpt.",
+  "quote": "The exact source excerpt.",
   "locator": "Page 14 · large-load allocations",
   "page": 14,
   "authority": "OFFICIAL UTILITY RECORD",
   "retrieved_at": "2026-09-02T19:30:12Z",
   "sha256": "...",
-  "review_state": "APPROVED",
-  "review_bound_digest": "sha256:..."
+  "review_state": "SOURCE_VERIFIED",
+  "verification_digest": "sha256:..."
 }
 ```
 
-Only fields approved for publication may appear. If exact quoted text is not approved for public display, the evidence record must not be published merely because the surrounding claim is approved.
+Only source-verified fields from a released case may appear. A field must not be published merely because its source was collected; the case release gate applies to the complete public snapshot.
 
 ## `GET /sources/<id>`
 
@@ -289,11 +289,11 @@ Only fields approved for publication may appear. If exact quoted text is not app
 }
 ```
 
-`canonical_url` must be an approved public `https://` URL or an internal canonical evidence route deliberately published by Panopticon. The frontend independently refuses non-HTTP(S) schemes.
+`canonical_url` must be a vetted public `https://` URL or an internal canonical evidence route deliberately published by Panopticon. The frontend requires HTTPS.
 
 ## Explicit unknowns
 
-The UI currently derives unknowns conservatively from absent public fields. The preferred production model is for the publisher to emit reviewable unknown-state records:
+The UI currently derives unknowns conservatively from absent public fields. The preferred production model is for the publisher to emit explicit unknown-state records:
 
 ```json
 {

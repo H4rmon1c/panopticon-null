@@ -1,7 +1,7 @@
 //! Deterministic, reviewed static data for the public atlas.
 //!
 //! The input is a small, versioned editorial manifest. Its claims are checked
-//! against preserved raw bytes, then separately bound to human review decisions.
+//! against preserved raw bytes, then bound to one case-level human release decision.
 //! Preview output is explicitly marked and cannot be mistaken for a release.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -192,7 +192,7 @@ struct Validated {
     sources: BTreeMap<String, Value>,
 }
 
-/// Inspect the exact claim and release bindings a human must approve. Merely
+/// Inspect the exact case-level release binding a human must approve. Merely
 /// calling this function never records a review or creates an allowlist.
 pub fn review_requirements(
     manifest_path: &Path,
@@ -591,31 +591,7 @@ fn source_id(proof: &Proof) -> String {
 }
 
 fn requirements(checked: &Validated) -> Vec<AtlasReviewRequirement> {
-    let mut result = checked
-        .claims
-        .iter()
-        .map(|claim| AtlasReviewRequirement {
-            id: stable_id("atlas-claim", &[&checked.manifest.case_id, &claim.key]),
-            bound_digest: review_digest(
-                "atlas-claim-binding",
-                &[
-                    &checked.manifest.case_id,
-                    &claim.key,
-                    &claim.proof.url,
-                    &claim.proof.sha256,
-                    &claim.locator,
-                    &claim.quote,
-                    &claim.summary,
-                ],
-            ),
-            kind: "claim".to_owned(),
-            summary: claim.summary.clone(),
-            source_url: claim.proof.url.clone(),
-            locator: claim.locator.clone(),
-            source_sha256: claim.proof.sha256.clone(),
-        })
-        .collect::<Vec<_>>();
-    result.push(AtlasReviewRequirement {
+    vec![AtlasReviewRequirement {
         id: stable_id("atlas-release", &[&checked.manifest.case_id]),
         bound_digest: review_digest("atlas-release-binding", &[&checked.manifest_digest]),
         kind: "release".to_owned(),
@@ -623,8 +599,22 @@ fn requirements(checked: &Validated) -> Vec<AtlasReviewRequirement> {
         source_url: String::new(),
         locator: String::new(),
         source_sha256: checked.manifest_digest.clone(),
-    });
-    result
+    }]
+}
+
+fn claim_verification_digest(case_id: &str, claim: &Claim) -> String {
+    review_digest(
+        "atlas-source-verification",
+        &[
+            case_id,
+            &claim.key,
+            &claim.proof.url,
+            &claim.proof.sha256,
+            &claim.locator,
+            &claim.quote,
+            &claim.summary,
+        ],
+    )
 }
 
 fn review_digest(namespace: &str, parts: &[&str]) -> String {
@@ -648,7 +638,7 @@ fn production_gate(
     }
     if checked.manifest.review_state != "approved" {
         return Err(AtlasError::Review(
-            "manifest is pending editorial review".to_owned(),
+            "manifest is pending case-level release review".to_owned(),
         ));
     }
     if !publication_allowlist_allows(store, ATLAS_RELEASE_CATEGORY)
@@ -675,23 +665,22 @@ fn production_gate(
             "canonical site URL must be a non-placeholder HTTPS origin".to_owned(),
         ));
     }
-    for req in required {
-        let current = store.current_review(&req.id)?;
-        let Some(decision) = current else {
-            return Err(AtlasError::Review(format!(
-                "{} lacks review: {}",
-                req.kind, req.id
-            )));
-        };
-        if decision.state != ReviewState::Approved
-            || decision.bound_digest != req.bound_digest
-            || !human_reviewer(&decision.reviewer)
-        {
-            return Err(AtlasError::Review(format!(
-                "{} lacks current human approval: {}",
-                req.kind, req.id
-            )));
-        }
+    let req = required.first().expect("one release requirement");
+    let current = store.current_review(&req.id)?;
+    let Some(decision) = current else {
+        return Err(AtlasError::Review(format!(
+            "case lacks release review: {}",
+            req.id
+        )));
+    };
+    if decision.state != ReviewState::Approved
+        || decision.bound_digest != req.bound_digest
+        || !human_reviewer(&decision.reviewer)
+    {
+        return Err(AtlasError::Review(format!(
+            "case lacks current human release approval: {}",
+            req.id
+        )));
     }
     Ok(())
 }
@@ -713,29 +702,6 @@ fn human_reviewer(reviewer: &str) -> bool {
         .any(|part| lower.contains(part))
 }
 
-fn review_info(store: &Store, req: &AtlasReviewRequirement) -> Result<(String, Value), AtlasError> {
-    let history = store.reviews_for_citation(&req.id)?;
-    let state = match history.last() {
-        Some(last)
-            if last.bound_digest == req.bound_digest
-                && last.state == ReviewState::Approved
-                && human_reviewer(&last.reviewer) =>
-        {
-            "APPROVED"
-        }
-        Some(last) if last.state == ReviewState::Rejected => "REJECTED",
-        Some(last) if last.state == ReviewState::Superseded => "SUPERSEDED",
-        Some(last) if last.state == ReviewState::NeedsContext => "NEEDS_CONTEXT",
-        _ => "PENDING",
-    };
-    let corrections = history
-        .iter()
-        .filter(|review| review.state != ReviewState::Approved)
-        .map(|review| json!({"state":review.state.label(), "at":review.decided_at}))
-        .collect::<Vec<_>>();
-    Ok((state.to_owned(), Value::Array(corrections)))
-}
-
 #[allow(clippy::too_many_lines)]
 fn snapshot(
     store: &Store,
@@ -750,19 +716,42 @@ fn snapshot(
     let jurisdiction_id = format!("jurisdiction_{}", m.jurisdiction.id.replace('-', "_"));
     let agency_id = format!("agency_{}", m.agency.id.replace('-', "_"));
     let mut evidence = Vec::new();
+    let evidence_state = if preview {
+        "PENDING_RELEASE"
+    } else {
+        "SOURCE_VERIFIED"
+    };
     let mut by_key = BTreeMap::<String, (String, String, Value)>::new();
-    for (claim, req) in checked.claims.iter().zip(required.iter()) {
+    for claim in &checked.claims {
         let id = format!("evidence_{}", claim.key);
-        let (review_state, corrections) = review_info(store, req)?;
+        let review_state = evidence_state.to_owned();
+        let corrections = json!([]);
         evidence.push(json!({
             "id":id, "source_id":source_id(&claim.proof), "claim":claim.summary,
             "quote":claim.quote, "locator":claim.locator,
             "authority":"City of Colorado Springs", "retrieved_at":null,
             "sha256":claim.proof.sha256, "review_state":review_state,
-            "review_bound_digest":req.bound_digest, "corrections":corrections,
+            "verification_digest":claim_verification_digest(&m.case_id, claim), "corrections":corrections,
         }));
         by_key.insert(claim.key.clone(), (id, review_state, corrections));
     }
+    let release_requirement = required.first().expect("one release requirement");
+    let release_history = store.reviews_for_citation(&release_requirement.id)?;
+    let release_corrections = release_history
+        .iter()
+        .filter(|review| review.state != ReviewState::Approved)
+        .map(|review| json!({"state":review.state.label(), "at":review.decided_at}))
+        .collect::<Vec<_>>();
+    let release_review = if preview {
+        json!({"state":"PENDING_RELEASE", "bound_digest":release_requirement.bound_digest,
+            "reviewed_at":null, "corrections":release_corrections})
+    } else {
+        let current = release_history
+            .last()
+            .expect("production gate checked release review");
+        json!({"state":"APPROVED", "bound_digest":release_requirement.bound_digest,
+            "reviewed_at":current.decided_at, "corrections":release_corrections})
+    };
     let link = |key: &str| by_key.get(key).expect("validated claim exists");
     let j = link("jurisdiction");
     let a = link("agency");
@@ -910,12 +899,13 @@ fn snapshot(
         "schema_version":"pnull-public-snapshot-v1", "demo":m.synthetic,
         "preview":preview,
         "status":{
-            "state":if preview {"pending_review"} else {"approved"},
+            "state":if preview {"pending_release"} else {"released"},
             "dataset_version":checked.manifest_digest, "last_ingest":null,
             "last_publish":null, "manifest_digest":checked.manifest_digest,
             "counts":{"entities":entities.len(),"records":evidence.len(),
                 "sources":checked.sources.len(),"relationships":relationship_count},
         },
+        "release_review":release_review,
         "activity":[], "entities":entities, "evidence":evidence,
         "sources":checked.sources.values().collect::<Vec<_>>(),
     }))
@@ -1010,22 +1000,24 @@ mod tests {
         .expect("write manifest");
     }
 
-    fn approve_all(store: &Store, manifest: &Path, reviewer: &str) {
-        for req in review_requirements(manifest).expect("requirements") {
-            let decided_at = "2026-11-09T12:00:00Z".to_owned();
-            let decision = ReviewDecision {
-                id: ReviewDecision::id_for(&req.id, &decided_at),
-                citation_id: req.id,
-                state: ReviewState::Approved,
-                reviewer: reviewer.to_owned(),
-                note: String::new(),
-                bound_digest: req.bound_digest,
-                decision_digest: String::new(),
-                decided_at,
-                supersedes: None,
-            };
-            store.insert_review(&decision).expect("insert review");
-        }
+    fn approve_release(store: &Store, manifest: &Path, reviewer: &str) {
+        let [req] = review_requirements(manifest)
+            .expect("one release requirement")
+            .try_into()
+            .expect("one release requirement");
+        let decided_at = "2026-11-09T12:00:00Z".to_owned();
+        let decision = ReviewDecision {
+            id: ReviewDecision::id_for(&req.id, &decided_at),
+            citation_id: req.id,
+            state: ReviewState::Approved,
+            reviewer: reviewer.to_owned(),
+            note: String::new(),
+            bound_digest: req.bound_digest,
+            decision_digest: String::new(),
+            decided_at,
+            supersedes: None,
+        };
+        store.insert_review(&decision).expect("insert review");
     }
 
     fn allow_release(store: &Store) {
@@ -1053,7 +1045,9 @@ mod tests {
         let data: Value = serde_json::from_slice(&fs::read(one).unwrap()).unwrap();
         assert_eq!(data["preview"], true);
         assert_eq!(data["demo"], false);
-        assert_eq!(data["status"]["state"], "pending_review");
+        assert_eq!(data["status"]["state"], "pending_release");
+        assert_eq!(data["release_review"]["state"], "PENDING_RELEASE");
+        assert!(data["release_review"]["reviewed_at"].is_null());
         let decision = data["entities"]
             .as_array()
             .unwrap()
@@ -1074,7 +1068,9 @@ mod tests {
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|e| e["review_state"] == "PENDING")
+                .all(|e| e["review_state"] == "PENDING_RELEASE"
+                    && e.get("verification_digest").is_some()
+                    && e.get("review_bound_digest").is_none())
         );
     }
 
@@ -1082,22 +1078,15 @@ mod tests {
     fn relative_manifest_path_resolves_preserved_fixtures() {
         let path = Path::new("../../fixtures/atlas/colorado-springs-25-93.v1.json");
         let required = review_requirements(path).expect("relative manifest path");
-        assert_eq!(
-            required.iter().filter(|item| item.kind == "claim").count(),
-            14
-        );
-        assert_eq!(
-            required
-                .iter()
-                .filter(|item| item.kind == "release")
-                .count(),
-            1
-        );
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0].kind, "release");
+        assert!(required[0].bound_digest.starts_with("sha256:"));
     }
 
     #[test]
-    fn pending_and_synthetic_manifests_block_production() {
+    fn absent_case_approval_and_synthetic_case_block_production() {
         let (dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| m["review_state"] = json!("pending"));
         let store = Store::open(dir.path().join("db")).expect("store");
         let output = dir.path().join("public.json");
         fs::write(&output, b"existing approved snapshot").unwrap();
@@ -1112,15 +1101,29 @@ mod tests {
             Err(AtlasError::Review(_))
         ));
         assert_eq!(fs::read(&output).unwrap(), b"existing approved snapshot");
+        allow_release(&store);
+        approve_release(&store, &manifest, "Ada Editor");
+        assert!(matches!(
+            export_atlas(
+                &store,
+                &manifest,
+                &output,
+                AtlasExportMode::Production,
+                Some("https://atlas.test")
+            ),
+            Err(AtlasError::Review(_))
+        ));
         edit_manifest(&manifest, |m| {
             m["review_state"] = json!("approved");
             m["synthetic"] = json!(true);
         });
-        allow_release(&store);
-        approve_all(&store, &manifest, "Ada Editor");
+        let synthetic_store =
+            Store::open(dir.path().join("synthetic-db")).expect("synthetic store");
+        allow_release(&synthetic_store);
+        approve_release(&synthetic_store, &manifest, "Ada Editor");
         assert!(matches!(
             export_atlas(
-                &store,
+                &synthetic_store,
                 &manifest,
                 &output,
                 AtlasExportMode::Production,
@@ -1132,12 +1135,12 @@ mod tests {
     }
 
     #[test]
-    fn allowlist_and_current_human_reviews_gate_release() {
+    fn one_case_review_and_allowlist_gate_release() {
         let (dir, manifest) = copied_case();
         edit_manifest(&manifest, |m| m["review_state"] = json!("approved"));
         let store = Store::open(dir.path().join("db")).expect("store");
         let output = dir.path().join("public.json");
-        approve_all(&store, &manifest, "Ada Editor");
+        allow_release(&store);
         assert!(matches!(
             export_atlas(
                 &store,
@@ -1148,7 +1151,19 @@ mod tests {
             ),
             Err(AtlasError::Review(_))
         ));
-        allow_release(&store);
+        approve_release(&store, &manifest, "Ada Editor");
+        let no_allowlist_store = Store::open(dir.path().join("db-no-allowlist")).expect("store");
+        approve_release(&no_allowlist_store, &manifest, "Ada Editor");
+        assert!(matches!(
+            export_atlas(
+                &no_allowlist_store,
+                &manifest,
+                &output,
+                AtlasExportMode::Production,
+                Some("https://atlas.test")
+            ),
+            Err(AtlasError::Review(_))
+        ));
         export_atlas(
             &store,
             &manifest,
@@ -1159,12 +1174,20 @@ mod tests {
         .expect("reviewed release");
         let data: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
         assert_eq!(data["preview"], false);
+        assert_eq!(data["status"]["state"], "released");
+        assert_eq!(data["release_review"]["state"], "APPROVED");
+        assert_eq!(
+            data["release_review"]["reviewed_at"],
+            "2026-11-09T12:00:00Z"
+        );
         assert!(
             data["evidence"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|e| e["review_state"] == "APPROVED")
+                .all(|e| e["review_state"] == "SOURCE_VERIFIED"
+                    && e.get("verification_digest").is_some()
+                    && e.get("review_bound_digest").is_none())
         );
         let decision = data["entities"]
             .as_array()
@@ -1177,11 +1200,7 @@ mod tests {
             "https://atlas.test/decision.html?decision=co-colorado-springs-25-581-2025-11-25"
         );
         let saved = fs::read(&output).unwrap();
-        let req = review_requirements(&manifest)
-            .unwrap()
-            .into_iter()
-            .find(|r| r.kind == "claim")
-            .unwrap();
+        let req = review_requirements(&manifest).unwrap().remove(0);
         let at = "2026-11-09T13:00:00Z".to_owned();
         store
             .insert_review(&ReviewDecision {
@@ -1228,7 +1247,7 @@ mod tests {
         let store = Store::open(dir.path().join("db")).unwrap();
         let output = dir.path().join("public.json");
         allow_release(&store);
-        approve_all(&store, &manifest, "demo seed");
+        approve_release(&store, &manifest, "demo seed");
         assert!(matches!(
             export_atlas(
                 &store,
@@ -1241,7 +1260,7 @@ mod tests {
         ));
         let store2 = Store::open(dir.path().join("db2")).unwrap();
         allow_release(&store2);
-        approve_all(&store2, &manifest, "Ada Editor");
+        approve_release(&store2, &manifest, "Ada Editor");
         edit_manifest(&manifest, |m| {
             m["unresolved_question"] = json!("Which contracts were later paid?")
         });
@@ -1260,22 +1279,62 @@ mod tests {
     #[test]
     fn source_digest_and_public_private_data_are_rejected() {
         let (dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| m["review_state"] = json!("approved"));
+        let store = Store::open(dir.path().join("approved-db")).expect("store");
+        allow_release(&store);
+        approve_release(&store, &manifest, "Ada Editor");
+        let output = dir.path().join("public.json");
+        fs::write(&output, b"previous published bytes").expect("sentinel");
         let fixture = dir.path().join("fixtures/co/votes-103550-final-vote.json");
         fs::write(&fixture, b"changed raw bytes").unwrap();
         assert!(matches!(
             review_requirements(&manifest),
             Err(AtlasError::Source(_))
         ));
+        assert!(matches!(
+            export_atlas(
+                &store,
+                &manifest,
+                &output,
+                AtlasExportMode::Production,
+                Some("https://atlas.test")
+            ),
+            Err(AtlasError::Source(_))
+        ));
+        assert_eq!(fs::read(&output).unwrap(), b"previous published bytes");
         let (_dir2, manifest2) = copied_case();
         edit_manifest(&manifest2, |m| {
             m["decision"]["summary"] = json!("Call resident@example.com about this decision")
         });
-        let store = Store::open(tempfile::tempdir().unwrap().path()).unwrap();
+        let private_store_dir = tempfile::tempdir().unwrap();
+        let private_store = Store::open(private_store_dir.path()).unwrap();
         let output = manifest2.with_extension("preview.json");
         assert!(matches!(
-            export_atlas(&store, &manifest2, &output, AtlasExportMode::Preview, None),
+            export_atlas(
+                &private_store,
+                &manifest2,
+                &output,
+                AtlasExportMode::Preview,
+                None
+            ),
             Err(AtlasError::Privacy(_))
         ));
         assert!(!output.exists());
+        let (_dir3, manifest3) = copied_case();
+        edit_manifest(&manifest3, |m| {
+            m["votes"][0]["proof"]["name_locator"] = json!("$[1].VotePersonName");
+        });
+        assert!(matches!(
+            review_requirements(&manifest3),
+            Err(AtlasError::Source(_))
+        ));
+        let (_dir4, manifest4) = copied_case();
+        edit_manifest(&manifest4, |m| {
+            m["contract_link"]["state"] = json!("approved");
+        });
+        assert!(matches!(
+            review_requirements(&manifest4),
+            Err(AtlasError::Manifest(_))
+        ));
     }
 }

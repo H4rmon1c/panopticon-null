@@ -18,7 +18,7 @@ The checked-in public snapshot is empty. Pending Colorado Springs work is export
 
 ## Release sequence
 
-From the Rust repository root, run `atlas requirements`, complete human claim and release review, then `atlas allow-release`. Set the canonical site URL explicitly and export to the static site:
+From the Rust repository root, run `atlas requirements`, verify source bindings, complete one case-level release decision, then `atlas allow-release`. Set the canonical site URL explicitly and export to the static site:
 
 ```console
 cargo run -p pnull-cli -- --site-url "$PNUL_SITE_URL" atlas export --output /absolute/path/to/web/panopticon-terminal/public/public-snapshot.json
@@ -26,7 +26,7 @@ node web/panopticon-terminal/scripts/validate.mjs
 node --test web/panopticon-terminal/scripts/test-client.mjs
 ```
 
-The release exporter must reject pending, stale, superseded, and mismatched reviews. Deploy the validated site and snapshot together. A failed export leaves the previous public dataset in place.
+The release exporter must reject missing source verification and a pending or mismatched case release. Deploy the validated site and snapshot together. A failed export leaves the previous public dataset in place.
 
 For owner-only editorial QA, the Rust CLI can write `preview-snapshot.json` with `atlas export --preview --output ...`; serve it only in a private site and open `?preview=1`. `?demo=1` selects the separate synthetic fixture. Neither mode is an automatic fallback.
 
@@ -36,4 +36,4 @@ Use separate Unix users for the collector and static web server. The web server 
 
 Jurisdiction and agency points are coarse map anchors, not precise sites. The relationship canvas is schematic. The browser does not request device location. People are shown only in documented public roles.
 
-A read-only API may follow when the released dataset grows. It must read only a sanitized public artifact and retain the same review gates; the draft interface is in [`api-contract.md`](api-contract.md).
+A read-only API may follow when the released dataset grows. It must read only a sanitized public artifact and retain the same source-verification and case-release gates; the draft interface is in [`api-contract.md`](api-contract.md).

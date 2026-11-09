@@ -66,7 +66,7 @@ export function buildDecisionModel(snapshot, requestedId) {
     .map((item) => typeof item === "string" ? item : item?.detail ?? item?.text ?? item?.description)
     .filter(Boolean);
   if (!contracts.length && !unknowns.some((item) => /contract|award|vendor/i.test(item))) {
-    unknowns.unshift("A specific vendor contract or award connected to this decision is not established in the reviewed record.");
+    unknowns.unshift("A specific vendor contract or award connected to this decision is not established in the source record.");
   }
   if (!votes.length && !unknowns.some((item) => /recorded vote|individual vote|signature/i.test(item))) {
     unknowns.push("An individual recorded vote or signature is not established in this dataset.");
@@ -93,7 +93,7 @@ function addNotice(mode) {
   if (mode === "public") return;
   const label = mode === "demo"
     ? "SYNTHETIC DEMONSTRATION — THESE RECORDS DO NOT DESCRIBE REAL PEOPLE OR CONTRACTS."
-    : "PRIVATE EDITORIAL PREVIEW — PENDING REVIEW. DO NOT SHARE AS A PUBLISHED FINDING.";
+    : "PRIVATE EDITORIAL PREVIEW — CASE PENDING RELEASE. DO NOT SHARE AS A PUBLISHED FINDING.";
   page.append(node("div", `notice ${mode === "demo" ? "demo" : ""}`, label));
 }
 
@@ -213,9 +213,10 @@ function renderEvidence(model, mode) {
     card.id = `evidence-${item.id}`;
     card.append(node("h3", "", item.claim ?? "Recorded claim"));
     if (item.quote) card.append(node("blockquote", "", item.quote));
-    card.append(node("p", "review", `${item.review_state ?? "REVIEW UNKNOWN"} · ${source?.authority ?? item.authority ?? "SOURCE"}`));
+    const verificationLabel = mode === "demo" ? "SYNTHETIC DEMO" : item.review_state === "SOURCE_VERIFIED" ? "SOURCE VERIFIED" : "PENDING CASE RELEASE";
+    card.append(node("p", "review", `${verificationLabel} · ${source?.authority ?? item.authority ?? "SOURCE"}`));
     card.append(node("p", "locator", `${source?.title ?? item.source_id} · ${item.locator}`));
-    card.append(node("p", "digest", `Preserved SHA-256: ${item.sha256} · Review binding: ${item.review_bound_digest}`));
+    card.append(node("p", "digest", `Preserved SHA-256: ${item.sha256} · Verification binding: ${item.verification_digest}`));
     if (source && mode !== "demo") card.append(publicLink(source.canonical_url, "Open original public source ↗"));
     if (mode === "demo") card.append(node("p", "empty", "Synthetic source · demonstration only"));
     panel.append(card);
@@ -254,8 +255,8 @@ function renderDecision(model, snapshot, mode) {
   page.append(node("h1", "", model.decision.name));
   if (model.decision.description) page.append(node("p", "lead", model.decision.description));
   const meta = node("div", "meta");
-  addMeta(meta, `Review: ${mode === "preview" ? "PENDING PUBLICATION" : mode === "demo" ? "SYNTHETIC DEMO" : "PUBLISHED"}`);
-  if (model.decision.status) addMeta(meta, model.decision.status);
+  addMeta(meta, `Case release: ${mode === "preview" ? "PENDING" : mode === "demo" ? "SYNTHETIC DEMO" : "APPROVED"}`);
+  if (mode === "public") addMeta(meta, "Sources: VERIFIED");
   const date = model.decision.date ?? model.decision.timeline?.[0]?.date;
   if (date) addMeta(meta, `Decision date: ${date}`);
   if (snapshot.status?.last_publish) addMeta(meta, `Snapshot: ${snapshot.status.last_publish}`);
@@ -273,10 +274,10 @@ function renderDecision(model, snapshot, mode) {
   page.append(grid);
   document.title = `${model.decision.name} | PANOPTICON.FAIL`;
   if (mode === "public") {
-    const canonical = node("link");
+    const canonical = document.querySelector('link[rel="canonical"]') ?? node("link");
     canonical.rel = "canonical";
     canonical.href = `${location.origin}${location.pathname}?decision=${encodeURIComponent(model.decision.slug ?? model.decision.id)}`;
-    document.head.append(canonical);
+    if (!canonical.isConnected) document.head.append(canonical);
   }
 }
 
@@ -290,7 +291,7 @@ async function main() {
     addNotice(client.mode);
     page.append(node("h1", "", "Published decisions"));
     const decisions = snapshot.entities.filter((item) => String(item.type).toUpperCase() === "DECISION");
-    if (!decisions.length) page.append(node("p", "empty", "No reviewed decisions have been published yet."));
+    if (!decisions.length) page.append(node("p", "empty", "No source-verified cases have been released yet."));
     const list = node("ul", "source-list");
     for (const item of decisions) {
       const link = node("a", "", item.name);

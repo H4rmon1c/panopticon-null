@@ -126,8 +126,8 @@ if (snapshot) {
   for (const [id, record] of evidence) {
     if (record.demo !== true) failures.push(`evidence ${id}: demo must be true`);
     if (!sources.has(record.source_id)) failures.push(`evidence ${id}: missing source ${record.source_id}`);
-    if (record.review_state !== "APPROVED") failures.push(`evidence ${id}: public demo evidence must be APPROVED`);
-    if (!record.review_bound_digest?.startsWith("sha256:")) failures.push(`evidence ${id}: missing review binding digest`);
+    if (record.review_state !== "DEMO") failures.push(`evidence ${id}: synthetic evidence must be DEMO`);
+    if (!record.verification_digest?.startsWith("sha256:")) failures.push(`evidence ${id}: missing verification digest`);
     if (!record.sha256?.match(/^[a-f0-9]{64}$/)) failures.push(`evidence ${id}: invalid source sha256`);
   }
 
@@ -137,7 +137,13 @@ if (snapshot) {
 }
 
 try {
-  validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
+  const published = validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
+  const decision = published.entities.find((entity) => entity.type === "DECISION");
+  if (decision?.share_url) {
+    const socialUrl = decisionHtml.match(/property="og:url" content="([^"]+)"/)?.[1];
+    if (socialUrl !== decision.share_url) failures.push("decision.html: social URL differs from the released decision URL");
+    if (!decisionHtml.includes('name="twitter:card" content="summary"')) failures.push("decision.html: missing X summary card metadata");
+  }
 } catch (error) {
   failures.push(`public/public-snapshot.json: ${error.message}`);
 }

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "case_id": "co-colorado-springs-25-581-2025-11-25",
   "synthetic": false,
-  "review_state": "pending",
+  "review_state": "approved",
   "jurisdiction": {
     "id": "co-colorado-springs",
     "name": "Colorado Springs, Colorado",
@@ -311,5 +311,5 @@
     }
   },
   "unresolved_question": "Which specific contracts and payments, if any, will be funded from the surcharge proceeds?",
-  "publication_note": "Source facts checked against preserved bytes; separate human publication review is required."
+  "publication_note": "Case-level public release approved by h4rmon1c in Codex chat on 2026-11-09; individual claims are source-verified by the exporter."
 }

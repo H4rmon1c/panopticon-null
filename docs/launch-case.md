@@ -1,10 +1,10 @@
 # Colorado Springs launch case: Ordinance 25-93
 
-**Editorial status:** source facts verified against preserved official records; public release review is still pending. This is a decision about a Police Department Technology Surcharge. It is **not** a vote on an Axon or Flock contract.
+**Editorial status:** source facts checked against preserved official records; h4rmon1c approved the case-level release on November 9, 2026. The production snapshot has been generated. Public access on `panopticon.fail` awaits domain verification. This is a decision about a Police Department Technology Surcharge. It is **not** a vote on an Axon or Flock contract.
 
 ## Short evidence card
 
-**Colorado Springs City Council voted 6–3 on November 25, 2025, to amend city code to assess a police technology surcharge.** The signed ordinance directs surcharge proceeds to police technology systems. A staff presentation for the same matter listed Axon body cameras, digital evidence and AI transcription, and Flock vehicle-intelligence cameras among its 2026 major systems costs. The reviewed records do **not establish a named vendor contract, award, payment, or deployment caused by this vote.**
+**Colorado Springs City Council voted 6–3 on November 25, 2025, to amend city code to assess a police technology surcharge.** The signed ordinance directs surcharge proceeds to police technology systems. A staff presentation for the same matter listed Axon body cameras, digital evidence and AI transcription, and Flock vehicle-intelligence cameras among its 2026 major systems costs. The checked records do **not establish a named vendor contract, award, payment, or deployment caused by this vote.**
 
 **Unresolved question:** Which specific contracts and payments, if any, will be funded from the surcharge proceeds?
 
@@ -41,14 +41,14 @@ Replace the placeholder only after the decision page is live and its proof links
 
 ## Static atlas release workflow
 
-The manifest at [`fixtures/atlas/colorado-springs-25-93.v1.json`](../fixtures/atlas/colorado-springs-25-93.v1.json) is source-verified but has `review_state: pending`. A preview export is a separate, gitignored editorial artifact:
+The manifest at [`fixtures/atlas/colorado-springs-25-93.v1.json`](../fixtures/atlas/colorado-springs-25-93.v1.json) has `review_state: approved`, with one case-level release decision bound to its complete digest. A preview export remains a separate, gitignored editorial artifact:
 
 ```console
 cargo run --locked -p pnull-cli -- atlas requirements
 cargo run --locked -p pnull-cli -- atlas export --preview
 ```
 
-Before a public release, a human must inspect each requirement's cited official record, exact locator, saved digest, and proposed wording. After that check, change the manifest's `review_state` to `approved` and run `atlas requirements` again. The edit changes the whole-release binding. Record each claim and the distinct release decision with the displayed `id` and current `binding`:
+Before public release, check the case and its proposed wording. The exporter checks each saved digest and JSON locator automatically. After the case check, change the manifest's `review_state` to `approved` and run `atlas requirements` again. Record the **one case-level release decision** with its displayed `id` and current `binding`:
 
 ```console
 cargo run --locked -p pnull-cli -- atlas review \
@@ -64,4 +64,4 @@ cargo run --locked -p pnull-cli -- atlas allow-release \
 cargo run --locked -p pnull-cli -- --site-url https://<actual-site-origin> atlas export
 ```
 
-The production export atomically writes `web/panopticon-terminal/public/public-snapshot.json` only when all gates pass. It rejects demo reviewers, pending or stale decisions, a missing `atlas_release` allowlist, a changed source digest, and a placeholder site URL. Check the decision page and every proof link after deployment, then manually review and post the short X copy. No X token or automated posting is part of this launch.
+The production export atomically writes `web/panopticon-terminal/public/public-snapshot.json` only when all gates pass. It rejects demo reviewers, a pending or stale case-level release, a missing `atlas_release` allowlist, a changed source digest, and a placeholder site URL. It labels individual evidence `SOURCE_VERIFIED`, without implying per-record human approval. Check the decision page and proof links after deployment, then manually review and post the short X copy. No X token or automated posting is part of this launch.

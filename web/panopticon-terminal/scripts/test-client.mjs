@@ -12,14 +12,30 @@ const clone = (value) => structuredClone(value);
 function publicFixture() {
   const snapshot = clone(demo);
   snapshot.demo = false;
-  snapshot.status.state = "ok";
+  snapshot.status.state = "released";
+  snapshot.release_review = { state: "APPROVED", bound_digest: `sha256:${"a".repeat(64)}`, reviewed_at: "2026-11-09T00:00:00Z" };
   for (const source of snapshot.sources) delete source.demo;
-  for (const record of snapshot.evidence) delete record.demo;
-  for (const entity of snapshot.entities) entity.tags = (entity.tags ?? []).filter((tag) => tag !== "DEMO DATA");
+  for (const record of snapshot.evidence) { delete record.demo; record.review_state = "SOURCE_VERIFIED"; }
+  for (const entity of snapshot.entities) {
+    entity.tags = (entity.tags ?? []).filter((tag) => tag !== "DEMO DATA");
+    for (const item of [...(entity.relationships ?? []), ...(entity.attributes ?? []), ...(entity.timeline ?? []), ...(entity.votes ?? []), ...(entity.technology_context ?? [])]) item.review_state = "SOURCE_VERIFIED";
+  }
   return snapshot;
 }
 
-test("default client loads only the reviewed static snapshot", async () => {
+function previewFixture() {
+  const snapshot = publicFixture();
+  snapshot.preview = true;
+  snapshot.status.state = "pending_release";
+  snapshot.release_review = { state: "PENDING_RELEASE", bound_digest: `sha256:${"b".repeat(64)}`, reviewed_at: null };
+  for (const record of snapshot.evidence) record.review_state = "PENDING_RELEASE";
+  for (const entity of snapshot.entities) {
+    for (const item of [...(entity.relationships ?? []), ...(entity.attributes ?? []), ...(entity.timeline ?? []), ...(entity.votes ?? []), ...(entity.technology_context ?? [])]) item.review_state = "PENDING_RELEASE";
+  }
+  return snapshot;
+}
+
+test("default client loads only the case-released static snapshot", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
   globalThis.fetch = async (url) => {
@@ -44,7 +60,7 @@ test("missing public snapshot never falls back to synthetic data", async () => {
     return { ok: false, status: 404 };
   };
   try {
-    await assert.rejects(new PanopticonClient().bootstrap(), /reviewed public snapshot \(404\)/);
+    await assert.rejects(new PanopticonClient().bootstrap(), /released public snapshot \(404\)/);
     assert.deepEqual(requested, ["./public/public-snapshot.json"]);
   } finally { globalThis.fetch = originalFetch; }
 });
@@ -54,12 +70,7 @@ test("demonstration and private preview require explicit modes", async () => {
   const requested = [];
   globalThis.fetch = async (url) => {
     requested.push(url);
-    const snapshot = url.includes("preview") ? publicFixture() : clone(demo);
-    if (url.includes("preview")) {
-      snapshot.preview = true;
-      snapshot.status.state = "pending_review";
-      snapshot.evidence[0].review_state = "PENDING";
-    }
+    const snapshot = url.includes("preview") ? previewFixture() : clone(demo);
     return { ok: true, json: async () => snapshot };
   };
   try {
@@ -70,10 +81,18 @@ test("demonstration and private preview require explicit modes", async () => {
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("published data rejects pending review, demo sources, and unsupported links", () => {
-  const pending = publicFixture();
-  pending.status.state = "pending_review";
-  assert.throws(() => validateSnapshot(pending), /Pending-review/);
+test("published data requires case release, source verification, and supported links", () => {
+  const pending = previewFixture();
+  assert.throws(() => validateSnapshot(pending), /Preview and published datasets/);
+  const unreleased = publicFixture();
+  unreleased.release_review.state = "PENDING_RELEASE";
+  assert.throws(() => validateSnapshot(unreleased), /approved case release/);
+  const unverified = publicFixture();
+  unverified.evidence[0].review_state = "PENDING_RELEASE";
+  assert.throws(() => validateSnapshot(unverified), /source-verification state/);
+  const missingBinding = publicFixture();
+  missingBinding.evidence[0].verification_digest = "";
+  assert.throws(() => validateSnapshot(missingBinding), /verification digest/);
   const mixed = publicFixture();
   mixed.sources[0].demo = true;
   assert.throws(() => validateSnapshot(mixed), /demonstration boundary/);
