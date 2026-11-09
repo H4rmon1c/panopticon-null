@@ -1,6 +1,6 @@
 # Fixture provenance
 
-The Colorado fixtures are exact bytes retrieved from official public endpoints on 2026-08-16 with one request at a time and no authentication, access-control bypass, or browser automation.
+The Colorado fixtures are exact bytes retrieved from official public endpoints. The original event and PDF bundle was retrieved on 2026-08-16; the individual-vote response was retrieved on 2026-11-09 UTC. Acquisition used one request at a time and no authentication, access-control bypass, or browser automation.
 
 | File | Official source | Purpose |
 |---|---|---|
@@ -9,6 +9,7 @@ The Colorado fixtures are exact bytes retrieved from official public endpoints o
 | `co/police-technology-surcharge-presentation.pdf` | [Legistar attachment 14876735](https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D) | Supporting source naming Axon body cameras, Axon evidence systems, and Flock vehicle-intelligence cameras with stated costs |
 | `co/event-2654-work-session.json` | [Legistar event 2654](https://webapi.legistar.com/v1/coloradosprings/events/2654?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1) | Real API parser and work-session fixture |
 | `co/event-2660-final-vote.json` | [Legistar event 2660](https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1) | Real API parser and final-vote fixture |
+| `co/votes-103550-final-vote.json` | [Legistar votes on event item 103550](https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes) | Nine individually recorded votes on Ordinance 25-93: six Aye, three No |
 
 `co/SHA256SUMS` commits the hash of every source fixture. Raw fixtures remain local evidence inputs; the static publisher emits only necessary institutional facts and exact selected citations.
 
@@ -66,3 +67,25 @@ able to automate. The City's authoritative procurement portals (BidNet/Bonfire) 
 fetched or preserved because they are registration/terms-restricted. OpenBook COS is
 documented as a budget-level export that does not provide vendor-level expenditures; no
 vendor-level payment fixture is fabricated.
+
+## Synthetic second snapshot (v0.0.4, Item 4)
+
+`procurement/contract-awards-2.html` is a **synthetic demonstration fixture derived from
+the preserved official snapshot; not an official record**. It is not bytes retrieved from
+any live endpoint. It is a second variant of the preserved `contract-awards.html` built to
+demonstrate that the supersession + diff + change-alert pipeline catches in-place edits to
+award rows. Relative to the preserved official snapshot it:
+
+- edits one amount and one vendor name and adds notes on the `Q25-130ZM` LogRhythm renewal
+  row (a `record_modified` field-level diff);
+- removes one row (`R24-T114JD` on-call guardrail construction) to demonstrate
+  `record_removed`;
+- adds one row (`R25-044AB` flood-control pump station maintenance) to demonstrate
+  `record_added`;
+- preserves every other row and the two `R21-T107KK` rental-equipment rows byte-for-byte.
+
+Its SHA-256 is committed in `procurement/SHA256SUMS`. Every demo output that references it
+carries the label "synthetic demonstration fixture derived from the preserved official
+snapshot; not an official record," and it is never presented as official bytes. This is
+consistent with how the demo labels its deterministic demonstration reviews.
+

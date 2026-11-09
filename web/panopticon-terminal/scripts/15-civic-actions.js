@@ -1,17 +1,25 @@
 function injectCivicLayers() {
   if (typeof TYPE_GROUPS !== "undefined") {
     TYPE_GROUPS.DECISION = new Set(["DECISION", "VOTE", "ORDINANCE", "PERMIT", "MEETING"]);
-    TYPE_GROUPS.PERSON = new Set(["PERSON", "OFFICIAL", "OFFICEHOLDER"]);
+    TYPE_GROUPS.PERSON = new Set(["PERSON", "OFFICIAL", "OFFICEHOLDER", "RECORDED_VOTER"]);
+    TYPE_GROUPS.JURISDICTION = new Set(["JURISDICTION"]);
+    TYPE_GROUPS.TECHNOLOGY = new Set(["TECHNOLOGY"]);
   }
   if (typeof TYPE_STYLE !== "undefined") {
     TYPE_STYLE.DECISION = ["#f0d579", "DEC", "diamond"];
     TYPE_STYLE.VOTE = ["#f0d579", "VOTE", "diamond"];
     TYPE_STYLE.PERSON = ["#d8e0e2", "ROLE", "circle"];
     TYPE_STYLE.OFFICIAL = ["#d8e0e2", "ROLE", "circle"];
+    TYPE_STYLE.RECORDED_VOTER = ["#d8e0e2", "VOTE", "circle"];
+    TYPE_STYLE.JURISDICTION = ["#66ddea", "PLACE", "circle"];
+    TYPE_STYLE.AGENCY = ["#a892db", "AGCY", "circle"];
+    TYPE_STYLE.TECHNOLOGY = ["#7fa7df", "TECH", "diamond"];
   }
   const snapshot = currentState();
   snapshot.activeLayers?.add?.("DECISION");
   snapshot.activeLayers?.add?.("PERSON");
+  snapshot.activeLayers?.add?.("JURISDICTION");
+  snapshot.activeLayers?.add?.("TECHNOLOGY");
 
   const list = civic$("#layer-list");
   if (!list || civic$("[data-layer='DECISION']", list)) return;
@@ -20,7 +28,13 @@ function injectCivicLayers() {
       <i class="layer-dot layer-dot--decision"></i><span><b>DECISIONS & VOTES</b><small>permits, meetings, ordinances</small></span><em>0</em>
     </button>
     <button class="layer is-active" data-layer="PERSON" type="button">
-      <i class="layer-dot layer-dot--person"></i><span><b>PEOPLE IN POWER</b><small>documented public roles only</small></span><em>0</em>
+      <i class="layer-dot layer-dot--person"></i><span><b>RECORDED VOTERS</b><small>names in public vote record</small></span><em>0</em>
+    </button>
+    <button class="layer is-active" data-layer="JURISDICTION" type="button">
+      <i class="layer-dot layer-dot--decision"></i><span><b>JURISDICTIONS</b><small>public geographic authority</small></span><em>0</em>
+    </button>
+    <button class="layer is-active" data-layer="TECHNOLOGY" type="button">
+      <i class="layer-dot layer-dot--decision"></i><span><b>TECHNOLOGY</b><small>documented in decisions or awards</small></span><em>0</em>
     </button>
   `);
 }
@@ -131,8 +145,9 @@ function runCivicAction(action) {
     return;
   }
   if (action === "decisions") {
-    if (typeof setDossierTab === "function") setDossierTab("sources");
-    if (typeof openSearch === "function") openSearch("source:official");
+    const decision = snapshot.entities?.find((item) => String(item.type).toUpperCase() === "DECISION");
+    if (decision) selectRecord(decision.id);
+    else if (typeof openSearch === "function") openSearch("type:decision");
     return;
   }
   if (action === "building") {
@@ -147,5 +162,5 @@ function selectRecord(id) {
 
 function updatePlaceLabel() {
   const label = civic$("#civic-atlas-place");
-  if (label) label.textContent = `${place} // ${currentState().mode === "demo" ? "DEMO" : "PUBLIC RECORD"}`;
+  if (label) label.textContent = `${place} // ${currentState().mode === "demo" ? "DEMO" : currentState().mode === "preview" ? "PENDING REVIEW" : "PUBLIC RECORD"}`;
 }

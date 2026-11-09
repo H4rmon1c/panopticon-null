@@ -1,5 +1,8 @@
 //! Deterministic, JavaScript-free publication with sensitive-data gates.
 
+pub mod atlas;
+pub mod procurement;
+
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs;
@@ -23,6 +26,8 @@ pub enum PublishError {
     BrokenReference(String),
     #[error("public claim depends on a citation without a current Approved review: {0}")]
     Review(String),
+    #[error("procurement case-file content unavailable: {0}")]
+    Procurement(String),
 }
 
 pub struct SiteConfig<'a> {
@@ -127,6 +132,15 @@ fn build_site_in(
         )?;
     }
     write_root_documents(output_dir, config, &approved_alerts, &mut written)?;
+    // The procurement chain (v0.0.4, Item 2): published under the same
+    // citation-review, allowlist, and privacy gates, rendered from the same
+    // deterministic case-file content that `case build` serializes.
+    procurement::build_procurement_site(
+        store,
+        output_dir,
+        config.canonical_base_url,
+        &mut written,
+    )?;
     written.sort();
     Ok(written)
 }
@@ -411,10 +425,11 @@ fn contains_person_identifier(text: &str) -> bool {
     })
 }
 
-fn page(title: &str, body: &str, prefix: &str) -> String {
+pub(crate) fn page(title: &str, body: &str, prefix: &str) -> String {
     format!(
-        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} — Panopticon Null</title><link rel=\"stylesheet\" href=\"{}style.css\"><link rel=\"alternate\" type=\"application/atom+xml\" href=\"{}atom.xml\"></head><body><header><a class=\"brand\" href=\"{}index.html\">PANOPTICON NULL</a><p>No human being is born to be indexed.</p><nav><a href=\"{}index.html\">Alerts</a><a href=\"{}history.html\">History</a><a href=\"{}methodology.html\">Method</a><a href=\"{}rules.html\">Rules</a><a href=\"{}privacy.html\">Privacy</a><a href=\"{}manifesto.html\">Manifesto</a><a href=\"{}legal.html\">Boundaries</a></nav></header><main><h1>{}</h1>{}</main><footer><p>We think, therefore we are free. Evidence before rhetoric; institutions, not private people.</p></footer></body></html>\n",
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} — Panopticon Null</title><link rel=\"stylesheet\" href=\"{}style.css\"><link rel=\"alternate\" type=\"application/atom+xml\" href=\"{}atom.xml\"></head><body><header><a class=\"brand\" href=\"{}index.html\">PANOPTICON NULL</a><p>No human being is born to be indexed.</p><nav><a href=\"{}index.html\">Alerts</a><a href=\"{}co/procurement/index.html\">Procurement</a><a href=\"{}history.html\">History</a><a href=\"{}methodology.html\">Method</a><a href=\"{}rules.html\">Rules</a><a href=\"{}privacy.html\">Privacy</a><a href=\"{}manifesto.html\">Manifesto</a><a href=\"{}legal.html\">Boundaries</a></nav></header><main><h1>{}</h1>{}</main><footer><p>We think, therefore we are free. Evidence before rhetoric; institutions, not private people.</p></footer></body></html>\n",
         escape(title),
+        prefix,
         prefix,
         prefix,
         prefix,
@@ -714,7 +729,7 @@ fn atom_feed(alerts: &[&Alert], base_url: &str) -> String {
     xml
 }
 
-fn safe_id(id: &str) -> String {
+pub(crate) fn safe_id(id: &str) -> String {
     id.chars()
         .map(|character| {
             if character.is_ascii_alphanumeric() || character == '-' {
@@ -726,7 +741,7 @@ fn safe_id(id: &str) -> String {
         .collect()
 }
 
-fn escape(input: &str) -> String {
+pub(crate) fn escape(input: &str) -> String {
     input
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -735,11 +750,11 @@ fn escape(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn escape_attr(input: &str) -> String {
+pub(crate) fn escape_attr(input: &str) -> String {
     escape(input)
 }
 
-fn escape_xml(input: &str) -> String {
+pub(crate) fn escape_xml(input: &str) -> String {
     escape(input)
 }
 
@@ -932,6 +947,8 @@ mod tests {
         let (_dir, store) = seed_site();
         let out = tempdir().expect("tempdir");
         let paths = build_site(&store, out.path(), &config()).expect("build succeeds");
+        let home = fs::read_to_string(out.path().join("index.html")).expect("home page");
+        assert!(home.contains("href=\"co/procurement/index.html\""));
         assert!(out.path().join("alerts/alert_approved.html").exists());
         assert!(!out.path().join("alerts/alert_unapproved.html").exists());
         assert!(

@@ -22,15 +22,17 @@ use pnull_ingest::{
 use pnull_publish::{
     SiteConfig, assert_citations_approved, build_site, citation_id, citation_review_binding,
 };
-use pnull_x::{attempts_for_alert, draft, post_approved, reconcile};
+use pnull_x::{attempts_for_alert, draft, draft_procurement, post_approved, reconcile};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+mod approval_cmd;
 mod procurement_cmd;
+mod refresh;
 
-const CONFIG_PATH: &str = "configs/states/co.toml";
-const RULES_PATH: &str = "rules/surveillance.yml";
+const DEFAULT_CONFIG_PATH: &str = "configs/states/co.toml";
+const DEFAULT_RULES_PATH: &str = "rules/surveillance.yml";
 
 #[derive(Parser)]
 #[command(
@@ -41,6 +43,12 @@ const RULES_PATH: &str = "rules/surveillance.yml";
 struct Cli {
     #[arg(long, global = true, env = "PNUL_DATA_DIR", default_value = ".pnull")]
     data_dir: PathBuf,
+    #[arg(long, global = true, env = "PNUL_CONFIG_PATH", default_value = DEFAULT_CONFIG_PATH)]
+    config: PathBuf,
+    #[arg(long, global = true, env = "PNUL_RULES_PATH", default_value = DEFAULT_RULES_PATH)]
+    rules: PathBuf,
+    #[arg(long, global = true, env = "PNUL_SITE_URL")]
+    site_url: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -101,6 +109,98 @@ enum Command {
         #[command(subcommand)]
         command: CoraCommand,
     },
+    Approval {
+        #[command(subcommand)]
+        command: ApprovalCommand,
+    },
+    Atlas {
+        #[command(subcommand)]
+        command: AtlasCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AtlasCommand {
+    /// Show every source-bound claim and the exact digest a reviewer must check.
+    Requirements {
+        #[arg(long, default_value = "fixtures/atlas/colorado-springs-25-93.v1.json")]
+        manifest: PathBuf,
+    },
+    /// Append a human review of one source-bound claim or the whole release.
+    Review {
+        #[arg(long, default_value = "fixtures/atlas/colorado-springs-25-93.v1.json")]
+        manifest: PathBuf,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        binding: String,
+        #[arg(long)]
+        decision: String,
+        #[arg(long)]
+        reviewer: String,
+        #[arg(long)]
+        note: String,
+    },
+    /// Allow atlas publication after the source-bound human reviews are complete.
+    AllowRelease {
+        #[arg(long)]
+        reviewer: String,
+        #[arg(long)]
+        note: String,
+    },
+    /// Export the reviewed public atlas dataset, or a clearly labeled private preview.
+    Export {
+        #[arg(long, default_value = "fixtures/atlas/colorado-springs-25-93.v1.json")]
+        manifest: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Include pending claims only in a separate editorial preview artifact.
+        #[arg(long)]
+        preview: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApprovalCommand {
+    /// Preserve and import the reviewed-source Chino case as pending links.
+    ImportChino {
+        #[arg(long, default_value = "fixtures/approval")]
+        fixtures: PathBuf,
+    },
+    /// Inspect every proposed link, its exact proof, and remaining unknowns.
+    Show { contract_id: String },
+    /// Record a human decision bound to the exact link digest shown by `show`.
+    Review {
+        link_id: String,
+        #[arg(long)]
+        binding: String,
+        #[arg(long)]
+        decision: String,
+        #[arg(long)]
+        reviewer: String,
+        #[arg(long)]
+        note: String,
+    },
+    /// Append a sourced correction without erasing the original claim.
+    Correct {
+        link_id: String,
+        #[arg(long)]
+        kind: String,
+        #[arg(long)]
+        operator: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        source_url: String,
+        #[arg(long)]
+        snapshot_digest: String,
+        #[arg(long)]
+        locator: String,
+        #[arg(long)]
+        quote: String,
+        #[arg(long)]
+        replacement_link: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -148,6 +248,15 @@ enum ProcurementCommand {
     Chain {
         matter: String,
     },
+    Alerts,
+    PublishReady {
+        matter_id: String,
+    },
+    Refresh {
+        source_id: String,
+        #[arg(long)]
+        live: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -187,7 +296,34 @@ enum CaseCommand {
 
 #[derive(Subcommand)]
 enum CoraCommand {
-    Draft { matter: String },
+    Draft {
+        matter: String,
+    },
+    List {
+        #[arg(long)]
+        matter: Option<String>,
+    },
+    Show {
+        request_id: String,
+    },
+    Submit {
+        request_id: String,
+        #[arg(long)]
+        operator: String,
+        #[arg(long)]
+        date: String,
+        #[arg(long)]
+        tracking: String,
+        #[arg(long)]
+        recipient_note: Option<String>,
+    },
+    Response {
+        request_id: String,
+        #[arg(long)]
+        evidence_id: String,
+        #[arg(long)]
+        note: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -363,7 +499,24 @@ fn main() -> Result<()> {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let config = load_config()?;
+    let mut config = load_config(&cli.config)?;
+    if let Some(site_url) = &cli.site_url {
+        let parsed = url::Url::parse(site_url).context("parse --site-url / PNUL_SITE_URL")?;
+        if !matches!(parsed.scheme(), "http" | "https")
+            || parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            bail!(
+                "site URL must be an absolute HTTP(S) URL without credentials, query, or fragment"
+            );
+        }
+        site_url
+            .trim_end_matches('/')
+            .clone_into(&mut config.canonical_base_url);
+    }
     match cli.command {
         Command::Source {
             command: SourceCommand::List,
@@ -375,31 +528,231 @@ fn run(cli: Cli) -> Result<()> {
             command: SourceCommand::Review { command },
         } => source_review_command(&cli.data_dir, &config, command),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
-        Command::Scan => scan_all(&cli.data_dir),
+        Command::Scan => scan_all(&cli.data_dir, &cli.rules),
         Command::Diff {
             old_evidence_id,
             new_evidence_id,
         } => print_diff(
             &cli.data_dir,
+            &cli.rules,
             old_evidence_id.as_deref(),
             new_evidence_id.as_deref(),
         ),
-        Command::BuildSite { output } => build_public_site(&cli.data_dir, &config, &output),
+        Command::BuildSite { output } => {
+            build_public_site(&cli.data_dir, &config, &cli.rules, &output)
+        }
         Command::Alerts => list_alerts(&cli.data_dir),
         Command::Matter { command } => matter_command(&cli.data_dir, command),
         Command::Citation { command } => citation_command(&cli.data_dir, command),
         Command::Review { command } => review_command(&cli.data_dir, command),
         Command::X { command } => x_command(&cli.data_dir, &config, command),
         Command::Verify { evidence_id } => verify(&cli.data_dir, &evidence_id),
-        Command::Demo { output } => run_demo(&output, &config),
-        Command::Procurement { command } => procurement_command(&cli.data_dir, command),
+        Command::Demo { output } => run_demo(&output, &config, &cli.rules),
+        Command::Procurement { command } => procurement_command(&cli.data_dir, &config, command),
         Command::Coverage { command } => coverage_command(&cli.data_dir, command),
         Command::Case { command } => case_command(&cli.data_dir, command),
         Command::Cora { command } => cora_command(&cli.data_dir, command),
+        Command::Approval { command } => approval_command(&cli.data_dir, command),
+        Command::Atlas { command } => {
+            atlas_command(&cli.data_dir, &config, cli.site_url.as_deref(), command)
+        }
     }
 }
 
-fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<()> {
+fn atlas_command(
+    data_dir: &Path,
+    config: &StateConfig,
+    explicit_site_url: Option<&str>,
+    command: AtlasCommand,
+) -> Result<()> {
+    use pnull_publish::atlas::{AtlasExportMode, export_atlas, review_requirements};
+
+    let store = Store::open(data_dir)?;
+    match command {
+        AtlasCommand::Requirements { manifest } => {
+            for requirement in review_requirements(&manifest)? {
+                println!(
+                    "{} | {} | {}",
+                    requirement.id, requirement.bound_digest, requirement.summary
+                );
+                if !requirement.source_url.is_empty() {
+                    println!("  source: {}", requirement.source_url);
+                    println!("  locator: {}", requirement.locator);
+                    println!("  SHA-256: {}", requirement.source_sha256);
+                }
+                if let Some(review) = store.current_review(&requirement.id)? {
+                    let current = review.bound_digest == requirement.bound_digest;
+                    println!(
+                        "  review: {} | current binding: {}",
+                        review.state.label(),
+                        current
+                    );
+                } else {
+                    println!("  review: PENDING");
+                }
+            }
+            Ok(())
+        }
+        AtlasCommand::Review {
+            manifest,
+            id,
+            binding,
+            decision,
+            reviewer,
+            note,
+        } => {
+            if reviewer.trim().is_empty() || note.trim().is_empty() {
+                bail!("reviewer and note are required");
+            }
+            if ["demo", "test", "seed", "bot"]
+                .iter()
+                .any(|word| reviewer.to_ascii_lowercase().contains(word))
+            {
+                bail!("demonstration reviewers cannot approve atlas release claims");
+            }
+            let requirement = review_requirements(&manifest)?
+                .into_iter()
+                .find(|item| item.id == id)
+                .ok_or_else(|| anyhow!("unknown atlas review requirement: {id}"))?;
+            if requirement.bound_digest != binding {
+                bail!("atlas review binding changed; inspect `atlas requirements` again");
+            }
+            let state = match decision.as_str() {
+                "approve" => ReviewState::Approved,
+                "reject" => ReviewState::Rejected,
+                "needs-context" => ReviewState::NeedsContext,
+                _ => bail!("decision must be approve, reject, or needs-context"),
+            };
+            let decided_at = OffsetDateTime::now_utc().format(&Rfc3339)?;
+            let previous = store.current_review(&id)?;
+            let review = ReviewDecision {
+                id: ReviewDecision::id_for(&id, &decided_at),
+                citation_id: id.clone(),
+                state,
+                reviewer,
+                note,
+                bound_digest: binding,
+                decision_digest: sha256_hex(
+                    format!("{id}\0{}\0{decided_at}", state.label()).as_bytes(),
+                ),
+                decided_at,
+                supersedes: previous.map(|item| item.id),
+            };
+            if !store.insert_review(&review)? {
+                bail!("duplicate atlas review decision; retry after the current timestamp");
+            }
+            println!("recorded {} review {}", state.label(), review.id);
+            Ok(())
+        }
+        AtlasCommand::AllowRelease { reviewer, note } => {
+            if reviewer.trim().is_empty() || note.trim().is_empty() {
+                bail!("reviewer and note are required");
+            }
+            if ["demo", "test", "seed", "bot"]
+                .iter()
+                .any(|word| reviewer.to_ascii_lowercase().contains(word))
+            {
+                bail!("demonstration reviewers cannot allow atlas release");
+            }
+            let created_at = OffsetDateTime::now_utc().format(&Rfc3339)?;
+            let allowlist = PublicationAllowlist {
+                id: pnull_core::stable_id("allowlist:atlas_release", &[&created_at, &reviewer]),
+                field_categories: vec!["atlas_release".to_owned()],
+                created_at,
+                note: format!("{reviewer}: {note}"),
+            };
+            store.insert_publication_allowlist(&allowlist)?;
+            println!("recorded atlas release allowlist {}", allowlist.id);
+            Ok(())
+        }
+        AtlasCommand::Export {
+            manifest,
+            output,
+            preview,
+        } => {
+            let output = output.unwrap_or_else(|| {
+                if preview {
+                    PathBuf::from("web/panopticon-terminal/preview-snapshot.json")
+                } else {
+                    PathBuf::from("web/panopticon-terminal/public/public-snapshot.json")
+                }
+            });
+            if preview
+                && output.file_name().and_then(|name| name.to_str()) == Some("public-snapshot.json")
+            {
+                bail!("preview data must not be written as public-snapshot.json");
+            }
+            let mode = if preview {
+                AtlasExportMode::Preview
+            } else {
+                AtlasExportMode::Production
+            };
+            // A release link must be bound to the URL configured for this deployment.
+            // The preview does not acquire a public canonical URL.
+            let configured_url = url::Url::parse(&config.canonical_base_url).ok();
+            let site_url = explicit_site_url.or_else(|| {
+                configured_url
+                    .as_ref()
+                    .and_then(url::Url::host_str)
+                    .filter(|host| !host.ends_with(".invalid"))
+                    .map(|_| config.canonical_base_url.as_str())
+            });
+            export_atlas(&store, &manifest, &output, mode, site_url)?;
+            println!("wrote {}", output.display());
+            Ok(())
+        }
+    }
+}
+
+fn approval_command(data_dir: &Path, command: ApprovalCommand) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    match command {
+        ApprovalCommand::ImportChino { fixtures } => {
+            let contract_id = approval_cmd::import_chino_case(&store, &fixtures)?;
+            println!("imported pending Chino approval case: {contract_id}");
+            println!("inspect with `pnull approval show {contract_id}` before human review");
+        }
+        ApprovalCommand::Show { contract_id } => approval_cmd::show_case(&store, &contract_id)?,
+        ApprovalCommand::Review {
+            link_id,
+            binding,
+            decision,
+            reviewer,
+            note,
+        } => approval_cmd::review_link(&store, &link_id, &binding, &decision, &reviewer, &note)?,
+        ApprovalCommand::Correct {
+            link_id,
+            kind,
+            operator,
+            reason,
+            source_url,
+            snapshot_digest,
+            locator,
+            quote,
+            replacement_link,
+        } => approval_cmd::correct_link(
+            &store,
+            &link_id,
+            &kind,
+            &operator,
+            &reason,
+            pnull_core::SourceProof {
+                source_url,
+                snapshot_digest,
+                locator,
+                quote,
+            },
+            replacement_link,
+        )?,
+    }
+    Ok(())
+}
+
+fn procurement_command(
+    data_dir: &Path,
+    config: &StateConfig,
+    command: ProcurementCommand,
+) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
         ProcurementCommand::Ingest {
@@ -448,6 +801,13 @@ fn procurement_command(data_dir: &Path, command: ProcurementCommand) -> Result<(
         ProcurementCommand::Show { matter } => procurement_cmd::show_matter(&store, &matter),
         ProcurementCommand::Gaps { matter } => procurement_cmd::gaps(&store, &matter),
         ProcurementCommand::Chain { matter } => procurement_cmd::chain(&store, &matter),
+        ProcurementCommand::Alerts => procurement_cmd::procurement_alerts(&store),
+        ProcurementCommand::PublishReady { matter_id } => {
+            procurement_cmd::publish_ready(&store, &matter_id)
+        }
+        ProcurementCommand::Refresh { source_id, live } => {
+            procurement_cmd::procurement_refresh(&store, config, &source_id, live)
+        }
     }
 }
 
@@ -475,12 +835,33 @@ fn cora_command(data_dir: &Path, command: CoraCommand) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
         CoraCommand::Draft { matter } => procurement_cmd::cora_draft(&store, &matter),
+        CoraCommand::List { matter } => procurement_cmd::cora_list(&store, matter.as_deref()),
+        CoraCommand::Show { request_id } => procurement_cmd::cora_show(&store, &request_id),
+        CoraCommand::Submit {
+            request_id,
+            operator,
+            date,
+            tracking,
+            recipient_note,
+        } => procurement_cmd::cora_submit(
+            &store,
+            &request_id,
+            &operator,
+            &date,
+            &tracking,
+            recipient_note.as_deref(),
+        ),
+        CoraCommand::Response {
+            request_id,
+            evidence_id,
+            note,
+        } => procurement_cmd::cora_response(&store, &request_id, &evidence_id, note.as_deref()),
     }
 }
 
-fn load_config() -> Result<StateConfig> {
-    let bytes = fs::read(CONFIG_PATH).with_context(|| format!("read {CONFIG_PATH}"))?;
-    toml::from_slice(&bytes).with_context(|| format!("parse {CONFIG_PATH}"))
+fn load_config(path: &Path) -> Result<StateConfig> {
+    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    toml::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))
 }
 
 fn source_list(config: &StateConfig) {
@@ -511,12 +892,17 @@ fn source_list(config: &StateConfig) {
 fn source_config_digest(source: &SourceConfig) -> String {
     sha256_hex(
         format!(
-            "{}\0{}\0{}\0{}\0{}",
+            "{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             source.id,
             source.url,
             source.name,
+            source.source_type,
+            source.documented_at,
+            source.official_discovery_url,
             source.minimum_interval_seconds,
-            source.maximum_bytes
+            source.maximum_bytes,
+            source.robots_status,
+            source.terms_note,
         )
         .as_bytes(),
     )
@@ -557,14 +943,7 @@ fn source_review_command(
                 observations.len(),
                 body.len()
             );
-            // Persist the snapshot as local evidence bytes via a dedicated blob.
-            let blob_path = store
-                .content_path(&snapshot_digest)
-                .map_err(|error| anyhow!(error.to_string()))?;
-            if let Some(parent) = blob_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&blob_path, &body)?;
+            store.persist_content(&snapshot_digest, &body)?;
             println!(
                 "snapshot preserved locally; run `source review record` to record the human review"
             );
@@ -588,7 +967,7 @@ fn source_review_command(
                 source_id: source_id.clone(),
                 source_config_digest: source_config_digest(source),
                 reviewed_hosts: vec![host.clone()],
-                endpoint_patterns: vec!["/api/v2/Events".to_owned(), "/Events".to_owned()],
+                endpoint_patterns: vec![url::Url::parse(&source.url)?.path().to_owned()],
                 robots_url: format!("https://{host}/robots.txt"),
                 robots_snapshot_digest: String::new(),
                 robots_provenance: None,
@@ -656,17 +1035,8 @@ fn verify_source_review(
         .iter()
         .find(|source| source.id == source_id)
         .ok_or_else(|| anyhow!("unknown source: {source_id}"))?;
-    let review = store.current_source_review(source_id)?.ok_or_else(|| {
-        anyhow!("live retrieval refused: no source review exists for {source_id}")
-    })?;
-    let now = OffsetDateTime::now_utc();
-    let now_ts = now.format(&Rfc3339)?;
-    if review.expires_at < now_ts {
-        bail!(
-            "live retrieval refused: source review for {source_id} expired {}",
-            review.expires_at
-        );
-    }
+    let review =
+        procurement_cmd::require_review_for_live_at(store, source_id, OffsetDateTime::now_utc())?;
     if review.source_config_digest != source_config_digest(source) {
         bail!("live retrieval refused: source configuration changed since review for {source_id}");
     }
@@ -802,9 +1172,9 @@ fn latest_prior(
     }))
 }
 
-fn scan_all(data_dir: &Path) -> Result<()> {
+fn scan_all(data_dir: &Path, rules_path: &Path) -> Result<()> {
     let store = Store::open(data_dir)?;
-    let rules = load_rules(RULES_PATH)?;
+    let rules = load_rules(rules_path)?;
     let mut count = 0;
     for (mut record, text) in store.all_evidence()? {
         if let Some(finding) = scan(&record, &text, &rules) {
@@ -831,9 +1201,14 @@ fn scan_all(data_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn print_diff(data_dir: &Path, old_id: Option<&str>, new_id: Option<&str>) -> Result<()> {
+fn print_diff(
+    data_dir: &Path,
+    rules_path: &Path,
+    old_id: Option<&str>,
+    new_id: Option<&str>,
+) -> Result<()> {
     let store = Store::open(data_dir)?;
-    let rules = load_rules(RULES_PATH)?;
+    let rules = load_rules(rules_path)?;
     let (old_record, old_text, new_record, new_text) = match (old_id, new_id) {
         (Some(old), Some(new)) => {
             let (old_record, old_text) = store.evidence(old)?;
@@ -865,9 +1240,14 @@ fn print_diff(data_dir: &Path, old_id: Option<&str>, new_id: Option<&str>) -> Re
     Ok(())
 }
 
-fn build_public_site(data_dir: &Path, config: &StateConfig, output: &Path) -> Result<()> {
+fn build_public_site(
+    data_dir: &Path,
+    config: &StateConfig,
+    rules_path: &Path,
+    output: &Path,
+) -> Result<()> {
     let store = Store::open(data_dir)?;
-    let rules_yaml = fs::read_to_string(RULES_PATH)?;
+    let rules_yaml = fs::read_to_string(rules_path)?;
     // build_site now gates publication on approved citations and allowlists.
     let files = build_site(
         &store,
@@ -891,6 +1271,23 @@ fn list_alerts(data_dir: &Path) -> Result<()> {
             alert.publication_date,
             alert.state.label(),
             alert.title
+        );
+    }
+    // Procurement change alerts share the alert listing so an operator sees
+    // both kinds in one place (v0.0.4, Item 1).
+    for alert in store.all_procurement_alerts()? {
+        let kinds: Vec<&str> = alert
+            .changes
+            .iter()
+            .map(|c| c.change_kind.label())
+            .collect();
+        println!(
+            "{} | {} | {} | {} | {}",
+            alert.id,
+            alert.retrieved_at,
+            kinds.join(","),
+            alert.source_id,
+            alert.summary
         );
     }
     Ok(())
@@ -1224,10 +1621,7 @@ fn x_command(data_dir: &Path, config: &StateConfig, command: XCommand) -> Result
                 bail!("live posting requires --confirm");
             }
             let canonical = url::Url::parse(&config.canonical_base_url)?;
-            if canonical
-                .host_str()
-                .is_none_or(|host| host.ends_with(".invalid"))
-            {
+            if canonical.host_str().is_none_or(placeholder_site_host) {
                 bail!(
                     "live posting refused: configure a real public canonical_base_url before approval and posting"
                 );
@@ -1290,6 +1684,15 @@ fn x_command(data_dir: &Path, config: &StateConfig, command: XCommand) -> Result
         }
     }
     Ok(())
+}
+
+fn placeholder_site_host(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    host == "localhost"
+        || matches!(
+            host.rsplit('.').next(),
+            Some("invalid" | "example" | "test")
+        )
 }
 
 fn attempt_summary(attempt: &pnull_core::XAttempt) -> String {
@@ -1502,9 +1905,9 @@ fn demo_page_citation(store: &Store, record: &EvidenceRecord, quote: &str) -> Pa
 }
 
 #[allow(clippy::too_many_lines)]
-fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
+fn run_demo(output: &Path, config: &StateConfig, rules_path: &Path) -> Result<()> {
     let (store, site_dir) = prepare_demo_output(output)?;
-    let rules = load_rules(RULES_PATH)?;
+    let rules = load_rules(rules_path)?;
     let mut context = ExtractContext {
         sandbox: RealSandbox::new(pnull_ingest::ExtractionSandboxConfig::defaults())
             .map_err(|error| anyhow!(error.to_string()))?,
@@ -1644,7 +2047,7 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
     approve_alert_citations_demo(&store, &alert)?;
     println!("5d. Recorded demonstration approvals for the alert's citations.");
 
-    let rules_yaml = fs::read_to_string(RULES_PATH)?;
+    let rules_yaml = fs::read_to_string(rules_path)?;
     let files = build_site(
         &store,
         &site_dir,
@@ -1786,6 +2189,82 @@ fn run_demo(output: &Path, config: &StateConfig) -> Result<()> {
         procurement_out.join("awards.csv").display()
     );
 
+    // v0.0.4, Item 2: publish the procurement chain. Write the control matter's
+    // case file (same deterministic JSON source as transit-fare), approve the
+    // procurement citations with a clearly-labeled demonstration review, and
+    // rebuild the site so /co/procurement is included. The control matter's
+    // page is the restraint demonstration: no surveillance labeling anywhere.
+    let control_case =
+        pnull_procurement::build_content(&store, pnull_procurement::CONTROL_MATTER_ID)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    let control_json = pnull_procurement::render_case_json(&control_case);
+    let control_md = pnull_procurement::render_case_markdown(&control_case);
+    fs::create_dir_all(procurement_out.join("control"))?;
+    fs::write(
+        procurement_out.join("control").join("case-file.json"),
+        &control_json,
+    )?;
+    fs::write(
+        procurement_out.join("control").join("case-file.md"),
+        &control_md,
+    )?;
+    approve_procurement_citations_demo(&store, pnull_procurement::TRANSIT_FARE_MATTER_ID)?;
+    approve_procurement_citations_demo(&store, pnull_procurement::CONTROL_MATTER_ID)?;
+    // Also approve any derived matters (Item 4 affected award records) so their
+    // pages publish and render the "what changed" section.
+    for matter in store.procurement_matters()? {
+        approve_procurement_citations_demo(&store, &matter.id)?;
+    }
+    println!(
+        "15. Approved procurement citations (demonstration review) and wrote control case file."
+    );
+    let files2 = build_site(
+        &store,
+        &site_dir,
+        &SiteConfig {
+            canonical_base_url: &config.canonical_base_url,
+            rules_yaml: &rules_yaml,
+        },
+    )
+    .map_err(|error| anyhow!("publication refused: {error}"))?;
+    println!(
+        "16. Rebuilt {} static site files (now including the procurement chain) at {}",
+        files2.len(),
+        site_dir.display()
+    );
+
+    // v0.0.4, Item 1/4: a dry-run X draft for a procurement change alert. The
+    // demo constructs no live X transport; the draft is deterministic and
+    // clearly labeled as a demonstration. It links the affected matter's
+    // published case-file page under the canonical base URL.
+    let procurement_alerts = store.all_procurement_alerts()?;
+    let mut publishable_alert = None;
+    for candidate in &procurement_alerts {
+        if pnull_publish::procurement::approved_procurement_alert_page(&store, candidate)?.is_some()
+        {
+            publishable_alert = Some(candidate);
+            break;
+        }
+    }
+    if let Some(first_alert) = publishable_alert {
+        let matter_label = first_alert
+            .matter_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "unresolved".to_owned());
+        let generated = draft_procurement(
+            &store,
+            first_alert,
+            &config.canonical_base_url,
+            "Colorado Springs, Colorado",
+            &matter_label,
+        )?;
+        println!("17. Generated dry-run X draft for a procurement change alert (no transport):");
+        print_draft(&generated);
+    } else {
+        println!("17. No publishable procurement change alerts to draft (dry-run X step skipped).");
+    }
+
     println!("Alert ID: {}", alert.id);
     Ok(())
 }
@@ -1800,6 +2279,7 @@ fn seed_demo_reviews(store: &Store) -> Result<()> {
             "page_citation".to_owned(),
             "subject_action".to_owned(),
             "evidence_metadata".to_owned(),
+            "procurement_casefile".to_owned(),
         ],
         created_at: "2026-08-16T00:00:00Z".to_owned(),
         note: "Demonstration allowlist for the offline v0.0.2 demo.".to_owned(),
@@ -1883,6 +2363,34 @@ fn approve_alert_citations_demo(store: &Store, alert: &Alert) -> Result<()> {
                 };
                 store.insert_review(&decision)?;
             }
+        }
+    }
+    Ok(())
+}
+
+/// Approve every citation in a matter's case-file content so the offline demo
+/// can exercise the procurement publication path (v0.0.4, Item 2). Each
+/// approval binds to the exact digests via the shared citation binding.
+fn approve_procurement_citations_demo(store: &Store, matter_id: &str) -> Result<()> {
+    let content =
+        pnull_procurement::build_content(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
+    for citation in &content.citations {
+        let id = pnull_publish::citation_id(citation);
+        if store.current_review(&id)?.is_none() {
+            let binding = pnull_publish::citation_review_binding(citation);
+            let decided_at = "2026-08-16T00:00:00Z".to_owned();
+            let decision = ReviewDecision {
+                id: ReviewDecision::id_for(&id, &decided_at),
+                citation_id: id.clone(),
+                state: ReviewState::Approved,
+                reviewer: "demo-operator".to_owned(),
+                note: "Demonstration approval for the offline v0.0.4 demo.".to_owned(),
+                bound_digest: binding.digest(),
+                decision_digest: sha256_hex(format!("{id}\0Approved\0{decided_at}").as_bytes()),
+                decided_at,
+                supersedes: None,
+            };
+            store.insert_review(&decision)?;
         }
     }
     Ok(())
@@ -2033,15 +2541,37 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn deployment_settings_are_explicit_global_flags() {
+        let cli = Cli::try_parse_from([
+            "pnull",
+            "--config",
+            "/tmp/state.toml",
+            "--rules",
+            "/tmp/rules.yml",
+            "--site-url",
+            "https://ledger.example/co",
+            "source",
+            "list",
+        ])
+        .expect("deployment flags");
+        assert_eq!(cli.config, PathBuf::from("/tmp/state.toml"));
+        assert_eq!(cli.rules, PathBuf::from("/tmp/rules.yml"));
+        assert_eq!(cli.site_url.as_deref(), Some("https://ledger.example/co"));
+        assert!(placeholder_site_host("ledger.example"));
+        assert!(placeholder_site_host("localhost"));
+        assert!(!placeholder_site_host("ledger.org"));
+    }
+
+    #[test]
     fn offline_demo_is_reproducible_and_never_posts() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         std::env::set_current_dir(&root).expect("workspace root");
-        let config = load_config().expect("config");
+        let config = load_config(Path::new(DEFAULT_CONFIG_PATH)).expect("config");
         let directory = tempdir().expect("temporary directory");
         let first = directory.path().join("first");
         let second = directory.path().join("second");
-        run_demo(&first, &config).expect("first demo");
-        run_demo(&second, &config).expect("second demo");
+        run_demo(&first, &config, Path::new(DEFAULT_RULES_PATH)).expect("first demo");
+        run_demo(&second, &config, Path::new(DEFAULT_RULES_PATH)).expect("second demo");
         assert_eq!(
             fs::read(first.join("network-posts.txt")).expect("proof"),
             b"0\n"
@@ -2073,6 +2603,33 @@ mod tests {
         assert!(cora.contains("not submitted"));
         assert!(cora.contains("colorado-springs-solicitation-mirror"));
         assert!(!cora.contains("mailto:"));
+        // The procurement site publishes the transit-fare matter, the benign
+        // control matter, and a derived "what changed" page with the
+        // second-snapshot supersession and record-level changes (v0.0.4).
+        let transit_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_r26-023ab/index.html"))
+                .expect("transit page");
+        let transit_page = String::from_utf8_lossy(&transit_page);
+        assert!(transit_page.contains("Next-Generation Transit Fare"));
+        assert!(!transit_page.contains("Publication withheld"));
+        let control_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_crack-seal-2023/index.html"))
+                .expect("control page");
+        let control_page = String::from_utf8_lossy(&control_page);
+        assert!(!control_page.contains("surveillance purchase"));
+        assert!(!control_page.contains("surveillance award"));
+        let changed_page =
+            fs::read(first.join("site/co/procurement/proc_matter_co_q25130zm/index.html"))
+                .expect("changed page");
+        let changed_page = String::from_utf8_lossy(&changed_page);
+        assert!(changed_page.contains("What changed"));
+        assert!(changed_page.contains("supersedes"));
+        assert!(!changed_page.contains("Publication withheld"));
+        // The procurement Atom feed lists the matters.
+        let proc_atom =
+            fs::read(first.join("site/co/procurement/atom.xml")).expect("procurement atom");
+        let proc_atom = String::from_utf8_lossy(&proc_atom);
+        assert!(proc_atom.contains("Next-Generation Transit Fare"));
         // No script element may occur in public output.
         for (path, bytes) in snapshot(&first.join("site")) {
             let content = String::from_utf8_lossy(&bytes);

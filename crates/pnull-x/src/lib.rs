@@ -4,7 +4,9 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
-use pnull_core::{Alert, CoreError, Store, XAttempt, XReconciliation, XSegment, stable_id};
+use pnull_core::{
+    Alert, CoreError, ProcurementAlert, Store, XAttempt, XReconciliation, XSegment, stable_id,
+};
 use reqwest::blocking::Client;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,8 @@ pub enum XError {
     MissingCitation,
     #[error("draft refused by sensitive-data policy")]
     SensitiveData,
+    #[error("procurement alert is not publishable: an affected matter or alert is withheld")]
+    ProcurementNotPublished,
     #[error("draft cannot fit within X character limits")]
     CharacterLimit,
     #[error("alert has not received explicit approval for this exact draft")]
@@ -55,6 +59,8 @@ pub enum XError {
     Transport,
     #[error(transparent)]
     Core(#[from] CoreError),
+    #[error(transparent)]
+    Publish(#[from] pnull_publish::PublishError),
     #[error("could not read protected runtime secret")]
     SecretRead,
 }
@@ -95,6 +101,67 @@ pub fn draft(alert: &Alert, canonical_base_url: &str) -> Result<Draft, XError> {
         alert_id: alert.id.clone(),
         posts,
     })
+}
+
+/// Drafts an X thread for a procurement change alert (v0.0.4, Item 1).
+///
+/// Reuses the same pipeline machinery as the general alert draft: dry-run
+/// default, exact-digest approval, canonical-URL check, credentials gate, and
+/// reconciliation for uncertain attempts. The body identifies the feed as
+/// automated, names the jurisdiction and matter/identifier, states the observed
+/// change in one sentence with phrasing discipline, links the published
+/// case-file page under `canonical_base_url`, and carries the "public record;
+/// not proof of absence" caveat. The page must pass the current publication
+/// gates before a draft is produced.
+pub fn draft_procurement(
+    store: &Store,
+    alert: &ProcurementAlert,
+    canonical_base_url: &str,
+    jurisdiction: &str,
+    matter_label: &str,
+) -> Result<Draft, XError> {
+    assert_procurement_published(store, alert)?;
+    pnull_publish::validate_public_text(&alert.summary).map_err(|_| XError::SensitiveData)?;
+    let first = alert.changes.first().ok_or(XError::MissingCitation)?;
+    let kind = first.change_kind.label();
+    // The published case-file page for a procurement change is the affected
+    // matter's page (deterministic slug from the matter id). The canonical base
+    // URL already carries the site path prefix (e.g. `.../co`), so the
+    // `procurement/` segment is appended directly, matching how the general
+    // alert draft appends `/alerts/...`. When no matter id is resolvable,
+    // the alert itself is withheld by the publisher and cannot be drafted.
+    let matter_id = alert
+        .matter_ids
+        .first()
+        .ok_or(XError::ProcurementNotPublished)?;
+    let case_page = format!(
+        "{}/procurement/{}/index.html",
+        canonical_base_url.trim_end_matches('/'),
+        safe_id(matter_id)
+    );
+    let text = format!(
+        "AUTOMATED PUBLIC-RECORD CHANGE NOTICE · procurement\n\n{jurisdiction} — matter/identifier: {matter_label}\n\nObserved change ({kind}): {}. This reports a change in the public record; it is not proof of absence or of wrongdoing.\n\nCase-file page: {case_page}\n\nPublic record; not proof of absence.",
+        alert.summary
+    );
+    pnull_publish::validate_public_text(&text).map_err(|_| XError::SensitiveData)?;
+    let posts = split_thread(&text)?;
+    if posts
+        .iter()
+        .any(|post| post.chars().count() > X_CHARACTER_LIMIT)
+    {
+        return Err(XError::CharacterLimit);
+    }
+    Ok(Draft {
+        alert_id: alert.id.clone(),
+        posts,
+    })
+}
+
+fn assert_procurement_published(store: &Store, alert: &ProcurementAlert) -> Result<(), XError> {
+    if pnull_publish::procurement::approved_procurement_alert_page(store, alert)?.is_none() {
+        return Err(XError::ProcurementNotPublished);
+    }
+    Ok(())
 }
 
 fn split_thread(text: &str) -> Result<Vec<String>, XError> {
@@ -207,6 +274,19 @@ pub fn post_with_attempt<T: XTransport>(
 ) -> Result<Vec<String>, XError> {
     if !confirmed {
         return Err(XError::NotConfirmed);
+    }
+    let procurement_alert = store
+        .all_procurement_alerts()?
+        .into_iter()
+        .find(|alert| alert.id == draft.alert_id);
+    if let Some(alert) = procurement_alert.as_ref() {
+        assert_procurement_published(store, alert)?;
+    } else if draft
+        .posts
+        .iter()
+        .any(|post| post.contains("/procurement/"))
+    {
+        return Err(XError::ProcurementNotPublished);
     }
     if store.approved_draft_digest(&draft.alert_id)?.as_deref() != Some(draft.digest().as_str()) {
         return Err(XError::NotApproved);
@@ -557,7 +637,10 @@ impl XTransport for ReqwestXTransport {
 mod tests {
     use super::*;
     use pnull_core::{
-        Citation, EvidenceRecord, ExtractionStatus, FindingState, Locator, SourceType,
+        Citation, CoverageState, EvidenceRecord, ExtractionStatus, FindingState, Locator,
+        ProcurementAlert, ProcurementChangeKind, ProcurementEvent, ProcurementEventKind,
+        ProcurementMatter, ProcurementRecordChange, PublicationAllowlist, ReviewDecision,
+        ReviewState, SourceSnapshot, SourceType,
     };
     use tempfile::tempdir;
 
@@ -956,5 +1039,252 @@ mod tests {
             draft(&alert("Plate: ABC123"), "https://example.invalid"),
             Err(XError::SensitiveData)
         ));
+    }
+
+    fn procurement_alert() -> ProcurementAlert {
+        let source_id = "colorado-springs-contract-awards";
+        let old_digest = pnull_core::sha256_hex(b"<main><p>Previous record</p></main>");
+        let new_digest = pnull_core::sha256_hex(b"<main><p>Test row changed</p></main>");
+        let old_snapshot_id = SourceSnapshot::id_for(source_id, &old_digest);
+        let new_snapshot_id = SourceSnapshot::id_for(source_id, &new_digest);
+        ProcurementAlert {
+            id: "proc-alert:test".to_owned(),
+            source_id: source_id.to_owned(),
+            surface: "contract-award-table".to_owned(),
+            old_snapshot_id: old_snapshot_id.clone(),
+            old_snapshot_digest: old_digest.clone(),
+            new_snapshot_id: new_snapshot_id.clone(),
+            new_snapshot_digest: new_digest.clone(),
+            changes: vec![ProcurementRecordChange {
+                change_kind: ProcurementChangeKind::RecordAdded,
+                row_identity: "proc:matter:co:abc".to_owned(),
+                field_diffs: Vec::new(),
+                old_snapshot_id,
+                old_snapshot_digest: old_digest,
+                new_snapshot_id,
+                new_snapshot_digest: new_digest,
+                summary: "The row observed in snapshot snapshot:a (digest aaaaa...) is not present in snapshot snapshot:b (digest bbbbb...).".to_owned(),
+            }],
+            retrieved_at: "2026-08-31T00:00:00Z".to_owned(),
+            coverage_state: CoverageState::InformationalOnly,
+            matter_ids: vec!["proc:matter:co:abc".to_owned()],
+            identifier_ids: Vec::new(),
+            taxonomy_matches: Vec::new(),
+            summary: "The row observed in snapshot snapshot:a (digest aaaaa...) is not present in snapshot snapshot:b (digest bbbbb...).".to_owned(),
+        }
+    }
+
+    fn procurement_citation(alert: &ProcurementAlert) -> Citation {
+        let event_id = ProcurementEvent::id_for(
+            &alert.matter_ids[0],
+            ProcurementEventKind::RecordCorrected,
+            "2026-08-31",
+            "Test row changed",
+        );
+        Citation {
+            evidence_id: alert.new_snapshot_id.clone(),
+            source_url: "https://example.test/awards".to_owned(),
+            locator: Locator {
+                kind: "html-element".to_owned(),
+                start: 1,
+                end: 1,
+                label: format!("event:{event_id};visible-element[1]/p"),
+            },
+            quote: "Test row changed".to_owned(),
+        }
+    }
+
+    fn published_procurement_alert(store: &Store) -> ProcurementAlert {
+        let mut alert = procurement_alert();
+        let matter_id = alert.matter_ids[0].clone();
+        alert.id = ProcurementAlert::id_for(
+            &alert.source_id,
+            &alert.surface,
+            &alert.changes[0].row_identity,
+            alert.changes[0].change_kind,
+            &alert.old_snapshot_id,
+            &alert.new_snapshot_id,
+        );
+        store
+            .insert_procurement_matter(&ProcurementMatter {
+                id: matter_id.clone(),
+                jurisdiction: "Colorado Springs".to_owned(),
+                title: "Test Matter".to_owned(),
+                review_state: "draft".to_owned(),
+                publication_state: "unpublished".to_owned(),
+            })
+            .expect("matter");
+        for (id, digest) in [
+            (&alert.old_snapshot_id, &alert.old_snapshot_digest),
+            (&alert.new_snapshot_id, &alert.new_snapshot_digest),
+        ] {
+            let bytes: &[u8] = if id == &alert.old_snapshot_id {
+                b"<main><p>Previous record</p></main>"
+            } else {
+                b"<main><p>Test row changed</p></main>"
+            };
+            store.persist_content(digest, bytes).expect("source bytes");
+            store
+                .insert_source_snapshot(&SourceSnapshot {
+                    id: id.clone(),
+                    source_id: alert.source_id.clone(),
+                    source_url: "https://example.test/awards".to_owned(),
+                    retrieved_at: alert.retrieved_at.clone(),
+                    persisted_digest: digest.clone(),
+                    content_type: Some("text/html".to_owned()),
+                    etag: None,
+                    last_modified: None,
+                    final_url: "https://example.test/awards".to_owned(),
+                    redirect_history: Vec::new(),
+                    parser_version: "awards-1.0".to_owned(),
+                    schema_version: 2,
+                    record_count: Some(1),
+                    pagination_complete: Some(true),
+                    coverage_state: CoverageState::InformationalOnly,
+                    supersedes: None,
+                })
+                .expect("snapshot");
+        }
+        store
+            .insert_procurement_event(&ProcurementEvent {
+                id: ProcurementEvent::id_for(
+                    &matter_id,
+                    ProcurementEventKind::RecordCorrected,
+                    "2026-08-31",
+                    "Test row changed",
+                ),
+                matter_id: matter_id.clone(),
+                kind: ProcurementEventKind::RecordCorrected,
+                date: Some("2026-08-31".to_owned()),
+                summary: "Test row changed".to_owned(),
+                identifier_ids: Vec::new(),
+                evidence_ids: vec![alert.new_snapshot_id.clone()],
+                source_id: alert.source_id.clone(),
+            })
+            .expect("event");
+        store
+            .insert_publication_allowlist(&PublicationAllowlist {
+                id: "allowlist:x-test".to_owned(),
+                field_categories: vec!["procurement_casefile".to_owned()],
+                created_at: "2026-08-30T00:00:00Z".to_owned(),
+                note: "test".to_owned(),
+            })
+            .expect("allowlist");
+        let citation = procurement_citation(&alert);
+        let citation_id = pnull_publish::citation_id(&citation);
+        let decided_at = "2026-08-30T00:00:00Z".to_owned();
+        store
+            .insert_review(&ReviewDecision {
+                id: ReviewDecision::id_for(&citation_id, &decided_at),
+                citation_id,
+                state: ReviewState::Approved,
+                reviewer: "test".to_owned(),
+                note: String::new(),
+                bound_digest: pnull_publish::citation_review_binding(&citation).digest(),
+                decision_digest: String::new(),
+                decided_at,
+                supersedes: None,
+            })
+            .expect("review");
+        store.insert_procurement_alert(&alert).expect("alert");
+        alert
+    }
+
+    #[test]
+    fn procurement_draft_links_the_matter_case_file_page() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("store");
+        let alert = published_procurement_alert(&store);
+        let draft = draft_procurement(
+            &store,
+            &alert,
+            "https://example.invalid/base",
+            "Colorado Springs, Colorado",
+            "proc:matter:co:abc",
+        )
+        .expect("draft");
+        let text = draft.posts.join("\n");
+        assert!(
+            text.contains("AUTOMATED PUBLIC-RECORD CHANGE NOTICE · procurement"),
+            "the draft must identify the feed as automated"
+        );
+        assert!(
+            text.contains("/procurement/proc_matter_co_abc/index.html"),
+            "the draft must link the matter case-file page (slug from the matter id), got: {text}"
+        );
+        assert!(
+            text.contains("not proof of absence"),
+            "the draft must carry the absence caveat"
+        );
+    }
+
+    #[test]
+    fn procurement_draft_refuses_withheld_matter() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("store");
+        let alert = published_procurement_alert(&store);
+        let matter = alert.matter_ids[0].clone();
+        store
+            .insert_procurement_event(&ProcurementEvent {
+                id: ProcurementEvent::id_for(
+                    &matter,
+                    ProcurementEventKind::RecordCorrected,
+                    "2026-09-01",
+                    "New unreviewed change",
+                ),
+                matter_id: matter.clone(),
+                kind: ProcurementEventKind::RecordCorrected,
+                date: Some("2026-09-01".to_owned()),
+                summary: "New unreviewed change".to_owned(),
+                identifier_ids: Vec::new(),
+                evidence_ids: vec![alert.new_snapshot_id.clone()],
+                source_id: alert.source_id.clone(),
+            })
+            .expect("new event");
+        let result = draft_procurement(
+            &store,
+            &alert,
+            "https://example.invalid/base",
+            "Colorado Springs, Colorado",
+            &matter,
+        );
+        assert!(matches!(result, Err(XError::ProcurementNotPublished)));
+    }
+
+    #[test]
+    fn procurement_post_refuses_revoked_review_before_transport() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("store");
+        let alert = published_procurement_alert(&store);
+        let draft = draft_procurement(
+            &store,
+            &alert,
+            "https://example.invalid/base",
+            "Colorado Springs, Colorado",
+            &alert.matter_ids[0],
+        )
+        .expect("draft");
+        let citation = procurement_citation(&alert);
+        let citation_id = pnull_publish::citation_id(&citation);
+        let decided_at = "2026-09-02T00:00:00Z".to_owned();
+        store
+            .insert_review(&ReviewDecision {
+                id: ReviewDecision::id_for(&citation_id, &decided_at),
+                citation_id,
+                state: ReviewState::Rejected,
+                reviewer: "test".to_owned(),
+                note: "revoked".to_owned(),
+                bound_digest: pnull_publish::citation_review_binding(&citation).digest(),
+                decision_digest: String::new(),
+                decided_at,
+                supersedes: None,
+            })
+            .expect("revoke");
+        let mut fake = FakeTransport { calls: 0 };
+        assert!(matches!(
+            post_approved(&store, &draft, true, "2026-09-03T00:00:00Z", &mut fake),
+            Err(XError::ProcurementNotPublished)
+        ));
+        assert_eq!(fake.calls, 0);
     }
 }

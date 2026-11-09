@@ -1,7 +1,6 @@
 function uniqueLinks(entities) { const allowed=new Set(entities.map((e)=>e.id)),seen=new Set(),out=[];entities.forEach((entity)=>entity.relationships.forEach((link)=>{if(!allowed.has(link.target_entity_id))return;const key=[entity.id,link.target_entity_id].sort().join("::")+`::${link.evidence_id??link.type}`;if(seen.has(key))return;seen.add(key);out.push({...link,source_entity_id:entity.id});}));return out; }
 function averageConfidence(entity){return entity.relationships.length?entity.relationships.reduce((s,item)=>s+Number(item.confidence??0),0)/entity.relationships.length:entity.attributes.length?1:0;}
 function validGeo(geo){return geo&&Number.isFinite(Number(geo.lat))&&Number.isFinite(Number(geo.lon));}
-function fallbackGeo(index,total){const angle=index/Math.max(total,1)*Math.PI*2;return{lat:38+Math.sin(angle)*12,lon:-105+Math.cos(angle)*22,label:"Approximate public graph placement"};}
 function basis(lon,lat){const a=rad(lon),b=rad(lat);return{forward:[Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)],right:[-Math.sin(a),Math.cos(a),0],up:[-Math.sin(b)*Math.cos(a),-Math.sin(b)*Math.sin(a),Math.cos(b)]};}
 function vector(lat,lon){const a=rad(lat),b=rad(lon);return[Math.cos(a)*Math.cos(b),Math.cos(a)*Math.sin(b),Math.sin(a)];}
 function slerp(a,b,t,omega){if(omega<1e-5)return a;const s=Math.sin(omega),x=Math.sin((1-t)*omega)/s,y=Math.sin(t*omega)/s;return[a[0]*x+b[0]*y,a[1]*x+b[1]*y,a[2]*x+b[2]*y];}

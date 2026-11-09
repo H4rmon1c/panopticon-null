@@ -1,5 +1,12 @@
 function updateCivicContext(entity = currentState().selected) {
-  if (!entity) return;
+  if (!entity) {
+    const brief = civic$("#civic-brief-text");
+    if (brief) brief.textContent = "No reviewed decisions have been published yet.";
+    const proof = civic$("#civic-brief-proof");
+    if (proof) proof.textContent = "A pending case stays out of the public atlas until publication review is complete.";
+    updatePlaceLabel();
+    return;
+  }
   const snapshot = currentState();
   atlas?.setSelected(entity.id);
   atlas?.setData(snapshot.entities ?? []);

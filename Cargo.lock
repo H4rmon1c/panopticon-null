@@ -1098,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-cli"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1111,6 +1111,7 @@ dependencies = [
  "pnull-publish",
  "pnull-x",
  "serde",
+ "serde_json",
  "tempfile",
  "time",
  "toml",
@@ -1119,7 +1120,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-core"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "hex",
  "rusqlite",
@@ -1132,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-detect"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "pnull-core",
  "regex",
@@ -1145,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-geometry"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "image",
  "pnull-core",
@@ -1158,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-http"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "pnull-core",
  "reqwest",
@@ -1172,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-ingest"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "image",
  "pnull-core",
@@ -1194,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "pnull-procurement"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "pnull-core",
  "pnull-ingest",
@@ -1211,17 +1212,23 @@ dependencies = [
 
 [[package]]
 name = "pnull-publish"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "pnull-core",
+ "pnull-procurement",
  "quick-xml",
+ "regex",
+ "scraper",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
+ "url",
 ]
 
 [[package]]
 name = "pnull-x"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "pnull-core",
  "pnull-publish",

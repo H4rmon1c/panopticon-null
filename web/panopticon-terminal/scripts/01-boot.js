@@ -33,7 +33,7 @@ async function boot() {
   const requested = new URLSearchParams(location.hash.slice(1)).get("entity");
   const initial = state.byId.has(requested)
     ? requested
-    : state.byId.has("ent_front_range")
+    : state.mode === "demo" && state.byId.has("ent_front_range")
       ? "ent_front_range"
       : state.entities[0]?.id;
   if (initial) await selectEntity(initial, true, true);
@@ -44,7 +44,7 @@ async function boot() {
 function normalizeEntities(items) {
   return items.map((entity, index) => ({
     ...entity,
-    geo: validGeo(entity.geo) ? entity.geo : GEO[entity.id] ?? fallbackGeo(index, items.length),
+    geo: validGeo(entity.geo) ? entity.geo : null,
     attributes: entity.attributes ?? [],
     relationships: entity.relationships ?? [],
     timeline: entity.timeline ?? [],

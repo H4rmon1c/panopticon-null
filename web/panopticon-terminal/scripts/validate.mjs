@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { validateSnapshot } from "../api.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const templates = ["templates/shell-00.html", "templates/shell-01.html", "templates/shell-02.html", "templates/shell-03.html"];
@@ -19,7 +20,7 @@ const styles = [
   "styles/08-civic.css",
   "styles/09-civic-polish.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "mock/public-snapshot.json", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "mock/public-snapshot.json", "public/public-snapshot.json", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -55,6 +56,13 @@ for (const path of [...templates, ...scripts]) {
 }
 if (!app.includes("new PanopticonClient")) failures.push("app.js: missing PanopticonClient bootstrap");
 if (!app.includes("The Public Record, Connected")) failures.push("app.js: missing civic product identity");
+if (!app.includes('params.get("demo") === "1"') || !app.includes('params.get("preview") === "1"')) failures.push("app.js: demo and preview must be explicit opt-ins");
+
+const decisionHtml = contents.get("decision.html") ?? "";
+for (const asset of ["./decision.css", "./decision.js"]) {
+  if (!decisionHtml.includes(asset)) failures.push(`decision.html: missing asset reference ${asset}`);
+}
+if (!(contents.get("scripts/03-dossier.js") ?? "").includes("decision.html?decision=")) failures.push("dossier: missing shareable decision link");
 
 const rootStyles = contents.get("styles.css") ?? "";
 for (const path of styles) {
@@ -67,7 +75,7 @@ for (const phrase of ["THE PUBLIC RECORD, CONNECTED", "What is happening here?",
 }
 
 const civicActions = contents.get("scripts/15-civic-actions.js") ?? "";
-for (const phrase of ["PEOPLE IN POWER", "documented public roles only", "No device-location access"]) {
+for (const phrase of ["RECORDED VOTERS", "names in public vote record", "No device-location access"]) {
   if (!civicActions.includes(phrase) && !civicShell.includes(phrase)) failures.push(`civic boundary: missing language: ${phrase}`);
 }
 
@@ -126,6 +134,12 @@ if (snapshot) {
   for (const item of snapshot.activity ?? []) {
     if (item.entity_id && !entities.has(item.entity_id)) failures.push(`activity ${item.id}: missing entity ${item.entity_id}`);
   }
+}
+
+try {
+  validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
+} catch (error) {
+  failures.push(`public/public-snapshot.json: ${error.message}`);
 }
 
 if (failures.length) {

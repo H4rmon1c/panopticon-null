@@ -5,10 +5,14 @@ function renderStatus() {
   if (state.mode === "demo") {
     node.classList.add("is-demo");
     $("#system-state-label").textContent = "DEMO DATA";
+  } else if (state.mode === "preview") {
+    node.classList.add("is-demo");
+    $("#system-state-label").textContent = "PENDING REVIEW // PRIVATE PREVIEW";
+  } else if (state.status?.state === "empty") {
+    $("#system-state-label").textContent = "NO PUBLISHED CASES";
   } else {
-    const age = state.status?.last_publish ? Date.now() - new Date(state.status.last_publish).getTime() : Infinity;
-    node.classList.toggle("is-stale", age > 3 * 60 * 60 * 1000);
-    $("#system-state-label").textContent = age > 3 * 60 * 60 * 1000 ? "STALE" : "PUBLIC LIVE";
+    node.classList.toggle("is-stale", state.status?.state === "stale");
+    $("#system-state-label").textContent = state.status?.state === "stale" ? "STALE SNAPSHOT" : "REVIEWED SNAPSHOT";
   }
   updateVisibleCounts();
 }
@@ -16,7 +20,7 @@ function renderStatus() {
 function renderLayers() {
   $$(".layer").forEach((button) => {
     const group = TYPE_GROUPS[button.dataset.layer];
-    button.querySelector("em").textContent = state.entities.filter((entity) => group.has(entity.type.toUpperCase())).length;
+    button.querySelector("em").textContent = state.entities.filter((entity) => group?.has(entity.type.toUpperCase())).length;
   });
 }
 
@@ -49,11 +53,10 @@ function toggleActivity() {
 
 async function selectEntity(id, focus = true, replaceHistory = false) {
   const entity = state.byId.get(id) ?? await client.getEntity(id);
-  if (!entity.geo) entity.geo = GEO[entity.id] ?? fallbackGeo(0, 1);
   state.selected = entity;
   state.byId.set(entity.id, entity);
   globe.select(entity.id);
-  if (focus) globe.focus(entity.geo, state.view === "network" ? 1.48 : 1.30);
+  if (focus && validGeo(entity.geo)) globe.focus(entity.geo, state.view === "network" ? 1.48 : 1.30);
   await loadSources(entity.source_ids);
   renderDossier(entity);
   const hash = `entity=${encodeURIComponent(entity.id)}`;

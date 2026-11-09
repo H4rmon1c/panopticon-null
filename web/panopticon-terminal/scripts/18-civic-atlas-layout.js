@@ -5,12 +5,13 @@ CivicAtlas.prototype.layout = function layout() {
   const basePositions = {
     FACILITY: [0.52, 0.48], DATACENTER: [0.52, 0.48], CAMPUS: [0.52, 0.48], PROJECT: [0.52, 0.48],
     ORGANIZATION: [0.22, 0.25], COMPANY: [0.22, 0.25], AGENCY: [0.22, 0.25], OPERATOR: [0.22, 0.25],
+    JURISDICTION: [0.50, 0.15], TECHNOLOGY: [0.84, 0.50],
     UTILITY: [0.20, 0.69], POWER: [0.20, 0.69], SUBSTATION: [0.20, 0.69],
     NETWORK: [0.80, 0.28], CARRIER: [0.80, 0.28], FIBER: [0.80, 0.28],
     CONTRACTOR: [0.78, 0.65], SUPPLIER: [0.67, 0.79], VENDOR: [0.78, 0.65],
     CONTRACT: [0.46, 0.82], AGREEMENT: [0.46, 0.82], AWARD: [0.46, 0.82], SOLICITATION: [0.46, 0.82],
     DECISION: [0.36, 0.18], VOTE: [0.36, 0.18], ORDINANCE: [0.36, 0.18], PERMIT: [0.36, 0.18],
-    PERSON: [0.66, 0.17], OFFICIAL: [0.66, 0.17], OFFICEHOLDER: [0.66, 0.17],
+    PERSON: [0.66, 0.17], OFFICIAL: [0.66, 0.17], OFFICEHOLDER: [0.66, 0.17], RECORDED_VOTER: [0.66, 0.17],
   };
   const groupCounts = new Map();
   this.nodes = visible.map((entity, index) => {
@@ -38,6 +39,14 @@ CivicAtlas.prototype.layout = function layout() {
       const angle = count * 2.2 + index * 0.37;
       nx = base[0] + Math.cos(angle) * Math.min(0.08, count * 0.025);
       ny = base[1] + Math.sin(angle) * Math.min(0.07, count * 0.022);
+      if (type === "RECORDED_VOTER") {
+        nx = 0.60 + (count % 3) * 0.14;
+        ny = 0.15 + Math.floor(count / 3) * 0.14;
+      }
+      if (type === "TECHNOLOGY") {
+        nx = 0.69 + (count % 2) * 0.18;
+        ny = 0.64 + Math.floor(count / 2) * 0.16;
+      }
       if (entity.id === selected?.id) { nx = 0.52; ny = 0.48; }
     }
     return { entity, nx, ny };

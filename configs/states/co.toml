@@ -17,6 +17,30 @@ maximum_bytes = 20971520
 robots_status = "Unverified on 2026-08-16; production refresh must verify current directives before scheduled retrieval. The documented public API was accessed manually at conservative rates for v0.0.1 fixtures."
 terms_note = "No API-specific automated-use terms or published quota were found. Use one request at a time, date filters, caching, and backoff; stop on restrictions."
 
+[[sources]]
+id = "colorado-springs-contract-awards"
+name = "Colorado Springs contract-award information"
+url = "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+source_type = "html_page"
+documented_at = "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+official_discovery_url = "https://coloradosprings.gov/procurement-services/page/contract-award-information"
+minimum_interval_seconds = 86400
+maximum_bytes = 8388608
+robots_status = "Not reviewed for live refresh; capture current robots directives before recording a source review."
+terms_note = "Operator must review current site terms and scope before any live retrieval."
+
+[[sources]]
+id = "colorado-springs-solicitation-mirror"
+name = "Colorado Springs solicitation information mirror"
+url = "https://coloradosprings.gov/solicitations"
+source_type = "html_page"
+documented_at = "https://coloradosprings.gov/solicitations"
+official_discovery_url = "https://coloradosprings.gov/solicitations"
+minimum_interval_seconds = 86400
+maximum_bytes = 8388608
+robots_status = "Not reviewed for live refresh; capture current robots directives before recording a source review."
+terms_note = "Informational mirror; BidNet and Bonfire remain authoritative. Operator must review current terms and scope before any live retrieval."
+
 [[demo_documents]]
 id = "ordinance-draft"
 path = "fixtures/co/ordinance-25-93-draft.pdf"

@@ -1,99 +1,57 @@
-const DEFAULT_TIMEOUT_MS = 3500;
+const SNAPSHOT_SCHEMA = "pnull-public-snapshot-v1";
 
 export class PanopticonClient {
-  constructor({ baseUrl = "/api/v1", mockUrl = "./mock/public-snapshot.json" } = {}) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.mockUrl = mockUrl;
+  constructor({
+    publicUrl = "./public/public-snapshot.json",
+    demoUrl = "./mock/public-snapshot.json",
+    previewUrl = "./preview-snapshot.json",
+    demo = false,
+    preview = false,
+  } = {}) {
+    if (demo && preview) throw new Error("Choose either demonstration or preview data");
+    this.publicUrl = publicUrl;
+    this.demoUrl = demoUrl;
+    this.previewUrl = previewUrl;
+    this.demo = demo;
+    this.preview = preview;
     this.mode = "connecting";
     this.snapshot = null;
   }
 
   async bootstrap() {
-    try {
-      const [status, activityResponse, featuredResponse] = await Promise.all([
-        this.#request("/status"),
-        this.#request("/activity?limit=12"),
-        this.#request("/entities?limit=6&sort=updated"),
-      ]);
-
-      this.mode = "live";
-      return {
-        mode: this.mode,
-        status: normalizeStatus(status),
-        activity: normalizeItems(activityResponse),
-        featured: normalizeItems(featuredResponse),
-      };
-    } catch (error) {
-      const snapshot = await this.#loadMock();
-      this.mode = "demo";
-      return {
-        mode: this.mode,
-        status: normalizeStatus(snapshot.status, snapshot),
-        activity: snapshot.activity ?? [],
-        featured: snapshot.entities?.slice(0, 6) ?? [],
-        fallbackReason: error instanceof Error ? error.message : String(error),
-      };
-    }
+    const snapshot = await this.#loadSnapshot();
+    this.mode = this.demo ? "demo" : this.preview ? "preview" : "public";
+    return {
+      mode: this.mode,
+      status: normalizeStatus(snapshot.status, snapshot),
+      activity: snapshot.activity ?? [],
+      featured: snapshot.entities?.slice(0, 6) ?? [],
+    };
   }
 
   async search(query, { limit = 12 } = {}) {
+    const snapshot = await this.#loadSnapshot();
     const trimmed = query.trim();
-    if (this.mode === "live") {
-      try {
-        const path = trimmed
-          ? `/search?q=${encodeURIComponent(trimmed)}&limit=${limit}`
-          : `/entities?limit=${limit}&sort=updated`;
-        return normalizeItems(await this.#request(path));
-      } catch {
-        // Keep the shell usable during API development when a mock snapshot exists.
-      }
-    }
-
-    const snapshot = await this.#loadMock();
     if (!trimmed) return (snapshot.entities ?? []).slice(0, limit).map(entityResult);
     return searchSnapshot(snapshot, trimmed, limit);
   }
 
   async getEntity(id) {
-    if (this.mode === "live") {
-      try {
-        return await this.#request(`/entities/${encodeURIComponent(id)}`);
-      } catch {
-        // Fall through only when a matching demonstration entity exists.
-      }
-    }
-
-    const snapshot = await this.#loadMock();
+    const snapshot = await this.#loadSnapshot();
     const entity = snapshot.entities?.find((item) => item.id === id);
     if (!entity) throw new Error(`Public entity not found: ${id}`);
     return entity;
   }
 
   async getEvidence(id) {
-    if (this.mode === "live") {
-      try {
-        return await this.#request(`/evidence/${encodeURIComponent(id)}`);
-      } catch {
-        // Development fallback below.
-      }
-    }
-
-    const snapshot = await this.#loadMock();
+    const snapshot = await this.#loadSnapshot();
     const evidence = snapshot.evidence?.find((item) => item.id === id);
     if (!evidence) throw new Error(`Public evidence not found: ${id}`);
     return evidence;
   }
 
   async getSource(id) {
-    if (this.mode === "live") {
-      try {
-        return await this.#request(`/sources/${encodeURIComponent(id)}`);
-      } catch {
-        // Development fallback below.
-      }
-    }
-
-    const snapshot = await this.#loadMock();
+    const snapshot = await this.#loadSnapshot();
     const source = snapshot.sources?.find((item) => item.id === id);
     if (!source) throw new Error(`Public source not found: ${id}`);
     return source;
@@ -107,49 +65,19 @@ export class PanopticonClient {
       .map((result) => result.value);
   }
 
-  async #request(path, options = {}) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
-        headers: { Accept: "application/json", ...(options.headers ?? {}) },
-        credentials: "same-origin",
-        signal: controller.signal,
-      });
-
-      if (!response.ok) throw new Error(`Public API ${response.status} for ${path}`);
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        throw new Error(`Public API returned non-JSON content for ${path}`);
-      }
-      return await response.json();
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  async #loadMock() {
+  async #loadSnapshot() {
     if (this.snapshot) return this.snapshot;
-
-    const response = await fetch(this.mockUrl, {
+    const response = await fetch(this.demo ? this.demoUrl : this.preview ? this.previewUrl : this.publicUrl, {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Unable to load public snapshot (${response.status})`);
+    if (!response.ok) throw new Error(`Unable to load ${this.demo ? "demo" : this.preview ? "private preview" : "reviewed public"} snapshot (${response.status})`);
 
     const snapshot = await response.json();
-    validateSnapshot(snapshot);
+    validateSnapshot(snapshot, { demo: this.demo, preview: this.preview });
     this.snapshot = snapshot;
     return snapshot;
   }
-}
-
-function normalizeItems(value) {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.items)) return value.items;
-  return [];
 }
 
 function normalizeStatus(status = {}, snapshot = {}) {
@@ -176,12 +104,63 @@ function normalizeStatus(status = {}, snapshot = {}) {
   };
 }
 
-function validateSnapshot(snapshot) {
+export function validateSnapshot(snapshot, { demo = false, preview = false } = {}) {
   if (!snapshot || typeof snapshot !== "object") throw new Error("Public snapshot must be an object");
-  if (typeof snapshot.schema_version !== "string") throw new Error("Public snapshot is missing schema_version");
-  if (!snapshot.status || !Array.isArray(snapshot.entities)) {
-    throw new Error("Public snapshot is missing status or entities");
+  if (snapshot.schema_version !== SNAPSHOT_SCHEMA) throw new Error("Unsupported public snapshot schema");
+  if (snapshot.demo !== demo) throw new Error("Public and demonstration datasets must stay separate");
+  if (Boolean(snapshot.preview) !== preview) throw new Error("Preview and published datasets must stay separate");
+  if (!preview && /pending|draft|rejected/i.test(String(snapshot.status?.state ?? ""))) {
+    throw new Error("Pending-review data cannot be loaded as a published snapshot");
   }
+  if (!snapshot.status || !Array.isArray(snapshot.entities) || !Array.isArray(snapshot.evidence) || !Array.isArray(snapshot.sources)) {
+    throw new Error("Public snapshot is missing status, entities, evidence, or sources");
+  }
+
+  const entities = new Set(snapshot.entities.map((entity) => entity.id));
+  const sources = new Map(snapshot.sources.map((source) => [source.id, source]));
+  const evidence = new Map(snapshot.evidence.map((record) => [record.id, record]));
+  if (entities.size !== snapshot.entities.length || sources.size !== snapshot.sources.length || evidence.size !== snapshot.evidence.length) {
+    throw new Error("Public snapshot contains duplicate IDs");
+  }
+
+  for (const source of snapshot.sources) {
+    if (!source.id || !/^[a-f0-9]{64}$/.test(source.sha256 ?? "")) throw new Error(`Source ${source.id ?? "?"} lacks a preserved digest`);
+    if (Boolean(source.demo) !== demo) throw new Error(`Source ${source.id} crosses the demonstration boundary`);
+    if (!safePublicUrl(source.canonical_url)) throw new Error(`Source ${source.id} lacks a public HTTPS URL`);
+  }
+  for (const record of snapshot.evidence) {
+    if (Boolean(record.demo) !== demo) throw new Error(`Evidence ${record.id ?? "?"} crosses the demonstration boundary`);
+    if (!record.id || !sources.has(record.source_id) || (!preview && record.review_state !== "APPROVED") || !record.locator) {
+      throw new Error(`Evidence ${record.id ?? "?"} is not publication ready`);
+    }
+    if (!/^sha256:[a-f0-9]{64}$/.test(record.review_bound_digest ?? "") || record.sha256 !== sources.get(record.source_id).sha256) {
+      throw new Error(`Evidence ${record.id} lacks a matching review-bound digest`);
+    }
+  }
+  for (const entity of snapshot.entities) {
+    if (!entity.id || !entity.type || !entity.name) throw new Error("Public entity lacks an ID, type, or name");
+    if (!demo && (entity.tags ?? []).includes("DEMO DATA")) throw new Error(`Entity ${entity.id} crosses the demonstration boundary`);
+    if (!preview && /pending|draft|rejected/i.test(String(entity.review_state ?? entity.publication_state ?? ""))) {
+      throw new Error(`Entity ${entity.id} is not publication ready`);
+    }
+    for (const id of entity.source_ids ?? []) if (!sources.has(id)) throw new Error(`Entity ${entity.id} has an unknown source`);
+    for (const relation of entity.relationships ?? []) {
+      if (!entities.has(relation.target_entity_id) || !evidence.has(relation.evidence_id)) {
+        throw new Error(`Entity ${entity.id} has an unsupported relationship`);
+      }
+    }
+    for (const item of [...(entity.attributes ?? []), ...(entity.timeline ?? [])]) {
+      if (item.evidence_id && !evidence.has(item.evidence_id)) throw new Error(`Entity ${entity.id} has unknown evidence`);
+    }
+    for (const vote of entity.votes ?? []) {
+      if (!evidence.has(vote.evidence_id)) throw new Error(`Entity ${entity.id} has a vote without evidence`);
+    }
+  }
+  return snapshot;
+}
+
+function safePublicUrl(value) {
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
 }
 
 function entityResult(entity) {

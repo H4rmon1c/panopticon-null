@@ -643,7 +643,7 @@ mod tests {
             observations: Vec::new(),
         };
         let (snapshot, _) =
-            record_snapshot(store, &acquisition, None, Some(1), &[]).expect("snapshot");
+            record_snapshot(store, &acquisition, None, Some(1), &[], &[]).expect("snapshot");
         snapshot
     }
 

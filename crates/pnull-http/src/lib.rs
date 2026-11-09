@@ -11,7 +11,8 @@
 //!
 //! Resolver and transport are trait abstractions so all tests remain offline.
 
-use std::net::{IpAddr, ToSocketAddrs};
+use std::io::Read;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 
 use pnull_core::{ConditionalResult, FetchObservation, StructuredError, sha256_hex};
 use reqwest::blocking::Client;
@@ -35,6 +36,8 @@ pub enum HttpError {
     MixedAnswers(String),
     #[error("redirect to unreviewed host {0}")]
     UnreviewedRedirect(String),
+    #[error("request to unreviewed endpoint {0}")]
+    UnreviewedEndpoint(String),
     #[error("redirect loop detected")]
     RedirectLoop,
     #[error("too many redirects")]
@@ -77,6 +80,10 @@ pub trait Transport {
 #[derive(Clone, Debug)]
 pub struct TransportRequest {
     pub url: Url,
+    /// The exact public addresses validated for this request hop. The real
+    /// transport must connect to these addresses, not resolve the host again.
+    pub resolved_ips: Vec<IpAddr>,
+    pub max_bytes: usize,
     pub conditional_etag: Option<String>,
     pub conditional_modified: Option<String>,
 }
@@ -91,30 +98,59 @@ pub struct TransportResponse {
 /// Uses reqwest with redirect following disabled so the caller controls and
 /// records every hop.
 pub struct ReqwestTransport {
-    client: Client,
+    max_bytes: usize,
 }
 
 impl ReqwestTransport {
     pub fn new(max_bytes: usize) -> Result<Self, HttpError> {
-        let client = Client::builder()
+        if max_bytes == 0 {
+            return Err(HttpError::Oversized(max_bytes));
+        }
+        Ok(Self { max_bytes })
+    }
+
+    fn client_for(request: &TransportRequest) -> Result<Client, HttpError> {
+        if request.url.scheme() != "https"
+            || request.url.port_or_known_default() != Some(443)
+            || !request.url.username().is_empty()
+            || request.url.password().is_some()
+        {
+            return Err(HttpError::InsecureUrl);
+        }
+        let host = request.url.host_str().ok_or(HttpError::InsecureUrl)?;
+        validate_resolved(host, &request.resolved_ips)?;
+        let port = request
+            .url
+            .port_or_known_default()
+            .ok_or(HttpError::InsecureUrl)?;
+        let socket_addrs: Vec<SocketAddr> = request
+            .resolved_ips
+            .iter()
+            .copied()
+            .map(|ip| SocketAddr::new(ip, port))
+            .collect();
+        Client::builder()
             .connect_timeout(std::time::Duration::from_secs(10))
             .timeout(std::time::Duration::from_secs(30))
             .redirect(Policy::none())
+            // A proxy could independently resolve the hostname and defeat the
+            // validated-address binding. Fetch official sources directly.
+            .no_proxy()
+            .resolve_to_addrs(host, &socket_addrs)
             .user_agent(concat!(
                 "PanopticonNull/",
                 env!("CARGO_PKG_VERSION"),
                 " (+https://github.com/H4rmon1c/panopticon-null)"
             ))
             .build()
-            .map_err(|_| HttpError::Transport)?;
-        let _ = max_bytes;
-        Ok(Self { client })
+            .map_err(|_| HttpError::Transport)
     }
 }
 
 impl Transport for ReqwestTransport {
     fn request(&self, request: &TransportRequest) -> Result<TransportResponse, HttpError> {
-        let mut builder = self.client.get(request.url.clone());
+        let client = Self::client_for(request)?;
+        let mut builder = client.get(request.url.clone());
         if let Some(etag) = &request.conditional_etag {
             builder = builder.header(reqwest::header::IF_NONE_MATCH, etag);
         }
@@ -133,10 +169,7 @@ impl Transport for ReqwestTransport {
                     .map(|text| (name.as_str().to_owned(), text.to_owned()))
             })
             .collect();
-        let body = response
-            .bytes()
-            .map(|bytes| bytes.to_vec())
-            .map_err(|_| HttpError::Transport)?;
+        let body = read_bounded(response, request.max_bytes.min(self.max_bytes))?;
         Ok(TransportResponse {
             status_code,
             headers,
@@ -145,25 +178,54 @@ impl Transport for ReqwestTransport {
     }
 }
 
+fn read_bounded(mut reader: impl Read, max_bytes: usize) -> Result<Vec<u8>, HttpError> {
+    let mut body = Vec::new();
+    let limit = u64::try_from(max_bytes)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
+    reader
+        .by_ref()
+        .take(limit)
+        .read_to_end(&mut body)
+        .map_err(|_| HttpError::Transport)?;
+    if body.len() > max_bytes {
+        return Err(HttpError::Oversized(max_bytes));
+    }
+    Ok(body)
+}
+
 /// Whether an IP address is public (not loopback, private, link-local,
 /// multicast, unspecified, documentation, or otherwise non-routable).
 pub fn is_public_address(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(value) => {
+            let octets = value.octets();
             !(value.is_private()
                 || value.is_loopback()
                 || value.is_link_local()
                 || value.is_broadcast()
                 || value.is_unspecified()
                 || value.is_multicast()
-                || value.is_documentation())
+                || value.is_documentation()
+                || octets[0] == 0 // "this network" (0/8)
+                || (octets[0] == 100 && (64..=127).contains(&octets[1])) // shared address space
+                || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
+                || (octets[0] == 192 && octets[1] == 88 && octets[2] == 99)
+                || (octets[0] == 198 && matches!(octets[1], 18 | 19)) // benchmarks
+                || octets[0] >= 240) // reserved/broadcast
         }
         IpAddr::V6(value) => {
-            !(value.is_loopback()
-                || value.is_unspecified()
-                || value.is_multicast()
-                || value.is_unique_local()
-                || value.is_unicast_link_local())
+            if let Some(mapped) = value.to_ipv4_mapped() {
+                return is_public_address(IpAddr::V4(mapped));
+            }
+            let octets = value.octets();
+            // Accept only global-unicast space. Exclude documentation and
+            // transition/special-purpose prefixes within it as well.
+            octets[0] & 0xe0 == 0x20
+                && !(octets[0] == 0x20
+                    && octets[1] == 0x01
+                    && (octets[2] <= 0x01 || (octets[2] == 0x0d && octets[3] == 0xb8)))
+                && !(octets[0] == 0x20 && octets[1] == 0x02)
         }
     }
 }
@@ -229,6 +291,9 @@ fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a s
 pub struct FetchConfig {
     /// Hosts explicitly reviewed by a human operator.
     pub reviewed_hosts: Vec<String>,
+    /// Optional exact paths reviewed for this source. Every redirect must
+    /// remain on one of these paths before the next request is sent.
+    pub reviewed_paths: Option<Vec<String>>,
     /// Maximum response body bytes.
     pub max_bytes: usize,
 }
@@ -239,6 +304,30 @@ impl FetchConfig {
             .iter()
             .any(|reviewed| reviewed.eq_ignore_ascii_case(host))
     }
+
+    fn allows_path(&self, path: &str) -> bool {
+        self.reviewed_paths
+            .as_ref()
+            .is_none_or(|paths| paths.iter().any(|reviewed| reviewed == path))
+    }
+}
+
+fn validate_url_scope(config: &FetchConfig, url: &Url) -> Result<String, HttpError> {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(HttpError::InsecureUrl);
+    }
+    let host = url.host_str().ok_or(HttpError::InsecureUrl)?.to_owned();
+    if !config.allows_host(&host) {
+        return Err(HttpError::UnreviewedRedirect(host));
+    }
+    if !config.allows_path(url.path()) {
+        return Err(HttpError::UnreviewedEndpoint(url.path().to_owned()));
+    }
+    Ok(host)
 }
 
 /// Result of a provenance-aware fetch.
@@ -272,13 +361,7 @@ pub fn provenance_fetch(
 ) -> Result<FetchResult, HttpError> {
     let url =
         Url::parse(&request.requested_url).map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
-    if url.scheme() != "https" {
-        return Err(HttpError::InsecureUrl);
-    }
-    let host = url.host_str().ok_or(HttpError::InsecureUrl)?.to_owned();
-    if !config.allows_host(&host) {
-        return Err(HttpError::UnreviewedRedirect(host));
-    }
+    validate_url_scope(config, &url)?;
     let mut observations = Vec::new();
     let mut current_url = url.clone();
     let mut redirects = 0usize;
@@ -286,13 +369,7 @@ pub fn provenance_fetch(
     let mut unchanged = false;
 
     loop {
-        let current_host = current_url
-            .host_str()
-            .ok_or(HttpError::InsecureUrl)?
-            .to_owned();
-        if !config.allows_host(&current_host) {
-            return Err(HttpError::UnreviewedRedirect(current_host));
-        }
+        let current_host = validate_url_scope(config, &current_url)?;
         let addresses = resolver.resolve(&current_host)?;
         validate_resolved(&current_host, &addresses)?;
 
@@ -309,6 +386,8 @@ pub fn provenance_fetch(
 
         let response = transport.request(&TransportRequest {
             url: current_url.clone(),
+            resolved_ips: addresses.clone(),
+            max_bytes: config.max_bytes,
             conditional_etag,
             conditional_modified,
         })?;
@@ -404,13 +483,7 @@ fn follow_redirect(
     let next = current_url
         .join(&target)
         .map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
-    if next.scheme() != "https" {
-        return Err(HttpError::InsecureUrl);
-    }
-    let next_host = next.host_str().ok_or(HttpError::InsecureUrl)?.to_owned();
-    if !config.allows_host(&next_host) {
-        return Err(HttpError::UnreviewedRedirect(next_host));
-    }
+    validate_url_scope(config, &next)?;
     if &next == current_url {
         return Err(HttpError::RedirectLoop);
     }
@@ -481,6 +554,8 @@ pub fn observation_error(code: &str, message: String) -> StructuredError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::io::Cursor;
 
     struct FakeResolver(Vec<IpAddr>);
 
@@ -500,9 +575,36 @@ mod tests {
         }
     }
 
+    struct CapturingTransport {
+        request: RefCell<Option<TransportRequest>>,
+    }
+
+    impl Transport for CapturingTransport {
+        fn request(&self, request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            self.request.replace(Some(request.clone()));
+            Ok(response(200, b"ok"))
+        }
+    }
+
+    struct RedirectingTransport {
+        calls: Cell<usize>,
+    }
+
+    impl Transport for RedirectingTransport {
+        fn request(&self, _request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(TransportResponse {
+                status_code: 302,
+                headers: vec![("location".to_owned(), "/outside".to_owned())],
+                body: Vec::new(),
+            })
+        }
+    }
+
     fn config() -> FetchConfig {
         FetchConfig {
             reviewed_hosts: vec!["example.test".to_owned()],
+            reviewed_paths: None,
             max_bytes: 1024,
         }
     }
@@ -564,6 +666,25 @@ mod tests {
             validate_resolved("example.test", &["203.0.113.5".parse().unwrap()]),
             Err(HttpError::NonPublicAddress(_))
         ));
+        assert!(matches!(
+            validate_resolved("example.test", &["::ffff:127.0.0.1".parse().unwrap()]),
+            Err(HttpError::NonPublicAddress(_))
+        ));
+        for address in [
+            "100.64.0.1",
+            "198.18.0.1",
+            "192.0.0.1",
+            "2001:db8::1",
+            "2002:c0a8:0101::1",
+        ] {
+            assert!(
+                matches!(
+                    validate_resolved("example.test", &[address.parse().unwrap()]),
+                    Err(HttpError::NonPublicAddress(_))
+                ),
+                "{address} must be refused"
+            );
+        }
     }
 
     #[test]
@@ -649,6 +770,23 @@ mod tests {
     }
 
     #[test]
+    fn same_host_redirect_to_unreviewed_path_is_refused_before_second_request() {
+        let transport = RedirectingTransport {
+            calls: Cell::new(0),
+        };
+        let mut scoped = config();
+        scoped.reviewed_paths = Some(vec!["/doc".to_owned()]);
+        let result = provenance_fetch(
+            &scoped,
+            &FakeResolver(vec!["93.184.216.34".parse().unwrap()]),
+            &transport,
+            &request(None),
+        );
+        assert!(matches!(result, Err(HttpError::UnreviewedEndpoint(_))));
+        assert_eq!(transport.calls.get(), 1);
+    }
+
+    #[test]
     fn oversized_streaming_response_is_rejected() {
         let transport = FakeTransport {
             responses: vec![response(200, &vec![b'x'; 4096])],
@@ -660,5 +798,35 @@ mod tests {
             &request(None),
         );
         assert!(matches!(result, Err(HttpError::Oversized(_))));
+    }
+
+    #[test]
+    fn transport_gets_the_exact_validated_addresses_and_limit() {
+        let transport = CapturingTransport {
+            request: RefCell::new(None),
+        };
+        let address = "93.184.216.34".parse().expect("address");
+        provenance_fetch(
+            &config(),
+            &FakeResolver(vec![address]),
+            &transport,
+            &request(None),
+        )
+        .expect("fetch");
+        let captured = transport.request.borrow();
+        let captured = captured.as_ref().expect("captured request");
+        assert_eq!(captured.resolved_ips, vec![address]);
+        assert_eq!(captured.max_bytes, 1024);
+    }
+
+    #[test]
+    fn bounded_reader_never_consumes_more_than_limit_plus_one() {
+        let mut input = Cursor::new(vec![b'x'; 4096]);
+        assert!(matches!(
+            read_bounded(&mut input, 1024),
+            Err(HttpError::Oversized(1024))
+        ));
+        assert_eq!(input.position(), 1025);
+        assert_eq!(read_bounded(Cursor::new(b"small"), 1024).unwrap(), b"small");
     }
 }

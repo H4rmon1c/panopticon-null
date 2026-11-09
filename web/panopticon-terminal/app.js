@@ -55,12 +55,15 @@ for (const src of classicScripts) {
   });
 }
 
-window.client = new PanopticonClient();
+const params = new URLSearchParams(location.search);
+window.client = new PanopticonClient({ demo: params.get("demo") === "1", preview: params.get("preview") === "1" });
 
 window.boot().catch((error) => {
   console.error(error);
   document.querySelector("#system-state")?.classList.add("is-stale");
   const label = document.querySelector("#system-state-label");
   if (label) label.textContent = "OFFLINE";
+  const brief = document.querySelector("#civic-brief-text");
+  if (brief) brief.textContent = "Reviewed public data is unavailable.";
   window.toast?.(`TERMINAL FAILED // ${error.message}`);
 });

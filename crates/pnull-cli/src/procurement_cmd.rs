@@ -4,18 +4,20 @@
 //! default. Network retrieval is never attempted by this module: the connectors
 //! are deterministic parsers over preserved snapshots, and the coverage ledger
 //! records the informational-mirror status of each source. Live mode is an
-//! explicit opt-in that is refused unless a persistent source review exists; no
-//! live procurement fetch path is wired in this milestone.
+//! explicit opt-in guarded by a persistent source review. Network retrieval is
+//! implemented by the separate `refresh` command, not fixture ingestion.
 
 use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
-use pnull_core::{CoverageEntry, CoverageState, SourceAuthority, Store, sha256_hex};
+use pnull_core::{CoverageEntry, CoverageState, SourceAuthority, SourceReview, Store, sha256_hex};
 use pnull_procurement::{
     Acquisition, OpenBookFinding, build_cora_draft, generate_case_file, import_supplied_record,
     parse_awards_table, parse_solicitations, record_snapshot,
 };
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 /// Default fixture paths (committed, offline).
 const DEFAULT_AWARDS_FIXTURE: &str = "fixtures/procurement/contract-awards.html";
@@ -34,6 +36,7 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
     let html = String::from_utf8_lossy(&bytes);
     let records =
         parse_solicitations(&html, &digest).context("parse solicitation mirror snapshot")?;
+    store.persist_content(&digest, &bytes)?;
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-solicitation-mirror".to_owned(),
@@ -51,12 +54,14 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
+    let sol_rows = pnull_procurement::solicitation_record_rows(&records);
     let (sol_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(records.len() as u64),
-        &[],
+        &sol_rows,
+        &sol_rows,
     )?;
     let sol_evidence = vec![sol_snapshot.id.clone()];
 
@@ -88,6 +93,7 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
     let digest = sha256_hex(&bytes);
     let html = String::from_utf8_lossy(&bytes);
     let rows = parse_awards_table(&html, &digest).context("parse contract-award snapshot")?;
+    store.persist_content(&digest, &bytes)?;
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-contract-awards".to_owned(),
@@ -109,12 +115,14 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
         coverage_state: CoverageState::InformationalOnly,
         observations: Vec::new(),
     };
+    let award_rows = pnull_procurement::award_record_rows(&rows);
     let (award_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         pnull_procurement::latest_snapshot(store, &acquisition.source_id)?.as_ref(),
         Some(rows.len() as u64),
-        &[],
+        &award_rows,
+        &award_rows,
     )?;
     let award_evidence = vec![award_snapshot.id.clone()];
 
@@ -220,6 +228,11 @@ pub fn import_record(
         50 * 1024 * 1024,
     )
     .map_err(|e| anyhow!(e.to_string()))?;
+    // Persist the supplied record in the store so a CORA response can link to
+    // evidence that provably exists (v0.0.4, Item 3).
+    let store = Store::open(data_dir)?;
+    pnull_procurement::persist_supplied_record(&store, &record)
+        .map_err(|e| anyhow!(e.to_string()))?;
     println!(
         "imported supplied record {} ({} bytes, digest {})",
         record.id, record.byte_count, record.observed_digest
@@ -384,21 +397,22 @@ pub fn coverage_diff(store: &Store, old_snapshot: &str, new_snapshot: &str) -> R
             new.source_id
         );
     }
-    // Deterministic placeholder rows: both snapshots store their record counts.
-    let old_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            old.record_count, old.persisted_digest
-        ),
-    }];
-    let new_rows = vec![pnull_procurement::RecordRow {
-        key: "snapshot".to_owned(),
-        canonical: format!(
-            "count={:?} digest={}",
-            new.record_count, new.persisted_digest
-        ),
-    }];
+    // Rows come from the database's stored snapshot rows, never from files.
+    // Legacy snapshots with no preserved rows report a coverage limitation.
+    let old_rows = match pnull_procurement::snapshot_rows(store, old_snapshot) {
+        Ok(rows) => rows,
+        Err(e) => {
+            println!("old snapshot has no preserved row evidence: {e}");
+            return Ok(());
+        }
+    };
+    let new_rows = match pnull_procurement::snapshot_rows(store, new_snapshot) {
+        Ok(rows) => rows,
+        Err(e) => {
+            println!("new snapshot has no preserved row evidence: {e}");
+            return Ok(());
+        }
+    };
     let diff = pnull_procurement::record_diff(
         old_snapshot,
         new_snapshot,
@@ -439,7 +453,7 @@ pub fn case_build(store: &Store, matter_id: &str, output_dir: &Path) -> Result<(
     Ok(())
 }
 
-/// Run `cora draft <matter>`.
+/// Run `cora draft <matter>` — generate a draft and register it in the ledger.
 pub fn cora_draft(store: &Store, matter_id: &str) -> Result<()> {
     let matter = store.procurement_matter(matter_id)?;
     let identifiers = store.procurement_identifiers(matter_id)?;
@@ -453,17 +467,230 @@ pub fn cora_draft(store: &Store, matter_id: &str) -> Result<()> {
         "colorado-springs-solicitation-mirror",
         "openbook-cos",
     ];
+    let date_range = Some((Some("2026-01-01".to_owned()), Some("2026-08-17".to_owned())));
     let draft = build_cora_draft(
         &matter,
         &identifiers,
         &missing,
-        Some((Some("2026-01-01".to_owned()), Some("2026-08-17".to_owned()))),
+        date_range.clone(),
         Some(&matter.title),
         &sources_checked,
     );
     store.insert_cora_draft(&draft)?;
+    // Register the request in the append-only ledger (Item 3).
+    let registered = pnull_procurement::register_cora_draft(
+        store,
+        matter_id,
+        pnull_procurement::CITY_DEPARTMENT,
+        identifiers.iter().map(|i| i.raw.clone()).collect(),
+        missing.iter().map(|s| (*s).to_owned()).collect(),
+        date_range,
+        Some(matter.title.clone()),
+        sources_checked.iter().map(|s| (*s).to_owned()).collect(),
+        &draft.markdown,
+        pnull_procurement::OFFLINE_CREATED_AT,
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
     println!("{}", draft.markdown);
+    println!(
+        "STATUS: {} in the local request ledger.",
+        if registered {
+            "registered (drafted)"
+        } else {
+            "already registered"
+        }
+    );
     println!("STATUS: local draft only; not submitted. Operator/legal review required.");
+    Ok(())
+}
+
+/// Run `cora list [--matter <id>]`.
+pub fn cora_list(store: &Store, matter_id: Option<&str>) -> Result<()> {
+    let requests = pnull_procurement::list_cora_requests(store, matter_id)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    if requests.is_empty() {
+        println!("no CORA requests in the ledger");
+        return Ok(());
+    }
+    for request in &requests {
+        println!(
+            "{} | matter {} | state {} | events {} | created {}",
+            request.id,
+            request.matter_id,
+            request.state.label(),
+            request.events.len(),
+            request.created_at
+        );
+    }
+    Ok(())
+}
+
+/// Run `cora show <request-id>`.
+pub fn cora_show(store: &Store, request_id: &str) -> Result<()> {
+    let request = pnull_procurement::show_cora_request(store, request_id)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    println!("request {} (matter {})", request.id, request.matter_id);
+    println!("  state: {}", request.state.label());
+    println!("  created: {}", request.created_at);
+    println!("  institution: {}", request.institution);
+    println!("  identifiers: {}", request.identifiers.join(", "));
+    println!(
+        "  missing record types: {}",
+        request.missing_record_types.join(", ")
+    );
+    println!("  draft digest: {}", request.draft_digest);
+    println!("  events:");
+    for event in &request.events {
+        println!(
+            "    [{}] {} by {} at {} — {}",
+            event.state.label(),
+            event.id,
+            event.operator,
+            event.timestamp,
+            event.note
+        );
+    }
+    Ok(())
+}
+
+/// Run `cora submit <request-id> --operator --date --tracking`.
+pub fn cora_submit(
+    store: &Store,
+    request_id: &str,
+    operator: &str,
+    date: &str,
+    tracking: &str,
+    recipient_note: Option<&str>,
+) -> Result<()> {
+    let request = pnull_procurement::submit_cora_request(
+        store,
+        request_id,
+        operator,
+        date,
+        tracking,
+        recipient_note,
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
+    println!(
+        "request {} marked {} (operator {operator})",
+        request.id,
+        request.state.label()
+    );
+    println!("note: the tool stores the operator's facts; it does not perform the submission.");
+    Ok(())
+}
+
+/// Run `cora response <request-id> --evidence-id <eid>`.
+pub fn cora_response(
+    store: &Store,
+    request_id: &str,
+    evidence_id: &str,
+    note: Option<&str>,
+) -> Result<()> {
+    let request = pnull_procurement::response_received(store, request_id, evidence_id, note)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    println!(
+        "request {} marked {} linked to evidence {evidence_id}",
+        request.id,
+        request.state.label()
+    );
+    println!("note: evidence must already be imported through the hostile-file import path.");
+    Ok(())
+}
+
+/// Run `procurement alerts` — list procurement change alerts with snapshot digests.
+pub fn procurement_alerts(store: &Store) -> Result<()> {
+    let alerts = store.all_procurement_alerts()?;
+    if alerts.is_empty() {
+        println!("no procurement change alerts recorded");
+        return Ok(());
+    }
+    for alert in &alerts {
+        println!("alert {}", alert.id);
+        println!("  source {} surface {}", alert.source_id, alert.surface);
+        println!(
+            "  snapshot {} (digest {}) -> {} (digest {})",
+            alert.old_snapshot_id,
+            alert.old_snapshot_digest,
+            alert.new_snapshot_id,
+            alert.new_snapshot_digest
+        );
+        println!(
+            "  retrieved {} coverage {}",
+            alert.retrieved_at,
+            alert.coverage_state.label()
+        );
+        println!("  matter(s): {}", alert.matter_ids.join(", "));
+        for change in &alert.changes {
+            println!(
+                "  [{}] row {} — {}",
+                change.change_kind.label(),
+                change.row_identity,
+                change.summary
+            );
+            for diff in &change.field_diffs {
+                println!(
+                    "      field {}: '{}' -> '{}'",
+                    diff.field, diff.old_raw, diff.new_raw
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run `procurement refresh <source-id> [--live]` — the exposure heartbeat
+/// (v0.0.4, Item 6). `--dry-run` is the default.
+pub fn procurement_refresh(
+    store: &Store,
+    config: &crate::StateConfig,
+    source_id: &str,
+    live: bool,
+) -> Result<()> {
+    crate::refresh::refresh_procurement(store, config, source_id, live)
+}
+
+/// Run `procurement publish-ready <matter-id>` — the operator's pre-publish
+/// checklist (v0.0.4, Item 2). Reports gate state for a matter without
+/// publishing anything.
+pub fn publish_ready(store: &Store, matter_id: &str) -> Result<()> {
+    let content =
+        pnull_procurement::build_content(store, matter_id).map_err(|e| anyhow!(e.to_string()))?;
+    let gate = pnull_publish::procurement::evaluate_gate(store, &content)
+        .map_err(|e| anyhow!("gate evaluation failed: {e}"))?;
+    println!("publish-ready report for {matter_id}:");
+    if gate.withheld {
+        println!(
+            "  RESULT: WITHHELD ({} reason(s))",
+            gate.withholds_for.len()
+        );
+    } else {
+        println!("  RESULT: READY TO PUBLISH");
+    }
+    println!(
+        "  allowlist {} present: {}",
+        pnull_publish::procurement::PROCUREMENT_CASEFILE_CATEGORY,
+        gate.allowlist_present
+    );
+    let citations = pnull_publish::procurement::citation_outcomes(store, &content)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    println!(
+        "  citations reviewed: {}/{}",
+        citations.iter().filter(|(_, o)| o == "approved").count(),
+        citations.len()
+    );
+    for (citation, outcome) in &citations {
+        if outcome != "approved" {
+            println!("    pending/rejected: {outcome} — {}", citation.quote);
+        }
+    }
+    println!("  privacy backstop issues: {}", gate.privacy_issues.len());
+    for issue in &gate.privacy_issues {
+        println!("    {issue}");
+    }
+    for reason in &gate.withholds_for {
+        println!("  withheld: {reason}");
+    }
     Ok(())
 }
 
@@ -476,13 +703,35 @@ fn read_fixture(source_path: &str, default: &str) -> Result<Vec<u8>> {
     fs::read(path).with_context(|| format!("read fixture {path}"))
 }
 
-fn require_review_for_live(store: &Store, source_id: &str) -> Result<()> {
+pub(crate) fn require_review_for_live(store: &Store, source_id: &str) -> Result<SourceReview> {
+    require_review_for_live_at(store, source_id, OffsetDateTime::now_utc())
+}
+
+pub(crate) fn require_review_for_live_at(
+    store: &Store,
+    source_id: &str,
+    now: OffsetDateTime,
+) -> Result<SourceReview> {
     match store.current_source_review(source_id)? {
-        Some(review) if review.expires_at.as_str() >= OFFLINE_RETRIEVED_AT => {
-            println!("live mode: approved source review present for {source_id}");
-            Ok(())
+        Some(review) => {
+            // CLI source reviews accept a date or an RFC 3339 instant. A date
+            // remains valid through that UTC day.
+            let expiry = if review.expires_at.len() == 10 {
+                format!("{}T23:59:59Z", review.expires_at)
+            } else {
+                review.expires_at.clone()
+            };
+            let expiry = OffsetDateTime::parse(&expiry, &Rfc3339)
+                .with_context(|| format!("invalid source review expiry for {source_id}"))?;
+            if expiry < now {
+                bail!(
+                    "live retrieval refused: source review for {source_id} expired {}",
+                    review.expires_at
+                );
+            }
+            Ok(review)
         }
-        _ => bail!(
+        None => bail!(
             "live retrieval refused: no current persistent source review for {source_id}; \
              use the offline fixture path or record a source review first"
         ),

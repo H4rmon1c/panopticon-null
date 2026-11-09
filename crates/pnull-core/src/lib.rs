@@ -9,18 +9,28 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub mod approval;
 pub mod migrate;
 pub mod procurement;
 pub mod types;
 
+pub use approval::{
+    ApprovalChain, ApprovalCorrection, ApprovalCorrectionKind, ApprovalGap, ApprovalGapKind,
+    ApprovalLink, ApprovalLinkKind, ApprovalReview, CivicDecision, ContractRecord, ContractStatus,
+    DecisionKind, DecisionOutcome, DecisionParticipation, OfficeTerm, ParticipationKind,
+    SourceProof, TechnologyRecord,
+};
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use procurement::{
-    CaseFile, CaseFileState, CoraDraft, CoverageEntry, CoverageState, IdentifierKind, MoneyState,
-    MoneyValue, OrganizationRole, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
-    ProcurementMatter, ProcurementOrganization, ReconciliationDecision, ReconciliationItem,
-    ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision, SourceAuthority,
-    SourceSnapshot, identifier_match_key, normalize_identifier, organization_alias_candidate,
-    organization_exact_match, parse_money, sha256_manifest,
+    CaseFile, CaseFileState, CoraDraft, CoraRequest, CoraRequestEvent, CoraRequestState,
+    CoverageEntry, CoverageState, FieldDiff, IdentifierKind, MoneyState, MoneyValue,
+    OfficialRelationship, OfficialRelationshipKind, OrganizationRole, ProcurementAlert,
+    ProcurementChangeKind, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
+    ProcurementMatter, ProcurementOrganization, ProcurementRecordChange, ReconciliationDecision,
+    ReconciliationItem, ReconciliationKind, RecordChange, SnapshotDiff, SnapshotRevision,
+    SnapshotRow, SnapshotRowSet, SourceAuthority, SourceSnapshot, identifier_match_key,
+    normalize_identifier, organization_alias_candidate, organization_exact_match, parse_money,
+    row_set_digest, sha256_manifest,
 };
 pub use types::{
     Action, ActionKind, BoundingRect, ConditionalResult, DocumentRole, FetchObservation,
@@ -51,6 +61,16 @@ pub enum CoreError {
     },
     #[error("schema migration failed: {0}")]
     Migration(#[from] migrate::MigrationError),
+    #[error(
+        "snapshot {snapshot_id} already has stored rows that disagree with the rows being persisted"
+    )]
+    SnapshotRowSetConflict { snapshot_id: String },
+    #[error("stored snapshot rows for {snapshot_id} violate integrity: {detail}")]
+    SnapshotRowIntegrity { snapshot_id: String, detail: String },
+    #[error("invalid approval record: {0}")]
+    InvalidApproval(String),
+    #[error("approval record {0} already exists with different content")]
+    ApprovalConflict(String),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -306,6 +326,38 @@ impl Store {
             .join(digest))
     }
 
+    /// Retains the exact fetched bytes behind their SHA-256 digest.
+    /// Repeating the same capture is idempotent; conflicting bytes fail closed.
+    pub fn persist_content(&self, digest: &str, bytes: &[u8]) -> Result<(), CoreError> {
+        let path = self.content_path(digest)?;
+        let observed = sha256_hex(bytes);
+        if observed != digest {
+            return Err(CoreError::DigestMismatch {
+                evidence_id: digest.to_owned(),
+                expected: digest.to_owned(),
+                observed,
+            });
+        }
+        if path.exists() {
+            let existing = fs::read(&path)?;
+            let existing_digest = sha256_hex(&existing);
+            if existing_digest != digest {
+                return Err(CoreError::DigestMismatch {
+                    evidence_id: digest.to_owned(),
+                    expected: digest.to_owned(),
+                    observed: existing_digest,
+                });
+            }
+            return Ok(());
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+            set_private_directory(parent)?;
+        }
+        write_atomic(&path, bytes)?;
+        Ok(())
+    }
+
     fn record_path(&self, id: &str) -> Result<PathBuf, CoreError> {
         if !id.starts_with("evidence:")
             || !id.strip_prefix("evidence:").is_some_and(|digest| {
@@ -475,6 +527,25 @@ impl Store {
             params![source_id, now_unix],
         )?;
         Ok(())
+    }
+
+    /// Atomically claim a live fetch slot before any network request. A failed
+    /// transport or parse still consumes the slot, so errors cannot bypass the
+    /// configured minimum interval. Concurrent processes cannot both claim it.
+    pub fn try_record_source_fetch(
+        &self,
+        source_id: &str,
+        minimum_interval_seconds: u64,
+        now_unix: i64,
+    ) -> Result<bool, CoreError> {
+        let interval = i64::try_from(minimum_interval_seconds).unwrap_or(i64::MAX);
+        let previous_latest_allowed = now_unix.saturating_sub(interval);
+        Ok(self.connection.execute(
+            "INSERT INTO source_fetches(source_id, fetched_at_unix) VALUES (?1, ?2)
+             ON CONFLICT(source_id) DO UPDATE SET fetched_at_unix = excluded.fetched_at_unix
+             WHERE source_fetches.fetched_at_unix <= ?3",
+            params![source_id, now_unix, previous_latest_allowed],
+        )? == 1)
     }
 
     pub fn approve(
@@ -715,7 +786,7 @@ impl Store {
         citation_id: &str,
     ) -> Result<Vec<ReviewDecision>, CoreError> {
         self.read_json_rows(
-            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY id",
+            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY json_extract(decision_json, '$.decided_at'), id",
             &[citation_id],
         )
     }
@@ -885,7 +956,7 @@ impl Store {
 
     pub fn procurement_matters(&self) -> Result<Vec<ProcurementMatter>, CoreError> {
         self.read_json_rows(
-            "SELECT matter_json FROM procurement_matters ORDER BY title",
+            "SELECT matter_json FROM procurement_matters ORDER BY id",
             &[],
         )
     }
@@ -981,7 +1052,7 @@ impl Store {
 
     pub fn source_snapshots(&self, source_id: &str) -> Result<Vec<SourceSnapshot>, CoreError> {
         self.read_json_rows(
-            "SELECT snapshot_json FROM source_snapshots WHERE source_id = ?1 ORDER BY json_extract(snapshot_json, '$.retrieved_at')",
+            "SELECT snapshot_json FROM source_snapshots WHERE source_id = ?1 ORDER BY rowid",
             &[source_id],
         )
     }
@@ -1001,6 +1072,139 @@ impl Store {
             "SELECT revision_json FROM snapshot_revisions WHERE snapshot_id = ?1 ORDER BY json_extract(revision_json, '$.recorded_at')",
             &[snapshot_id],
         )
+    }
+
+    /// Persists a snapshot's complete row set plus its completion metadata in a
+    /// single transaction (v0.0.4c).
+    ///
+    /// Rows are written first, the completion marker last. Re-persisting an
+    /// identical logical row set is a no-op (idempotent retry). Re-persisting a
+    /// *different* row set for a snapshot that already has rows returns
+    /// `SnapshotRowSetConflict` and changes nothing — historical rows are never
+    /// silently overwritten.
+    pub fn insert_snapshot_row_set_with_rows(
+        &self,
+        meta: &SnapshotRowSet,
+        rows: &[SnapshotRow],
+    ) -> Result<(), CoreError> {
+        self.transaction(|tx| {
+            let existing_meta: Option<String> = tx
+                .query_row(
+                    "SELECT row_set_digest FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                    [&meta.snapshot_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let existing_rows: Vec<SnapshotRow> = {
+                let mut statement = tx.prepare(
+                    "SELECT row_key, canonical, row_digest, raw_json FROM snapshot_rows \
+                     WHERE snapshot_id = ?1 ORDER BY seq",
+                )?;
+                let mapped = statement.query_map([&meta.snapshot_id], |row| {
+                    Ok(SnapshotRow {
+                        key: row.get(0)?,
+                        canonical: row.get(1)?,
+                        row_digest: row.get(2)?,
+                        raw_json: row.get(3)?,
+                    })
+                })?;
+                mapped.collect::<Result<_, _>>()?
+            };
+            let already_present = existing_meta.is_some() || !existing_rows.is_empty();
+            if already_present {
+                let identical_rows = row_set_digest(&existing_rows) == meta.row_set_digest;
+                let stored_meta = snapshot_row_set_from_tx(tx, &meta.snapshot_id)?;
+                let identical_meta = matches!(
+                    stored_meta,
+                    Some(m)
+                        if m.expected_count == meta.expected_count
+                            && m.row_set_digest == meta.row_set_digest
+                            && m.parser_version == meta.parser_version
+                            && m.schema_version == meta.schema_version
+                );
+                if identical_rows && identical_meta {
+                    return Ok(());
+                }
+                return Err(CoreError::SnapshotRowSetConflict {
+                    snapshot_id: meta.snapshot_id.clone(),
+                });
+            }
+            for (index, row) in rows.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO snapshot_rows(snapshot_id, seq, row_key, canonical, row_digest, raw_json) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        meta.snapshot_id,
+                        i64::try_from(index).unwrap_or(i64::MAX),
+                        row.key,
+                        row.canonical,
+                        row.row_digest,
+                        row.raw_json
+                    ],
+                )?;
+            }
+            tx.execute(
+                "INSERT INTO snapshot_row_sets(snapshot_id, expected_count, row_set_digest, parser_version, schema_version) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    meta.snapshot_id,
+                    i64::try_from(meta.expected_count).unwrap_or(i64::MAX),
+                    meta.row_set_digest,
+                    meta.parser_version,
+                    i64::from(meta.schema_version)
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Returns the completion metadata for a snapshot's stored row set, if any.
+    pub fn snapshot_row_set(&self, snapshot_id: &str) -> Result<Option<SnapshotRowSet>, CoreError> {
+        let meta = self
+            .connection
+            .query_row(
+                "SELECT snapshot_id, expected_count, row_set_digest, parser_version, schema_version \
+                 FROM snapshot_row_sets WHERE snapshot_id = ?1",
+                [snapshot_id],
+                |row| {
+                    Ok(SnapshotRowSet {
+                        snapshot_id: row.get(0)?,
+                        expected_count: u64::try_from(row.get::<_, i64>(1)?)
+                            .unwrap_or(u64::MAX),
+                        row_set_digest: row.get(2)?,
+                        parser_version: row.get(3)?,
+                        schema_version: u32::try_from(row.get::<_, i64>(4)?)
+                            .unwrap_or(u32::MAX),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(meta)
+    }
+
+    /// Returns the stored rows of a snapshot, ordered by insertion sequence.
+    ///
+    /// This is the raw loader; callers that need integrity verification should
+    /// use `pnull_procurement::snapshot::snapshot_rows`, which validates the
+    /// completion metadata, count, and digest before returning rows.
+    pub fn snapshot_rows(&self, snapshot_id: &str) -> Result<Vec<SnapshotRow>, CoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT row_key, canonical, row_digest, raw_json FROM snapshot_rows \
+             WHERE snapshot_id = ?1 ORDER BY seq",
+        )?;
+        let mapped = statement.query_map([snapshot_id], |row| {
+            Ok(SnapshotRow {
+                key: row.get(0)?,
+                canonical: row.get(1)?,
+                row_digest: row.get(2)?,
+                raw_json: row.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in mapped {
+            out.push(row?);
+        }
+        Ok(out)
     }
 
     pub fn insert_snapshot_diff(&self, diff: &SnapshotDiff) -> Result<bool, CoreError> {
@@ -1109,6 +1313,143 @@ impl Store {
 }
 
 impl Store {
+    /// Inserts a procurement change alert (Item 1), ignoring duplicates so that
+    /// re-ingesting the same snapshot pair never creates a second alert.
+    pub fn insert_procurement_alert(&self, alert: &ProcurementAlert) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO procurement_alerts(id, source_id, alert_json) VALUES (?1, ?2, ?3)",
+            params![alert.id, alert.source_id, serde_json::to_string(alert)?],
+        )? == 1)
+    }
+
+    /// Lists every procurement change alert for a source, newest retrieval first.
+    pub fn procurement_alerts(&self, source_id: &str) -> Result<Vec<ProcurementAlert>, CoreError> {
+        self.read_json_rows(
+            "SELECT alert_json FROM procurement_alerts WHERE source_id = ?1 ORDER BY json_extract(alert_json, '$.retrieved_at'), id",
+            &[source_id],
+        )
+    }
+
+    /// Lists every procurement change alert across all sources.
+    pub fn all_procurement_alerts(&self) -> Result<Vec<ProcurementAlert>, CoreError> {
+        self.read_json_rows(
+            "SELECT alert_json FROM procurement_alerts ORDER BY json_extract(alert_json, '$.retrieved_at'), source_id, id",
+            &[],
+        )
+    }
+
+    /// Inserts a CORA request ledger entry (Item 3), ignoring duplicates.
+    pub fn insert_cora_request(&self, request: &CoraRequest) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO cora_requests(id, matter_id, request_json) VALUES (?1, ?2, ?3)",
+            params![
+                request.id,
+                request.matter_id,
+                serde_json::to_string(request)?
+            ],
+        )? == 1)
+    }
+
+    /// Lists every CORA request ledger entry for a matter.
+    pub fn cora_requests(&self, matter_id: &str) -> Result<Vec<CoraRequest>, CoreError> {
+        self.read_json_rows(
+            "SELECT request_json FROM cora_requests WHERE matter_id = ?1 ORDER BY json_extract(request_json, '$.created_at'), id",
+            &[matter_id],
+        )
+    }
+
+    /// Reads a single CORA request ledger entry by id.
+    pub fn cora_request(&self, request_id: &str) -> Result<CoraRequest, CoreError> {
+        self.read_json_row(
+            "SELECT request_json FROM cora_requests WHERE id = ?1",
+            &[request_id],
+        )
+    }
+
+    /// Lists every CORA request ledger entry across all matters.
+    pub fn all_cora_requests(&self) -> Result<Vec<CoraRequest>, CoreError> {
+        self.read_json_rows(
+            "SELECT request_json FROM cora_requests ORDER BY json_extract(request_json, '$.created_at'), matter_id, id",
+            &[],
+        )
+    }
+
+    /// Updates a CORA request's JSON in place. Only used to append a new
+    /// transition event to an existing request; prior events are preserved
+    /// byte-for-byte and in order (append-only within the request's event list).
+    pub fn update_cora_request(&self, request: &CoraRequest) -> Result<(), CoreError> {
+        self.connection.execute(
+            "UPDATE cora_requests SET request_json = ?1, matter_id = ?2 WHERE id = ?3",
+            params![
+                serde_json::to_string(request)?,
+                request.matter_id,
+                request.id
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Inserts an official-relationship link (Item 5), ignoring duplicates.
+    pub fn insert_official_relationship(
+        &self,
+        relationship: &OfficialRelationship,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO official_relationships(id, source_record_id, relationship_json) VALUES (?1, ?2, ?3)",
+            params![relationship.id, relationship.source_record_id, serde_json::to_string(relationship)?],
+        )? == 1)
+    }
+
+    /// Lists every official-relationship link.
+    pub fn all_official_relationships(&self) -> Result<Vec<OfficialRelationship>, CoreError> {
+        self.read_json_rows(
+            "SELECT relationship_json FROM official_relationships ORDER BY json_extract(relationship_json, '$.source_snapshot_id'), id",
+            &[],
+        )
+    }
+
+    /// Persists an operator-imported supplied record's JSON (hostile-file import
+    /// path) so a later CORA response can link to a record that provably exists.
+    /// The record body is stored as opaque JSON; the caller owns its schema.
+    pub fn insert_supplied_record_json(
+        &self,
+        id: &str,
+        observed_digest: &str,
+        record_json: &str,
+    ) -> Result<bool, CoreError> {
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO supplied_records(id, observed_digest, record_json) VALUES (?1, ?2, ?3)",
+            params![id, observed_digest, record_json],
+        )? == 1)
+    }
+
+    /// Reads a single imported supplied record's JSON by id, if present.
+    pub fn supplied_record_json(&self, id: &str) -> Result<Option<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT record_json FROM supplied_records WHERE id = ?1")?;
+        let mut rows = statement.query(params![id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Reads a single imported supplied record's observed SHA-256 digest by
+    /// id, if present.
+    pub fn supplied_record_digest(&self, id: &str) -> Result<Option<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT observed_digest FROM supplied_records WHERE id = ?1")?;
+        let mut rows = statement.query(params![id])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+}
+
+impl Store {
     /// Runs a transactional closure over the underlying connection.
     pub fn transaction<T>(
         &self,
@@ -1119,6 +1460,41 @@ impl Store {
         transaction.commit()?;
         Ok(result)
     }
+
+    /// Low-level access to the underlying `SQLite` connection.
+    ///
+    /// Exposed as an inspection and administration escape hatch (migrations,
+    /// diagnostics, and tests). It deliberately bypasses the Store's
+    /// high-level integrity helpers, so callers are responsible for preserving
+    /// the invariants those helpers enforce. Normal reads and writes should use
+    /// the dedicated methods.
+    pub fn connection(&self) -> &Connection {
+        &self.connection
+    }
+}
+
+/// Reads a snapshot's row-set completion metadata from an open transaction.
+fn snapshot_row_set_from_tx(
+    tx: &Transaction<'_>,
+    snapshot_id: &str,
+) -> Result<Option<SnapshotRowSet>, rusqlite::Error> {
+    let meta = tx
+        .query_row(
+            "SELECT snapshot_id, expected_count, row_set_digest, parser_version, schema_version \
+             FROM snapshot_row_sets WHERE snapshot_id = ?1",
+            [snapshot_id],
+            |row| {
+                Ok(SnapshotRowSet {
+                    snapshot_id: row.get(0)?,
+                    expected_count: u64::try_from(row.get::<_, i64>(1)?).unwrap_or(u64::MAX),
+                    row_set_digest: row.get(2)?,
+                    parser_version: row.get(3)?,
+                    schema_version: u32::try_from(row.get::<_, i64>(4)?).unwrap_or(u32::MAX),
+                })
+            },
+        )
+        .optional()?;
+    Ok(meta)
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), std::io::Error> {
@@ -1186,6 +1562,76 @@ mod tests {
         assert_eq!(
             sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn fetch_attempt_claim_observes_interval_boundary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = Store::open(dir.path()).expect("store");
+        assert!(
+            store
+                .try_record_source_fetch("source", 86_400, 1_000_000)
+                .expect("first claim")
+        );
+        assert!(
+            !store
+                .try_record_source_fetch("source", 86_400, 1_000_001)
+                .expect("early retry")
+        );
+        assert!(
+            !store
+                .try_record_source_fetch("source", 86_400, 999_999)
+                .expect("clock moved backward")
+        );
+        assert!(
+            store
+                .try_record_source_fetch("source", 86_400, 1_086_400)
+                .expect("boundary retry")
+        );
+    }
+
+    #[test]
+    fn current_review_uses_decision_time_not_hashed_id_order() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = Store::open(dir.path()).expect("store");
+        let citation_id = "citation:test";
+        let first_at = "2026-06-18T00:00:01Z";
+        let second_at = "2026-06-18T00:00:02Z";
+        let first = ReviewDecision {
+            id: ReviewDecision::id_for(citation_id, first_at),
+            citation_id: citation_id.to_owned(),
+            state: ReviewState::Approved,
+            reviewer: "reviewer".to_owned(),
+            note: "approved".to_owned(),
+            bound_digest: "binding".to_owned(),
+            decision_digest: "decision".to_owned(),
+            decided_at: first_at.to_owned(),
+            supersedes: None,
+        };
+        let second = ReviewDecision {
+            id: ReviewDecision::id_for(citation_id, second_at),
+            citation_id: citation_id.to_owned(),
+            state: ReviewState::Rejected,
+            reviewer: "reviewer".to_owned(),
+            note: "rejected after correction".to_owned(),
+            bound_digest: "binding".to_owned(),
+            decision_digest: "decision".to_owned(),
+            decided_at: second_at.to_owned(),
+            supersedes: Some(first.id.clone()),
+        };
+        assert!(second.id < first.id, "hash order must invert decision time");
+        store.insert_review(&first).expect("first review");
+        store.insert_review(&second).expect("second review");
+        assert_eq!(
+            store
+                .reviews_for_citation(citation_id)
+                .expect("review history"),
+            vec![first, second.clone()]
+        );
+        assert_eq!(
+            store.current_review(citation_id).expect("current review"),
+            Some(second)
         );
     }
 

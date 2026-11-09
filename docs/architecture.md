@@ -35,14 +35,16 @@ All durable state is local. No hosted service, JavaScript runtime, telemetry, an
 
 ## SQLite schema and migration
 
-SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 2` (as of v0.0.3).
+SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 5` for the approval ledger.
 
 - v0.0.1 databases have no `user_version` (treated as `0`). They upgrade transactionally by adding supplemental tables without rewriting canonical records.
-- v0.0.2 databases (`user_version = 1`) upgrade transactionally to v2 by adding procurement supplemental tables.
+- v0.0.2 databases (`user_version = 1`) upgrade transactionally by adding procurement supplemental tables.
+- v0.0.3 databases (`user_version = 2`) upgrade transactionally by adding the v0.0.4 public-ledger tables.
+- v0.0.4 databases (`user_version = 3`) upgrade transactionally by adding the v0.0.4c snapshot-row storage tables.
 - Existing evidence IDs stay stable, content-addressed blobs are unchanged, and older records still verify.
 - Migration failure rolls back cleanly; a newer unsupported schema is rejected.
 - No migration reinterprets old findings as new subject/action or procurement assertions.
-- The migration tests use the committed fixtures at `fixtures/migration/v0.0.1-minimal.sql` and `fixtures/migration/v0.0.2-minimal.sql`.
+- The migration tests use the committed fixtures at `fixtures/migration/v0.0.1-minimal.sql`, `fixtures/migration/v0.0.2-minimal.sql`, `fixtures/migration/v0.0.3-minimal.sql`, and `fixtures/migration/v0.0.4-minimal.sql`.
 
 Tables: `evidence`, `findings`, `alerts`, `approvals`, `posts`, `post_segments`, `source_fetches` (v0.0.1), plus the v0.0.2 supplemental tables:
 
@@ -64,6 +66,10 @@ Tables: `evidence`, `findings`, `alerts`, `approvals`, `posts`, `post_segments`,
 - `reconciliation_items`, `reconciliation_decisions` — the reconciliation-review queue and immutable decisions.
 - `supplied_records` — operator-supplied public records with declared origin.
 - `case_files`, `cora_drafts` — generated case files and local unsent CORA drafts.
+- `procurement_alerts`, `cora_requests`, `official_relationships` — the v0.0.4 public-ledger tables (change alerts, the CORA request ledger, and official-relationship links).
+- `snapshot_rows`, `snapshot_row_sets` — the v0.0.4c snapshot-row storage tables. Every immutable snapshot persists the exact parsed row set it captured (stable row key, normalized canonical fields, per-row and row-set digests, original raw values, parser/schema version), so change detection compares the exact previous snapshot's stored rows from the database and never reconstructs history from fixtures or files on disk.
+- A new snapshot revision links to its predecessor, even when its exact bytes equal an older revision. This records A→B→A reversions and makes the returning A the current head; unchanged current bytes and HTTP 304 remain no-op acquisitions with coverage provenance.
+- `office_terms`, `civic_decisions`, `decision_participations`, `contract_records`, `technology_records`, `approval_links`, `approval_reviews`, `approval_corrections`, `approval_gaps` — the v5 public-role approval ledger. Exact source bytes live in the SHA-256 content store; every proposed connection binds a source URL, digest, locator, quotation, review history, and correction history. Only approved, unretracted links enter the chain projection. The projection does not itself authorize publishing unreviewed display fields.
 
 ## Procurement chain
 

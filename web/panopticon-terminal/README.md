@@ -7,7 +7,7 @@ PANOPTICON.FAIL is a public intelligence commons for navigating documented insti
 - Residents asking what is being built, funded, approved, owned, contracted, or changed in their community.
 - Journalists and researchers tracing the underlying organizations, decisions, money, infrastructure, sources, and revisions.
 
-The default surface is a place-first civic atlas. The wide-area globe is retained only as an optional reporter lens; it is not the product's identity.
+The default surface is a place-first civic atlas. The relationship canvas is schematic; any geographic point is only a coarse jurisdictional anchor. The wide-area globe is retained only as an optional reporter lens.
 
 ## Public view
 
@@ -46,17 +46,13 @@ The interface may be visually powerful. The evidence must remain literal, review
 
 ## Data boundary
 
-The browser attempts the read-only public API first:
+The browser loads the reviewed static snapshot at `public/public-snapshot.json` by default. The checked-in file is an empty published dataset. The Colorado Springs draft stays in private preview until publication review completes. A missing or invalid public snapshot produces an unavailable state; it never substitutes synthetic data.
 
-```text
-/api/v1/status
-/api/v1/activity
-/api/v1/entities
-/api/v1/search
-/api/v1/entities/:id
-/api/v1/evidence/:id
-/api/v1/sources/:id
-```
+`?demo=1` loads only `mock/public-snapshot.json`. All bundled demo entities and sources are synthetic. For owner-only editorial QA, `?preview=1` loads `preview-snapshot.json` and displays a prominent pending-review label. The preview file is gitignored and must be supplied only to the private build.
+
+The shareable decision route is `decision.html?decision=<stable-id>`. A decision dossier in the atlas links to that route. It shows each sourced relationship, recorded votes on the ordinance, exact evidence locators and digests, corrections, and specific links still not established. It does not turn a funding ordinance into an inferred vendor contract.
+
+After human approval, the Rust CLI writes the release artifact with `cargo run -p pnull-cli -- --site-url "$PNUL_SITE_URL" atlas export --output /absolute/path/to/web/panopticon-terminal/public/public-snapshot.json`. Draft editorial QA uses `atlas export --preview --output /absolute/path/to/web/panopticon-terminal/preview-snapshot.json` and only a private site build. Run the publisher's requirements, claim reviews, release review, and allow-release gate before the public export. See the Rust repository's `docs/atlas-export.md` for the gate sequence.
 
 The intended same-VPS architecture remains:
 
@@ -65,16 +61,14 @@ private collector state
         |
 review + publication gates
         |
-sanitized atomic public read model
-        |
-read-only loopback API
+sanitized atomic public snapshot
         |
 PANOPTICON.FAIL civic atlas
 ```
 
 The frontend must never query Panopticon's operational database directly.
 
-Until the public API exists, the branch falls back to `mock/public-snapshot.json`. Every bundled organization, facility, source, contract, and relationship is synthetic and marked `DEMO DATA`.
+An optional read-only API can replace the snapshot transport after the published dataset grows. It must retain the same publication boundary.
 
 See [`docs/api-contract.md`](docs/api-contract.md) for the draft response shapes and publication rules.
 
@@ -86,17 +80,16 @@ A suitable topology is:
 internet
    |
 Caddy / nginx
-   |-- static files: /var/www/panopticon.fail
-   `-- /api/* -> pnull-api on 127.0.0.1 or a Unix socket
-                         |
-                  public.sqlite (read-only)
-                         ^
-                    atomic publish
-                         ^
-                  Panopticon collector
+   `-- static files: /var/www/panopticon.fail
+             |
+       public/public-snapshot.json
+             ^
+       gated atlas export
+             ^
+       Panopticon collector
 ```
 
-Run the collector, API, and reverse proxy under separate Unix users. The public API user should have read-only access to the sanitized public database and no access to collector secrets or private state.
+Run the collector and reverse proxy under separate Unix users. The reverse proxy should read only the static site and sanitized public snapshot, with no access to collector secrets or private state. A read-only API can follow as the released dataset grows.
 
 ## Run locally
 
@@ -105,7 +98,9 @@ cd web/panopticon-terminal
 python3 -m http.server 4173
 ```
 
-Open `http://127.0.0.1:4173`.
+Open `http://127.0.0.1:4173`; the checked-in dataset shows the honest empty public state. To inspect the synthetic demonstration, open `http://127.0.0.1:4173/?demo=1`. A private editorial build can supply `preview-snapshot.json` and use `?preview=1`.
+
+Static social crawlers do not run the decision-page JavaScript. After approval, generate a per-case HTML page with case-specific title, description, and Open Graph/X metadata from the released snapshot. The current generic metadata avoids advertising a pending case as published.
 
 Opening `index.html` directly is not supported because browsers restrict module and JSON loading from `file://` URLs. For deterministic CI rendering, use `http://127.0.0.1:4173/?ci=1`.
 

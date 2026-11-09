@@ -10,3 +10,4 @@
 .env
 .env.*
 !.env.example
+/web/panopticon-terminal/preview-snapshot.json

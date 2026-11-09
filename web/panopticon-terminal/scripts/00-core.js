@@ -21,16 +21,6 @@ const TYPE_STYLE = {
   CONTRACT: ["#ff5470", "CTR", "document"],
 };
 
-const GEO = {
-  ent_northstar: { lat: 47.6062, lon: -122.3321, label: "Seattle demonstration headquarters" },
-  ent_front_range: { lat: 38.8339, lon: -104.8214, label: "Colorado Springs demonstration region" },
-  ent_meridian: { lat: 39.7392, lon: -104.9903, label: "Denver demonstration region" },
-  ent_orion: { lat: 33.4484, lon: -112.074, label: "Phoenix demonstration headquarters" },
-  ent_vectorlink: { lat: 32.7767, lon: -96.797, label: "Dallas demonstration network office" },
-  ent_arc_tensor: { lat: 37.3382, lon: -121.8863, label: "San Jose demonstration headquarters" },
-  ent_power_agreement: { lat: 38.94, lon: -104.7, label: "Front Range agreement anchor" },
-};
-
 const WORLD = [
   [[-168,71],[-150,72],[-137,66],[-128,59],[-124,50],[-124,41],[-117,32],[-107,24],[-97,18],[-88,16],[-83,9],[-77,8],[-79,24],[-75,35],[-66,45],[-54,47],[-58,55],[-72,60],[-92,74],[-118,73],[-140,69],[-168,71]],
   [[-82,13],[-75,9],[-66,8],[-54,3],[-47,-7],[-36,-8],[-39,-20],[-48,-28],[-53,-34],[-60,-43],[-67,-55],[-73,-50],[-75,-38],[-80,-25],[-82,-8],[-79,2],[-82,13]],

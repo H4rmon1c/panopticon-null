@@ -9,6 +9,8 @@ const TYPE_META = {
   ORGANIZATION: { color: "#a892db", short: "ORG", title: "Organization" },
   COMPANY: { color: "#a892db", short: "CO", title: "Company" },
   AGENCY: { color: "#a892db", short: "AGCY", title: "Public agency" },
+  JURISDICTION: { color: "#66ddea", short: "PLACE", title: "Jurisdiction" },
+  TECHNOLOGY: { color: "#7fa7df", short: "TECH", title: "Technology" },
   OPERATOR: { color: "#a892db", short: "OPER", title: "Operator" },
   UTILITY: { color: "#f3b84b", short: "PWR", title: "Utility" },
   POWER: { color: "#f3b84b", short: "PWR", title: "Power record" },
@@ -30,6 +32,7 @@ const TYPE_META = {
   PERSON: { color: "#d8e0e2", short: "ROLE", title: "Person in public role" },
   OFFICIAL: { color: "#d8e0e2", short: "ROLE", title: "Public official" },
   OFFICEHOLDER: { color: "#d8e0e2", short: "ROLE", title: "Officeholder" },
+  RECORDED_VOTER: { color: "#d8e0e2", short: "VOTE", title: "Named voter in a public record" },
 };
 
 const STAKES = {
@@ -40,6 +43,8 @@ const STAKES = {
   ORGANIZATION: "Organizations become understandable when ownership, contracts, projects, public filings, and counterparties are connected.",
   COMPANY: "Companies often touch public money, permits, infrastructure, and policy through records scattered across many systems.",
   AGENCY: "Agencies exercise public authority. Their decisions, contracts, meetings, and changes should be legible to the people affected.",
+  JURISDICTION: "A jurisdiction sets the public authority and geographic scope for the decisions shown here.",
+  TECHNOLOGY: "A technology is linked only where the public record identifies it in a decision, contract, or award.",
   UTILITY: "Utility records can reveal major load commitments, infrastructure costs, service agreements, and long-term local planning decisions.",
   NETWORK: "Network relationships can reveal who connects, serves, builds, or depends on critical infrastructure.",
   CONTRACTOR: "Contractors connect public decisions to the companies doing the work and receiving the money.",
@@ -48,6 +53,7 @@ const STAKES = {
   AGREEMENT: "Agreements turn plans into obligations. They show who committed to what, when, and under which public record.",
   DECISION: "Decisions matter most when the responsible body, vote, beneficiaries, costs, and downstream effects are visible together.",
   PERSON: "People are shown only in their documented public or organizational roles, never as private surveillance targets.",
+  RECORDED_VOTER: "The public record names this voter on a specific decision. A public role and term require separate evidence.",
 };
 
 const ACTIVITY_LABELS = {
@@ -61,34 +67,8 @@ const ACTIVITY_LABELS = {
   ENTITY_ADDED: "NEW RECORD",
 };
 
-const FALLBACK_ENTITIES = [
-  { id: "ent_front_range", type: "FACILITY", name: "Front Range Campus", source_count: 11, relationships: [
-    { target_entity_id: "ent_northstar", type: "OPERATED_BY", label: "operated by", source_count: 3, confidence: 1 },
-    { target_entity_id: "ent_meridian", type: "POWERED_BY", label: "powered by", source_count: 2, confidence: 1 },
-    { target_entity_id: "ent_orion", type: "BUILT_BY", label: "built by", source_count: 2, confidence: 1 },
-    { target_entity_id: "ent_vectorlink", type: "CONNECTED_TO", label: "connected to", source_count: 2, confidence: 0.94 },
-    { target_entity_id: "ent_power_agreement", type: "GOVERNED_BY", label: "governed by", source_count: 1, confidence: 1 },
-  ], source_ids: ["a", "b", "c", "d", "e"], attributes: [{ label: "POWER", value: "96 MW documented planning capacity" }], timeline: [] },
-  { id: "ent_northstar", type: "ORGANIZATION", name: "Northstar Compute", source_count: 14, relationships: [], source_ids: [], attributes: [], timeline: [] },
-  { id: "ent_meridian", type: "UTILITY", name: "Meridian Grid Cooperative", source_count: 7, relationships: [], source_ids: [], attributes: [], timeline: [] },
-  { id: "ent_orion", type: "CONTRACTOR", name: "Orion Build Partners", source_count: 5, relationships: [], source_ids: [], attributes: [], timeline: [] },
-  { id: "ent_vectorlink", type: "NETWORK", name: "VectorLink Networks", source_count: 4, relationships: [], source_ids: [], attributes: [], timeline: [] },
-  { id: "ent_arc_tensor", type: "SUPPLIER", name: "Arc Tensor Systems", source_count: 4, relationships: [], source_ids: [], attributes: [], timeline: [] },
-  { id: "ent_power_agreement", type: "CONTRACT", name: "Front Range Power Service Agreement", source_count: 1, relationships: [], source_ids: [], attributes: [], timeline: [] },
-];
-
 let atlas = null;
 let audience = "public";
 let place = "COLORADO SPRINGS, CO";
 
-function currentState() {
-  if (typeof state !== "undefined") return state;
-  return {
-    entities: FALLBACK_ENTITIES,
-    selected: FALLBACK_ENTITIES[0],
-    activeLayers: new Set(["FACILITY", "ORGANIZATION", "UTILITY", "NETWORK", "CONTRACTOR", "CONTRACT"]),
-    view: "global",
-    sources: new Map(),
-    byId: new Map(FALLBACK_ENTITIES.map((item) => [item.id, item])),
-  };
-}
+function currentState() { return state; }

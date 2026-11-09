@@ -69,12 +69,12 @@ function applyCivicShell() {
   app?.insertAdjacentHTML("beforeend", `
     <div class="civic-atlas-label" aria-hidden="true">
       <span>PUBLIC POWER MAP</span>
-      <strong id="civic-atlas-place">COLORADO SPRINGS, CO // DEMO</strong>
+      <strong id="civic-atlas-place">COLORADO SPRINGS, CO // PUBLIC RECORD</strong>
     </div>
     <section class="civic-principle" aria-live="polite">
       <span>CURRENT PUBLIC BRIEF</span>
-      <strong id="civic-brief-text">Records connect a major project, its operator, utility, builder, network provider, and governing agreement.</strong>
-      <p id="civic-brief-proof">Known facts are sourced. Missing facts are shown as unknown, never guessed.</p>
+      <strong id="civic-brief-text">Loading the reviewed public record…</strong>
+      <p id="civic-brief-proof">Published claims have source links and preserved digests.</p>
     </section>
   `);
 

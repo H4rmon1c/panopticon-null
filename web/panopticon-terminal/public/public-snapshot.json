@@ -1,0 +1,22 @@
+{
+  "schema_version": "pnull-public-snapshot-v1",
+  "demo": false,
+  "preview": false,
+  "status": {
+    "state": "empty",
+    "dataset_version": "empty-2026-11-09",
+    "last_ingest": null,
+    "last_publish": null,
+    "manifest_digest": "sha256:f4acbc76b5a00b8996885c9f4c258626b93ff56acf08ba88c63918ba87c66449",
+    "counts": {
+      "entities": 0,
+      "records": 0,
+      "sources": 0,
+      "relationships": 0
+    }
+  },
+  "activity": [],
+  "entities": [],
+  "evidence": [],
+  "sources": []
+}

@@ -154,6 +154,7 @@ pub fn fetch_source(
 ) -> Result<(Vec<u8>, Vec<FetchObservation>), IngestError> {
     let config = FetchConfig {
         reviewed_hosts: reviewed_hosts.to_vec(),
+        reviewed_paths: None,
         max_bytes,
     };
     let resolver = pnull_http::SystemResolver;

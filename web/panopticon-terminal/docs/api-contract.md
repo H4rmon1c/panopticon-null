@@ -1,10 +1,10 @@
 # PANOPTICON.FAIL public API contract
 
-Status: frontend scaffold contract, not yet implemented by Panopticon Null.
+Status: future read-only API proposal. The current atlas reads a gated static JSON snapshot; no API is required for the first release.
 
 Base path: `/api/v1`
 
-This document defines the public, read-only boundary consumed by the PANOPTICON.FAIL Civic Intelligence Atlas. The API is not an administrative interface and must never query Panopticon's private working database on behalf of a public request. Every response comes from a sanitized publication artifact created only after review and publication gates succeed.
+This document defines a possible future public, read-only boundary for the PANOPTICON.FAIL Civic Intelligence Atlas. The API is not an administrative interface and must never query Panopticon's private working database on behalf of a public request. Every response comes from a sanitized publication artifact created only after review and publication gates succeed.
 
 ## Product model
 

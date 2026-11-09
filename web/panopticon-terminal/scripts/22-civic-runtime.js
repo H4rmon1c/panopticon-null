@@ -113,12 +113,3 @@ wireCivicUi();
 atlas = new CivicAtlas(civic$("#civic-canvas"), { onSelect: selectRecord });
 window.civicAtlas = atlas;
 patchRuntime();
-
-if (typeof window.boot !== "function") {
-  atlas.setData(FALLBACK_ENTITIES);
-  atlas.setLayers(currentState().activeLayers);
-  atlas.setSelected("ent_front_range");
-  updateCivicContext(FALLBACK_ENTITIES[0]);
-  translateActivityLabels();
-  rewriteCommands();
-}
