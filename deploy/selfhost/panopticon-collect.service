@@ -1,0 +1,18 @@
+[Unit]
+Description=Panopticon official source collection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=panopticon
+Group=panopticon
+WorkingDirectory=/srv/panopticon/repo
+EnvironmentFile=/etc/panopticon/panopticon.env
+ExecStart=/srv/panopticon/repo/deploy/selfhost/collect.sh
+StateDirectory=panopticon
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/panopticon

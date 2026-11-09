@@ -789,6 +789,7 @@ fn snapshot(
         ));
         votes.push(json!({
             "name":vote.person_name, "vote":vote.recorded_vote,
+            "voter_entity_id":voter_id,
             "office_role":"not_established", "office_term":"not_established",
             "evidence_id":proof.0, "review_state":proof.1, "corrections":proof.2,
         }));

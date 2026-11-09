@@ -1,0 +1,16 @@
+[Unit]
+Description=Publish an approved Panopticon static atlas release
+
+[Service]
+Type=oneshot
+User=panopticon
+Group=panopticon
+WorkingDirectory=/srv/panopticon/repo
+EnvironmentFile=/etc/panopticon/panopticon.env
+ExecStart=/srv/panopticon/repo/deploy/selfhost/publish.sh
+StateDirectory=panopticon
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/panopticon /srv/panopticon/site

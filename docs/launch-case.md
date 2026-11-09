@@ -1,6 +1,6 @@
 # Colorado Springs launch case: Ordinance 25-93
 
-**Editorial status:** source facts checked against preserved official records; h4rmon1c approved the case-level release on November 9, 2026. The production snapshot has been generated. Public access on `panopticon.fail` awaits domain verification. This is a decision about a Police Department Technology Surcharge. It is **not** a vote on an Axon or Flock contract.
+**Editorial status:** source facts checked against preserved official records; h4rmon1c approved the case-level release on November 9, 2026. The production snapshot has been generated. Public access on `panopticon.fail` awaits a user-owned VPS and DNS. This is a decision about a Police Department Technology Surcharge. It is **not** a vote on an Axon or Flock contract.
 
 ## Short evidence card
 
@@ -21,6 +21,8 @@ Primary records: [Council meeting and action](https://webapi.legistar.com/v1/col
 - **Contract or award:** **Not established** by these records. The ordinance authorizes a surcharge and directs its proceeds; it does not identify an executed contract with either named vendor.
 - **Technology link:** Supporting staff presentation, page 7, lists 2026 major systems costs for Axon body-worn cameras, Axon digital evidence and AI transcription, and Flock vehicle-intelligence cameras. These are cost figures in a presentation, not proof of expenditure or procurement approval.
 - **Payment or deployment:** **Not established** by these records.
+
+The vote cards show nine locally hosted portraits from City of Colorado Springs pages. Each card links its official photo source; [`portraits.js`](../web/panopticon-terminal/portraits/portraits.js) records the original image URL and SHA-256. Portraits identify people in the roll call and are separate from the vote evidence. The City pages do not state a blanket image reuse license, so these images are credited to the City without a public-domain claim.
 
 ## Preserved proof and exact locators
 

@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import { validateSnapshot } from "../api.js";
+import { votePortraits } from "../portraits/portraits.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const templates = ["templates/shell-00.html", "templates/shell-01.html", "templates/shell-02.html", "templates/shell-03.html"];
@@ -20,7 +22,7 @@ const styles = [
   "styles/08-civic.css",
   "styles/09-civic-polish.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "mock/public-snapshot.json", "public/public-snapshot.json", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "mock/public-snapshot.json", "public/public-snapshot.json", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -139,6 +141,27 @@ if (snapshot) {
 try {
   const published = validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
   const decision = published.entities.find((entity) => entity.type === "DECISION");
+  const voters = new Map((decision?.votes ?? []).map((vote) => [vote.voter_entity_id, vote.name]));
+  for (const [id, name] of voters) {
+    const portrait = votePortraits[id];
+    if (!portrait) { failures.push(`portrait: no image for ${name} (${id})`); continue; }
+    if (portrait.name !== name) failures.push(`portrait: name mismatch for ${id}`);
+  }
+  for (const [id, portrait] of Object.entries(votePortraits)) {
+    if (!voters.has(id)) failures.push(`portrait: unrecognized voter ${id}`);
+    if (!/^\.\/portraits\/[a-z0-9-]+\.(jpe?g|png|webp)$/.test(portrait.src)) failures.push(`portrait: unsafe image path for ${id}`);
+    if (!/^https:\/\/(?:www\.)?coloradosprings\.gov\//.test(portrait.source_url)) failures.push(`portrait: non-city source for ${id}`);
+    if (!/^https:\/\/(?:www\.)?coloradosprings\.gov\//.test(portrait.image_url)) failures.push(`portrait: non-city image for ${id}`);
+    if (portrait.credit !== "City of Colorado Springs") failures.push(`portrait: missing city credit for ${id}`);
+    if (!/^[a-f0-9]{64}$/.test(portrait.sha256)) failures.push(`portrait: invalid digest for ${id}`);
+    if (/^\.\/portraits\/[a-z0-9-]+\.(jpe?g|png|webp)$/.test(portrait.src)) {
+      try {
+        const bytes = await readFile(join(root, portrait.src));
+        const digest = createHash("sha256").update(bytes).digest("hex");
+        if (digest !== portrait.sha256) failures.push(`portrait: digest mismatch for ${id}`);
+      } catch (error) { failures.push(`portrait: cannot read ${portrait.src} (${error.message})`); }
+    }
+  }
   if (decision?.share_url) {
     const socialUrl = decisionHtml.match(/property="og:url" content="([^"]+)"/)?.[1];
     if (socialUrl !== decision.share_url) failures.push("decision.html: social URL differs from the released decision URL");

@@ -1,4 +1,5 @@
 import { PanopticonClient } from "./api.js";
+import { votePortraits } from "./portraits/portraits.js";
 
 const params = new URLSearchParams(location.search);
 const demo = params.get("demo") === "1";
@@ -178,26 +179,54 @@ function renderBrief(model, mode) {
   return panel;
 }
 
-function renderVotes(model) {
+function initials(name) {
+  return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function renderVotes(model, mode) {
   const panel = section("Recorded votes on this ordinance");
   if (!model.votes.length) {
     panel.append(node("p", "empty", "Individual votes are not established in this dataset."));
     return panel;
   }
-  const list = node("ul", "source-list");
+  panel.append(node("p", "vote-note", "City portraits identify the people named in the roll call. Open each vote record for the recorded position."));
+  const list = node("ul", "vote-list");
   for (const vote of model.votes) {
-    const item = node("li");
-    item.append(node("strong", "", `${vote.name ?? vote.officeholder ?? "Unnamed officeholder"} — ${vote.vote ?? vote.position ?? "Vote unknown"}`));
+    const item = node("li", "vote-card");
+    const name = vote.name ?? vote.officeholder ?? "Unnamed officeholder";
+    const candidate = mode === "demo" ? null : votePortraits[vote.voter_entity_id];
+    const portrait = candidate?.name === name ? candidate : null;
+    const media = node("div", "vote-portrait");
+    const fallback = node("span", "vote-initials", initials(name));
+    media.append(fallback);
+    if (portrait) {
+      const img = node("img");
+      img.src = portrait.src;
+      img.alt = `Portrait of ${name}`;
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.width = 144;
+      img.height = 144;
+      img.addEventListener("error", () => img.remove(), { once: true });
+      media.append(img);
+    }
+    const text = node("div", "vote-card-text");
+    const heading = node("div", "vote-card-heading");
+    heading.append(node("strong", "", name), node("span", `vote-position ${String(vote.vote ?? vote.position).toLowerCase() === "aye" ? "aye" : "no"}`, vote.vote ?? vote.position ?? "Vote unknown"));
+    text.append(heading);
     const role = vote.role ?? vote.office_role ?? "not established";
     const term = vote.term ?? vote.office_term ?? "not established";
     const roleTerm = role === "not_established" && term === "not_established" ? "Public role and term: not established" : `Public role: ${role}; term: ${term}`;
-    const detail = node("span", "detail", ` · ${roleTerm}. `);
-    item.append(detail);
+    text.append(node("p", "vote-detail", roleTerm));
+    const links = node("div", "vote-links");
     if (vote.evidence_id) {
       const link = node("a", "", "Vote record ↗");
       link.href = `#evidence-${encodeURIComponent(vote.evidence_id)}`;
-      item.append(link);
+      links.append(link);
     }
+    if (portrait) links.append(publicLink(portrait.source_url, "Photo: City of Colorado Springs ↗"));
+    text.append(links);
+    item.append(media, text);
     list.append(item);
   }
   panel.append(list);
@@ -264,7 +293,7 @@ function renderDecision(model, snapshot, mode) {
 
   const grid = node("div", "grid");
   const main = node("div");
-  main.append(renderChain(model), renderVotes(model));
+  main.append(renderChain(model), renderVotes(model, mode));
   const technology = renderTechnology(model);
   if (technology) main.append(technology);
   main.append(renderEvidence(model, mode), renderCorrections(model));

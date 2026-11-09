@@ -8,7 +8,7 @@ panopticon.fail {
 
     # Copy the validated static site and gated public snapshot together.
     handle {
-        root * /var/www/panopticon.fail
+        root * /srv/panopticon/site/current
         file_server
     }
 
