@@ -1200,6 +1200,24 @@ mod tests {
             decision["share_url"],
             "https://atlas.test/decision.html?decision=co-colorado-springs-25-581-2025-11-25"
         );
+    }
+
+    #[test]
+    fn superseded_case_review_blocks_release_and_keeps_correction_history() {
+        let (dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| m["review_state"] = json!("approved"));
+        let store = Store::open(dir.path().join("db")).expect("store");
+        allow_release(&store);
+        approve_release(&store, &manifest, "Ada Editor");
+        let output = dir.path().join("public.json");
+        export_atlas(
+            &store,
+            &manifest,
+            &output,
+            AtlasExportMode::Production,
+            Some("https://atlas.test"),
+        )
+        .expect("reviewed release");
         let saved = fs::read(&output).unwrap();
         let req = review_requirements(&manifest).unwrap().remove(0);
         let at = "2026-11-09T13:00:00Z".to_owned();
@@ -1263,7 +1281,7 @@ mod tests {
         allow_release(&store2);
         approve_release(&store2, &manifest, "Ada Editor");
         edit_manifest(&manifest, |m| {
-            m["unresolved_question"] = json!("Which contracts were later paid?")
+            m["unresolved_question"] = json!("Which contracts were later paid?");
         });
         assert!(matches!(
             export_atlas(
@@ -1305,7 +1323,7 @@ mod tests {
         assert_eq!(fs::read(&output).unwrap(), b"previous published bytes");
         let (_dir2, manifest2) = copied_case();
         edit_manifest(&manifest2, |m| {
-            m["decision"]["summary"] = json!("Call resident@example.com about this decision")
+            m["decision"]["summary"] = json!("Call resident@example.com about this decision");
         });
         let private_store_dir = tempfile::tempdir().unwrap();
         let private_store = Store::open(private_store_dir.path()).unwrap();
