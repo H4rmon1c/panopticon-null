@@ -14,7 +14,7 @@ Caddy / nginx
              private collector state
 ```
 
-The checked-in public snapshot is empty. Pending Colorado Springs work is exported only to the gitignored `preview-snapshot.json` for an owner-only private site. Do not copy that file into a public deployment.
+The checked-in public snapshot contains the approved Colorado Springs case. Pending future work is exported only to the gitignored `preview-snapshot.json` for owner-only editorial QA. Do not copy that file into a public deployment.
 
 ## Release sequence
 

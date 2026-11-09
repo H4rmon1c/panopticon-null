@@ -46,7 +46,7 @@ The interface may be visually powerful. The evidence must remain literal, source
 
 ## Data boundary
 
-The browser loads the released static snapshot at `public/public-snapshot.json` by default. The checked-in file is an empty published dataset. The Colorado Springs draft stays in private preview until the case-level release gate completes. A missing or invalid public snapshot produces an unavailable state; it never substitutes synthetic data.
+The browser loads the released static snapshot at `public/public-snapshot.json` by default. The checked-in file contains the source-verified Colorado Springs Ordinance 25-93 case, approved at the case level by h4rmon1c. A missing or invalid public snapshot produces an unavailable state; it never substitutes synthetic data.
 
 `?demo=1` loads only `mock/public-snapshot.json`. All bundled demo entities and sources are synthetic. For owner-only editorial QA, `?preview=1` loads `preview-snapshot.json` and displays a prominent pending-case-release label. The preview file is gitignored and must be supplied only to the private build.
 
@@ -98,9 +98,9 @@ cd web/panopticon-terminal
 python3 -m http.server 4173
 ```
 
-Open `http://127.0.0.1:4173`; the checked-in dataset shows the honest empty public state. To inspect the synthetic demonstration, open `http://127.0.0.1:4173/?demo=1`. A private editorial build can supply `preview-snapshot.json` and use `?preview=1`.
+Open `http://127.0.0.1:4173` to browse the released Colorado Springs case. To inspect the synthetic demonstration, open `http://127.0.0.1:4173/?demo=1`. A private editorial build can supply `preview-snapshot.json` and use `?preview=1`.
 
-Static social crawlers do not run the decision-page JavaScript. After approval, generate a per-case HTML page with case-specific title, description, and Open Graph/X metadata from the released snapshot. The current generic metadata avoids advertising a pending case as published.
+Static social crawlers do not run the decision-page JavaScript. The first released decision page has Colorado Springs-specific title, description, and Open Graph/X metadata. Generate distinct HTML metadata per case before expanding coverage.
 
 Opening `index.html` directly is not supported because browsers restrict module and JSON loading from `file://` URLs. For deterministic CI rendering, use `http://127.0.0.1:4173/?ci=1`.
 
