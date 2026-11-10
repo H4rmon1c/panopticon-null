@@ -183,27 +183,16 @@ impl Sandbox for BubblewrapSandbox {
             .ok_or_else(|| SandboxError::Unavailable("prlimit".to_owned()))?;
 
         let workdir = self.working_dir.path();
-        let ro_dir = workdir.join("inputs");
-        fs::create_dir_all(&ro_dir)?;
+        // The writable /work mount must never contain staged inputs. A
+        // compromised extractor could otherwise replace one with a symlink
+        // that the host follows during the next run.
+        let (ro_dir, input_rewrites) = stage_inputs(inputs)?;
 
-        // Stage inputs read-only into the workdir and record path rewrites to
-        // the read-only `/work-ro` mount. The workdir persists across
-        // subprocess runs within one sandbox, so staged copies may already
-        // exist; make them writable, overwrite, then restore read-only.
-        let mut input_rewrites: HashMap<PathBuf, PathBuf> = HashMap::new();
-        for (index, input) in inputs.iter().enumerate() {
-            let name = input.file_name().unwrap_or_else(|| OsStr::new("input"));
-            let staged = ro_dir.join(format!("{index}-{}", name.to_string_lossy()));
-            if staged.exists() {
-                fs::set_permissions(&staged, fs::Permissions::from_mode(0o600))?;
-            }
-            fs::copy(input, &staged)?;
-            fs::set_permissions(&staged, fs::Permissions::from_mode(0o400))?;
-            input_rewrites.insert(input.to_path_buf(), staged);
-        }
-
-        let stdout_path = workdir.join("stdout.bin");
-        let stderr_path = workdir.join("stderr.bin");
+        // Capture files are also outside /work: an extractor must not be able
+        // to plant a symlink that a later host-side File::create will follow.
+        let capture_dir = TempDir::new()?;
+        let stdout_path = capture_dir.path().join("stdout.bin");
+        let stderr_path = capture_dir.path().join("stderr.bin");
         let stdout_file = fs::File::create(&stdout_path)?;
         let stderr_file = fs::File::create(&stderr_path)?;
         let mut command = Command::new(&prlimit);
@@ -222,7 +211,7 @@ impl Sandbox for BubblewrapSandbox {
             .arg("/work")
             // Staged inputs are exposed read-only at `/work-ro`.
             .arg("--ro-bind")
-            .arg(&ro_dir)
+            .arg(ro_dir.path())
             .arg("/work-ro")
             .arg("--dev")
             .arg("/dev")
@@ -281,6 +270,41 @@ impl Sandbox for BubblewrapSandbox {
             success,
         })
     }
+}
+
+fn stage_inputs(inputs: &[&Path]) -> Result<(TempDir, HashMap<PathBuf, PathBuf>), SandboxError> {
+    let ro_dir = TempDir::new()?;
+    let mut rewrites = HashMap::new();
+    for (index, input) in inputs.iter().enumerate() {
+        require_regular_file_without_symlinks(input)?;
+        let name = input.file_name().unwrap_or_else(|| OsStr::new("input"));
+        let staged = ro_dir
+            .path()
+            .join(format!("{index}-{}", name.to_string_lossy()));
+        fs::copy(input, &staged)?;
+        fs::set_permissions(&staged, fs::Permissions::from_mode(0o400))?;
+        rewrites.insert((*input).to_path_buf(), staged);
+    }
+    Ok((ro_dir, rewrites))
+}
+
+pub(crate) fn require_regular_file_without_symlinks(path: &Path) -> Result<(), SandboxError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_file() {
+        return Err(SandboxError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sandbox input must be a regular file",
+        )));
+    }
+    for ancestor in path.ancestors().filter(|part| !part.as_os_str().is_empty()) {
+        if fs::symlink_metadata(ancestor)?.file_type().is_symlink() {
+            return Err(SandboxError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "sandbox input path must not contain a symlink",
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// A test-only fake sandbox that runs extractors directly. Never used for
@@ -450,9 +474,34 @@ fn resolve_executable(name: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::symlink;
 
     fn fake() -> FakeSandbox {
         FakeSandbox::new(SandboxConfig::defaults()).expect("fake sandbox")
+    }
+
+    #[test]
+    fn staged_inputs_are_private_and_reject_symlink_traps() {
+        let writable = TempDir::new().expect("writable directory");
+        let input = writable.path().join("input.pdf");
+        fs::write(&input, b"original").expect("input");
+        let (staging, rewrites) = stage_inputs(&[&input]).expect("stage input");
+        assert!(!staging.path().starts_with(writable.path()));
+        assert_eq!(
+            fs::read(rewrites.get(&input).expect("staged path")).expect("staged bytes"),
+            b"original"
+        );
+        let sentinel = TempDir::new().expect("sentinel directory");
+        let target = sentinel.path().join("private.txt");
+        fs::write(&target, b"private").expect("sentinel");
+        fs::remove_file(&input).expect("remove input");
+        symlink(&target, &input).expect("trap");
+        assert!(stage_inputs(&[&input]).is_err());
+        assert_eq!(fs::read(&target).expect("sentinel bytes"), b"private");
+
+        let parent = writable.path().join("aliased");
+        symlink(sentinel.path(), &parent).expect("parent trap");
+        assert!(stage_inputs(&[&parent.join("private.txt")]).is_err());
     }
 
     #[test]
@@ -542,6 +591,38 @@ mod tests {
             &[],
             timeout,
         )
+    }
+
+    #[test]
+    fn sandbox_capture_files_ignore_workdir_symlink_traps() {
+        let Some(sandbox) = real_sandbox_available() else {
+            eprintln!("SKIP: bubblewrap unavailable");
+            return;
+        };
+        if !host_shell_available(&sandbox) {
+            eprintln!("SKIP: shell unavailable inside bubblewrap");
+            return;
+        }
+        let sentinel = TempDir::new().expect("sentinel directory");
+        for name in ["stdout.bin", "stderr.bin"] {
+            let target = sentinel.path().join(name);
+            fs::write(&target, b"private").expect("sentinel");
+            symlink(&target, sandbox.working_dir().join(name)).expect("trap");
+        }
+        let output = shell(
+            &sandbox,
+            "printf public; printf warning >&2",
+            Duration::from_secs(5),
+        )
+        .expect("sandbox run");
+        assert_eq!(output.stdout, b"public");
+        assert_eq!(output.stderr, b"warning");
+        for name in ["stdout.bin", "stderr.bin"] {
+            assert_eq!(
+                fs::read(sentinel.path().join(name)).expect("sentinel bytes"),
+                b"private"
+            );
+        }
     }
 
     #[test]

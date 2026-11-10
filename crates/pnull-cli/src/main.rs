@@ -6,8 +6,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
 use pnull_core::{
     Alert, BoundingRect, Citation, DiffChange, EvidenceDiff, EvidenceRecord, Finding, Locator,
-    LocatorRange, PageCitation, PublicationAllowlist, ReviewBinding, ReviewDecision, ReviewState,
-    SourceReview, SourceType, Store, sha256_hex, stable_id,
+    LocatorRange, PageCitation, PublicationAllowlist, ReviewDecision, ReviewState, SourceReview,
+    SourceType, Store, sha256_hex, stable_id,
 };
 use pnull_detect::{
     RuleSet, build_alert, classify_document, compare, document_role,
@@ -16,7 +16,7 @@ use pnull_detect::{
 use pnull_geometry::render_review_image;
 use pnull_http::{
     FetchConfig, FetchRequest, PriorEvidence, ReqwestTransport, SystemResolver,
-    provenance_fetch_robots,
+    provenance_fetch_robots_detailed,
 };
 use pnull_ingest::{
     Budgets, BuildMetadata, DEFAULT_MAX_BYTES, IngestRequest, LegistarPagination, RealSandbox,
@@ -931,7 +931,7 @@ fn source_review_command(
             let robots_url = format!("https://{}/robots.txt", reviewed_host(source));
             let reviewed_hosts = vec![reviewed_host(source).clone()];
             let max_bytes = source.maximum_bytes.min(1_048_576);
-            let result = provenance_fetch_robots(
+            let result = provenance_fetch_robots_detailed(
                 &FetchConfig {
                     reviewed_hosts,
                     reviewed_paths: None,
@@ -945,7 +945,16 @@ fn source_review_command(
                     retrieved_at: timestamp,
                     prior: None,
                 },
-            )?;
+            );
+            let result = match result {
+                Ok(result) => result,
+                Err(failure) => {
+                    for observation in &failure.observations {
+                        store.insert_fetch_observation(observation)?;
+                    }
+                    return Err(failure.error.into());
+                }
+            };
             for observation in &result.observations {
                 store.insert_fetch_observation(observation)?;
             }
@@ -1267,19 +1276,7 @@ fn live_ingest(data_dir: &Path, config: &StateConfig, args: &IngestArgs) -> Resu
     let store = Store::open(data_dir)?;
     let review = verify_source_review(&store, config, &args.source_id)?;
     let now = OffsetDateTime::now_utc();
-    if !store.source_fetch_allowed(
-        &source.id,
-        source.minimum_interval_seconds,
-        now.unix_timestamp(),
-    )? {
-        bail!(
-            "rate limit: source {} was fetched within the configured {}-second interval",
-            source.id,
-            source.minimum_interval_seconds
-        );
-    }
     let timestamp = now.format(&Rfc3339)?;
-    let reviewed_hosts = review.reviewed_hosts.clone();
     let budgets = Tracker::new(Budgets::defaults());
     let mut context = ExtractContext {
         sandbox: RealSandbox::new(pnull_ingest::ExtractionSandboxConfig::defaults())
@@ -1295,18 +1292,33 @@ fn live_ingest(data_dir: &Path, config: &StateConfig, args: &IngestArgs) -> Resu
     };
     let source_url = source.url.clone();
     let max_bytes = source.maximum_bytes;
+    let fetch_config = FetchConfig {
+        reviewed_hosts: review.reviewed_hosts.clone(),
+        reviewed_paths: Some(review.endpoint_patterns.clone()),
+        max_bytes,
+    };
+    if !store.try_record_source_fetch(
+        &source.id,
+        source.minimum_interval_seconds,
+        now.unix_timestamp(),
+    )? {
+        bail!(
+            "rate limit: source {} was fetched within the configured {}-second interval",
+            source.id,
+            source.minimum_interval_seconds
+        );
+    }
     let outcome = pagination.paginate_events(
         &mut context.budgets,
         |offset| {
             let page_url = append_pagination(&source_url, args.page_size, offset);
-            let prior = latest_prior(&store, &source.id)?;
+            let prior = latest_prior(&store, &source.id, &page_url)?;
             let (body, observations) = fetch_source(
                 &store,
                 Some(&source.id),
-                &reviewed_hosts,
+                &fetch_config,
                 &page_url,
                 &timestamp,
-                max_bytes,
                 prior.as_ref(),
             )?;
             println!(
@@ -1318,7 +1330,6 @@ fn live_ingest(data_dir: &Path, config: &StateConfig, args: &IngestArgs) -> Resu
         &source.id,
         &source_url,
     )?;
-    store.record_source_fetch(&source.id, now.unix_timestamp())?;
     println!(
         "paginated {} events across {} pages (stopped: {})",
         outcome.events.len(),
@@ -1363,9 +1374,13 @@ fn append_pagination(base: &str, page_size: u32, offset: u32) -> String {
 fn latest_prior(
     store: &Store,
     source_id: &str,
+    requested_url: &str,
 ) -> Result<Option<PriorEvidence>, pnull_ingest::IngestError> {
     let observations = store.fetch_observations(source_id)?;
-    let last = observations.iter().rev().find(|o| o.body_digest.is_some());
+    let last = observations
+        .iter()
+        .rev()
+        .find(|o| o.requested_url == requested_url && o.body_digest.is_some());
     Ok(last.map(|o| PriorEvidence {
         evidence_id: o.body_digest.clone().unwrap_or_default(),
         etag: o.etag.clone(),
@@ -1750,16 +1765,7 @@ fn record_review(
     let binding = if let Some(citation) = find_line_citation(store, citation_id_value)? {
         citation_review_binding(&citation)
     } else if let Ok(page) = store.page_citation(citation_id_value) {
-        ReviewBinding {
-            evidence_id: page.evidence_id,
-            source_digest: page.evidence_digest,
-            locator_or_geometry: format!("page {}", page.page_number),
-            quote: page.quote,
-            quote_digest: page.quote_digest,
-            rule_digest: String::new(),
-            processing_artifact_digest: page.text_map_digest,
-            proposed_public_fields: "quote,locator,geometry".to_owned(),
-        }
+        pnull_publish::page_citation_review_binding(&page)
     } else {
         bail!("citation {citation_id_value} not found among line or page citations");
     };
@@ -1821,12 +1827,7 @@ fn x_command(data_dir: &Path, config: &StateConfig, command: XCommand) -> Result
             if !confirm {
                 bail!("live posting requires --confirm");
             }
-            let canonical = url::Url::parse(&config.canonical_base_url)?;
-            if canonical.host_str().is_none_or(placeholder_site_host) {
-                bail!(
-                    "live posting refused: configure a real public canonical_base_url before approval and posting"
-                );
-            }
+            validate_live_canonical_url(&config.canonical_base_url)?;
             let alert = store.alert(&alert_id)?;
             assert_citations_approved(&store, &alert.citations)
                 .map_err(|error| anyhow!("posting refused: {error}"))?;
@@ -1894,6 +1895,22 @@ fn placeholder_site_host(host: &str) -> bool {
             host.rsplit('.').next(),
             Some("invalid" | "example" | "test")
         )
+}
+
+fn validate_live_canonical_url(value: &str) -> Result<()> {
+    let canonical = url::Url::parse(value).context("parse canonical_base_url")?;
+    if canonical.scheme() != "https"
+        || canonical.host_str().is_none_or(placeholder_site_host)
+        || !canonical.username().is_empty()
+        || canonical.password().is_some()
+        || canonical.query().is_some()
+        || canonical.fragment().is_some()
+    {
+        bail!(
+            "live posting refused: canonical_base_url must be a public HTTPS URL without credentials, query, or fragment"
+        );
+    }
+    Ok(())
 }
 
 fn attempt_summary(attempt: &pnull_core::XAttempt) -> String {
@@ -2538,16 +2555,7 @@ fn approve_alert_citations_demo(store: &Store, alert: &Alert) -> Result<()> {
     for record in store.all_evidence()? {
         for citation in store.page_citations(&record.0.id)? {
             if store.current_review(&citation.id)?.is_none() {
-                let binding = ReviewBinding {
-                    evidence_id: citation.evidence_id,
-                    source_digest: citation.evidence_digest,
-                    locator_or_geometry: format!("page {}", citation.page_number),
-                    quote: citation.quote.clone(),
-                    quote_digest: citation.quote_digest,
-                    rule_digest: String::new(),
-                    processing_artifact_digest: citation.text_map_digest.clone(),
-                    proposed_public_fields: "quote,locator,geometry".to_owned(),
-                };
+                let binding = pnull_publish::page_citation_review_binding(&citation);
                 let decided_at = "2026-08-16T00:00:00Z".to_owned();
                 let decision = ReviewDecision {
                     id: ReviewDecision::id_for(&citation.id, &decided_at),
@@ -2776,6 +2784,54 @@ mod tests {
     }
 
     #[test]
+    fn conditional_prior_is_scoped_to_the_exact_paginated_url() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let source_id = "colorado-springs-legistar-events";
+        let first_url = "https://webapi.legistar.com/v1/coloradosprings/events?$skip=0";
+        let second_url = "https://webapi.legistar.com/v1/coloradosprings/events?$skip=100";
+        let (first_digest, _) = record_fake_robots_capture(
+            &store,
+            source_id,
+            first_url,
+            200,
+            b"first page",
+            "2026-11-10T00:00:00Z",
+        );
+        let (second_digest, _) = record_fake_robots_capture(
+            &store,
+            source_id,
+            second_url,
+            200,
+            b"second page",
+            "2026-11-10T00:00:01Z",
+        );
+        assert_eq!(
+            latest_prior(&store, source_id, first_url)
+                .expect("first prior")
+                .expect("first page")
+                .evidence_id,
+            first_digest
+        );
+        assert_eq!(
+            latest_prior(&store, source_id, second_url)
+                .expect("second prior")
+                .expect("second page")
+                .evidence_id,
+            second_digest
+        );
+        assert!(
+            latest_prior(
+                &store,
+                source_id,
+                "https://webapi.legistar.com/v1/coloradosprings/events?$skip=200"
+            )
+            .expect("unseen page")
+            .is_none()
+        );
+    }
+
+    #[test]
     fn source_review_records_exact_robots_capture_and_rejects_missing_or_mismatched_bytes() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config = load_config(&root.join(DEFAULT_CONFIG_PATH)).expect("config");
@@ -2983,6 +3039,24 @@ mod tests {
         assert!(placeholder_site_host("ledger.example"));
         assert!(placeholder_site_host("localhost"));
         assert!(!placeholder_site_host("ledger.org"));
+    }
+
+    #[test]
+    fn live_x_post_requires_clean_https_canonical_url() {
+        assert!(validate_live_canonical_url("https://panopticon.fail").is_ok());
+        for value in [
+            "http://panopticon.fail",
+            "https://user:pass@panopticon.fail",
+            "https://panopticon.fail/?redirect=other",
+            "https://panopticon.fail/#fragment",
+            "https://ledger.example",
+            "ftp://panopticon.fail",
+        ] {
+            assert!(
+                validate_live_canonical_url(value).is_err(),
+                "should refuse {value}"
+            );
+        }
     }
 
     #[test]

@@ -23,7 +23,9 @@ use pnull_geometry::{
     COORDINATE_SYSTEM, PageSpec, build_page_citation, find_occurrences, normalized_range,
     parse_ocr_tsv, validate_text_map,
 };
-use pnull_http::{FetchConfig, FetchRequest, PriorEvidence, provenance_fetch};
+use pnull_http::{
+    FetchConfig, FetchRequest, PriorEvidence, Resolver, Transport, provenance_fetch_detailed,
+};
 use regex::Regex;
 use sandbox::Sandbox;
 use scraper::Html;
@@ -146,32 +148,75 @@ struct RunContext<'a> {
 pub fn fetch_source(
     store: &Store,
     source_id: Option<&str>,
-    reviewed_hosts: &[String],
+    config: &FetchConfig,
     url: &str,
     retrieved_at: &str,
-    max_bytes: usize,
     prior: Option<&PriorEvidence>,
 ) -> Result<(Vec<u8>, Vec<FetchObservation>), IngestError> {
-    let config = FetchConfig {
-        reviewed_hosts: reviewed_hosts.to_vec(),
-        reviewed_paths: None,
-        max_bytes,
-    };
     let resolver = pnull_http::SystemResolver;
-    let transport = pnull_http::ReqwestTransport::new(max_bytes)?;
+    let transport = pnull_http::ReqwestTransport::new(config.max_bytes)?;
+    fetch_source_with(
+        store,
+        source_id,
+        config,
+        url,
+        retrieved_at,
+        prior,
+        &resolver,
+        &transport,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fetch_source_with(
+    store: &Store,
+    source_id: Option<&str>,
+    config: &FetchConfig,
+    url: &str,
+    retrieved_at: &str,
+    prior: Option<&PriorEvidence>,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+) -> Result<(Vec<u8>, Vec<FetchObservation>), IngestError> {
+    // Only send a conditional request when its exact raw body is available.
+    // Older live captures recorded a digest without retaining the bytes.
+    let prior_body = prior.and_then(|evidence| {
+        let path = store.content_path(&evidence.evidence_id).ok()?;
+        let bytes = fs::read(path).ok()?;
+        (bytes.len() <= config.max_bytes && sha256_hex(&bytes) == evidence.evidence_id)
+            .then_some(bytes)
+    });
     let request = FetchRequest {
         source_id: source_id.map(str::to_owned),
         requested_url: url.to_owned(),
         retrieved_at: retrieved_at.to_owned(),
-        prior: prior.cloned(),
+        prior: prior.filter(|_| prior_body.is_some()).cloned(),
     };
-    let result = provenance_fetch(&config, &resolver, &transport, &request)?;
-    for observation in &result.observations {
-        store.insert_fetch_observation(observation)?;
+    let result = match provenance_fetch_detailed(config, resolver, transport, &request) {
+        Ok(result) => result,
+        Err(failure) => {
+            for observation in &failure.observations {
+                store.insert_fetch_observation(observation)?;
+            }
+            return Err(failure.error.into());
+        }
+    };
+    if result.unchanged {
+        for observation in &result.observations {
+            store.insert_fetch_observation(observation)?;
+        }
+        let body = prior_body
+            .ok_or_else(|| IngestError::Metadata("304 without preserved prior bytes".to_owned()))?;
+        return Ok((body, result.observations));
     }
     let body = result
         .body
-        .ok_or_else(|| IngestError::Metadata("304: no new content observed".to_owned()))?;
+        .ok_or_else(|| IngestError::Metadata("successful fetch returned no body".to_owned()))?;
+    let digest = sha256_hex(&body);
+    store.persist_content(&digest, &body)?;
+    for observation in &result.observations {
+        store.insert_fetch_observation(observation)?;
+    }
     Ok((body, result.observations))
 }
 
@@ -597,9 +642,12 @@ fn extract_pdf(
     if !bytes.starts_with(b"%PDF-") {
         return Err(("malformed_pdf", "PDF signature is missing".to_owned()));
     }
-    let workdir = sandbox.working_dir().to_path_buf();
-    let input_path = workdir.join("input.pdf");
+    // Keep the original bytes outside the extractor's writable mount. Each
+    // subprocess receives a separate read-only staged copy.
+    let input_dir = tempfile::tempdir().map_err(external_io)?;
+    let input_path = input_dir.path().join("input.pdf");
     fs::write(&input_path, bytes).map_err(external_io)?;
+    let output_dir = tempfile::tempdir_in(sandbox.working_dir()).map_err(external_io)?;
     budgets
         .add_child_process()
         .map_err(|error| budget_err(&error))?;
@@ -626,7 +674,7 @@ fn extract_pdf(
     let (width, height) = parse_page_dimensions(&info).unwrap_or((612.0, 792.0));
     let rotation = parse_page_rotation(&info).unwrap_or(0);
 
-    let bbox_path = workdir.join("bbox.xml");
+    let bbox_path = output_dir.path().join("bbox.xml");
     budgets
         .add_child_process()
         .map_err(|error| budget_err(&error))?;
@@ -641,7 +689,7 @@ fn extract_pdf(
         ],
         &[&input_path],
     )?;
-    let bbox_xml = fs::read_to_string(&bbox_path).map_err(external_io)?;
+    let bbox_xml = read_sandbox_text_output(&bbox_path)?;
     let page_parse = parse_all_pages(&bbox_xml, width, height, rotation)?;
     let text_maps = page_parse.maps;
     let text = page_parse.lines.join("\n");
@@ -663,6 +711,7 @@ fn extract_pdf(
         sandbox,
         budgets,
         &input_path,
+        output_dir.path(),
         pages,
         &PageDims {
             width,
@@ -817,6 +866,7 @@ fn ocr_pdf(
     sandbox: &dyn Sandbox,
     budgets: &mut JobBudgetTracker,
     input: &Path,
+    output_dir: &Path,
     pages: u32,
     dims: &PageDims,
     ocr_language: &str,
@@ -830,9 +880,8 @@ fn ocr_pdf(
     budgets
         .add_ocr_pages(pages)
         .map_err(|error| budget_err(&error))?;
-    let workdir = sandbox.working_dir().to_path_buf();
-    let ocr_dir = workdir.join("ocr");
-    fs::create_dir_all(&ocr_dir).map_err(external_io)?;
+    let ocr_dir = output_dir.join("ocr");
+    fs::create_dir(&ocr_dir).map_err(external_io)?;
     let prefix = ocr_dir.join("page");
     let last_page = pages.to_string();
     budgets
@@ -857,6 +906,7 @@ fn ocr_pdf(
         ],
         &[input],
     )?;
+    require_sandbox_output_directory(&ocr_dir)?;
     let mut images: Vec<PathBuf> = fs::read_dir(&ocr_dir)
         .map_err(external_io)?
         .filter_map(Result::ok)
@@ -886,7 +936,7 @@ fn ocr_pdf(
             &[image],
         )?;
         let tsv_path = PathBuf::from(format!("{}.tsv", tsv_base.display()));
-        let tsv_content = fs::read_to_string(&tsv_path).map_err(external_io)?;
+        let tsv_content = read_sandbox_text_output(&tsv_path)?;
         let image_dims = image_dimensions(image)?;
         let spec = PageSpec::new(
             "",
@@ -922,8 +972,31 @@ fn ocr_pdf(
 }
 
 fn image_dimensions(path: &Path) -> Result<(u32, u32), (&'static str, String)> {
+    sandbox::require_regular_file_without_symlinks(path)
+        .map_err(|error| ("sandbox_output", error.to_string()))?;
     let image = image::open(path).map_err(|e| ("ocr_image", e.to_string()))?;
     Ok((image.width(), image.height()))
+}
+
+fn read_sandbox_text_output(path: &Path) -> Result<String, (&'static str, String)> {
+    sandbox::require_regular_file_without_symlinks(path)
+        .map_err(|error| ("sandbox_output", error.to_string()))?;
+    fs::read_to_string(path).map_err(external_io)
+}
+
+fn require_sandbox_output_directory(path: &Path) -> Result<(), (&'static str, String)> {
+    if fs::symlink_metadata(path)
+        .map_err(external_io)?
+        .file_type()
+        .is_dir()
+    {
+        Ok(())
+    } else {
+        Err((
+            "sandbox_output",
+            "OCR output directory was replaced".to_owned(),
+        ))
+    }
 }
 
 fn external_io(error: impl std::fmt::Display) -> (&'static str, String) {
@@ -1176,6 +1249,7 @@ pub fn discover_matters_from_event(
 ) -> Result<(Vec<Matter>, Vec<MatterAttachment>), IngestError> {
     let mut matters = Vec::new();
     let mut attachments = Vec::new();
+    let client = legistar_client(base_url);
     let items = event.get("EventItems").and_then(Value::as_array);
     if let Some(items) = items {
         for item in items {
@@ -1192,6 +1266,15 @@ pub fn discover_matters_from_event(
                 .unwrap_or_default()
                 .to_owned();
             let matter_id = format!("{source_id}:{matter_file}");
+            let matter_url = item
+                .get("EventItemMatterId")
+                .and_then(Value::as_u64)
+                .and_then(|id| {
+                    client.as_deref().map(|client| {
+                        format!("https://webapi.legistar.com/v1/{client}/matters/{id}")
+                    })
+                })
+                .unwrap_or_else(|| base_url.to_owned());
             let matter = Matter {
                 id: matter_id.clone(),
                 source_id: source_id.to_owned(),
@@ -1202,32 +1285,44 @@ pub fn discover_matters_from_event(
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_owned(),
-                url: format!("{base_url}/Matters/{matter_file}"),
+                url: matter_url,
                 document_role: pnull_core::DocumentRole::Agenda,
             };
             matters.push(matter);
-            if let Some(file_list) = item.get("EventItemAttachments").and_then(Value::as_array) {
+            if let Some(file_list) = item
+                .get("EventItemMatterAttachments")
+                .or_else(|| item.get("EventItemAttachments"))
+                .and_then(Value::as_array)
+            {
                 for file in file_list {
                     let official_id = file
                         .get("MatterAttachmentId")
-                        .and_then(Value::as_str)
-                        .or_else(|| file.get("EventItemAttachmentId").and_then(Value::as_str))
-                        .unwrap_or_default();
+                        .or_else(|| file.get("EventItemAttachmentId"))
+                        .and_then(|value| {
+                            value.as_u64().map(|id| id.to_string()).or_else(|| {
+                                value
+                                    .as_str()
+                                    .filter(|id| !id.is_empty())
+                                    .map(str::to_owned)
+                            })
+                        });
                     let name = file
                         .get("MatterAttachmentName")
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_owned();
                     let hyperlink = file
-                        .get("Hyperlink")
+                        .get("MatterAttachmentHyperlink")
+                        .or_else(|| file.get("Hyperlink"))
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_owned();
-                    // Only accept official reviewed hosts.
-                    let url = Url::parse(&hyperlink)
-                        .ok()
-                        .filter(|url| url.scheme() == "https");
-                    if let Some(url) = url {
+                    let url = Url::parse(&hyperlink).ok().filter(|url| {
+                        client
+                            .as_deref()
+                            .is_some_and(|client| official_legistar_attachment(url, client))
+                    });
+                    if let (Some(url), Some(official_id)) = (url, official_id) {
                         attachments.push(MatterAttachment {
                             id: format!("{matter_id}:{official_id}"),
                             matter_id: matter_id.clone(),
@@ -1242,6 +1337,49 @@ pub fn discover_matters_from_event(
         }
     }
     Ok((matters, attachments))
+}
+
+fn legistar_client(base_url: &str) -> Option<String> {
+    let url = Url::parse(base_url).ok()?;
+    let host = url.host_str()?;
+    let client = if host.eq_ignore_ascii_case("webapi.legistar.com") {
+        let mut parts = url.path_segments()?;
+        if parts.next()? != "v1" {
+            return None;
+        }
+        parts.next()?
+    } else {
+        host.strip_suffix(".legistar.com")?
+    };
+    (!client.is_empty()
+        && client != "webapi"
+        && client
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-'))
+    .then(|| client.to_owned())
+}
+
+fn official_legistar_attachment(url: &Url, client: &str) -> bool {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return false;
+    }
+    match url.host_str() {
+        Some(host) if host.eq_ignore_ascii_case(&format!("{client}.legistar.com")) => {
+            url.path().eq_ignore_ascii_case("/View.ashx")
+        }
+        Some(host) if host.eq_ignore_ascii_case("legistar2.granicus.com") => {
+            let mut parts = url.path_segments().into_iter().flatten();
+            parts.next() == Some(client)
+                && parts.next() == Some("attachments")
+                && parts.next().is_some_and(|file| !file.is_empty())
+                && parts.next().is_none()
+        }
+        _ => false,
+    }
 }
 
 pub fn normalize_text(input: &str) -> String {
@@ -1266,7 +1404,203 @@ pub fn normalize_text(input: &str) -> String {
 mod tests {
     use super::*;
     use pnull_core::SourceType;
+    use pnull_http::{HttpError, TransportRequest, TransportResponse};
+    use std::cell::{Cell, RefCell};
+    use std::net::IpAddr;
     use tempfile::tempdir;
+
+    struct PublicResolver;
+
+    impl Resolver for PublicResolver {
+        fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, HttpError> {
+            Ok(vec!["93.184.216.34".parse().expect("public IP")])
+        }
+    }
+
+    struct SequencedTransport {
+        responses: Vec<TransportResponse>,
+        requests: RefCell<Vec<TransportRequest>>,
+        next: Cell<usize>,
+    }
+
+    impl SequencedTransport {
+        fn new(responses: Vec<TransportResponse>) -> Self {
+            Self {
+                responses,
+                requests: RefCell::new(Vec::new()),
+                next: Cell::new(0),
+            }
+        }
+    }
+
+    impl Transport for SequencedTransport {
+        fn request(&self, request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            self.requests.borrow_mut().push(request.clone());
+            let index = self.next.get();
+            self.next.set(index + 1);
+            Ok(self.responses[index].clone())
+        }
+    }
+
+    fn api_response(
+        status_code: u16,
+        body: &[u8],
+        headers: Vec<(&str, &str)>,
+    ) -> TransportResponse {
+        TransportResponse {
+            status_code,
+            body: body.to_vec(),
+            headers: headers
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+                .collect(),
+        }
+    }
+
+    fn api_fetch_config() -> FetchConfig {
+        FetchConfig {
+            reviewed_hosts: vec!["webapi.legistar.com".to_owned()],
+            reviewed_paths: Some(vec!["/v1/coloradosprings/events".to_owned()]),
+            max_bytes: 1024,
+        }
+    }
+
+    #[test]
+    fn live_fetch_refuses_same_host_redirect_outside_reviewed_path() {
+        let dir = tempdir().expect("temporary directory");
+        let store = Store::open(dir.path()).expect("store");
+        let transport = SequencedTransport::new(vec![api_response(
+            302,
+            b"",
+            vec![("location", "/unreviewed")],
+        )]);
+        let error = fetch_source_with(
+            &store,
+            Some("source"),
+            &api_fetch_config(),
+            "https://webapi.legistar.com/v1/coloradosprings/events?$skip=0",
+            "2026-11-10T00:00:00Z",
+            None,
+            &PublicResolver,
+            &transport,
+        )
+        .expect_err("redirect must be refused");
+        assert!(matches!(
+            error,
+            IngestError::Http(HttpError::UnreviewedEndpoint(_))
+        ));
+        assert_eq!(transport.requests.borrow().len(), 1);
+        let receipts = store.fetch_observations("source").expect("fetch receipts");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].status_code, 302);
+        assert_eq!(receipts[0].redirect_target.as_deref(), Some("/unreviewed"));
+    }
+
+    #[test]
+    fn failed_http_status_still_leaves_a_fetch_receipt() {
+        let dir = tempdir().expect("temporary directory");
+        let store = Store::open(dir.path()).expect("store");
+        let transport = SequencedTransport::new(vec![api_response(503, b"unavailable", vec![])]);
+        let result = fetch_source_with(
+            &store,
+            Some("source"),
+            &api_fetch_config(),
+            "https://webapi.legistar.com/v1/coloradosprings/events?$skip=0",
+            "2026-11-10T00:00:00Z",
+            None,
+            &PublicResolver,
+            &transport,
+        );
+        assert!(matches!(
+            result,
+            Err(IngestError::Http(HttpError::Transport))
+        ));
+        let receipts = store.fetch_observations("source").expect("fetch receipts");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].status_code, 503);
+    }
+
+    #[test]
+    fn live_fetch_preserves_raw_page_and_reuses_it_after_304() {
+        let dir = tempdir().expect("temporary directory");
+        let store = Store::open(dir.path()).expect("store");
+        let config = api_fetch_config();
+        let url = "https://webapi.legistar.com/v1/coloradosprings/events?$skip=0";
+        let first = SequencedTransport::new(vec![api_response(
+            200,
+            br#"[{"EventId":1}]"#,
+            vec![("etag", "\"page-zero\"")],
+        )]);
+        let (body, observations) = fetch_source_with(
+            &store,
+            Some("source"),
+            &config,
+            url,
+            "2026-11-10T00:00:00Z",
+            None,
+            &PublicResolver,
+            &first,
+        )
+        .expect("first fetch");
+        let digest = sha256_hex(&body);
+        assert_eq!(
+            observations[0].body_digest.as_deref(),
+            Some(digest.as_str())
+        );
+        assert_eq!(
+            fs::read(store.content_path(&digest).expect("content path")).expect("raw page"),
+            body
+        );
+
+        let prior = PriorEvidence {
+            evidence_id: digest,
+            etag: observations[0].etag.clone(),
+            last_modified: None,
+        };
+        let second = SequencedTransport::new(vec![api_response(304, b"", vec![])]);
+        let (unchanged, second_observations) = fetch_source_with(
+            &store,
+            Some("source"),
+            &config,
+            url,
+            "2026-11-11T00:00:00Z",
+            Some(&prior),
+            &PublicResolver,
+            &second,
+        )
+        .expect("conditional fetch");
+        assert_eq!(unchanged, body);
+        assert_eq!(second_observations[0].status_code, 304);
+        assert_eq!(
+            second.requests.borrow()[0].conditional_etag.as_deref(),
+            Some("\"page-zero\"")
+        );
+    }
+
+    #[test]
+    fn missing_legacy_raw_page_forces_unconditional_refetch() {
+        let dir = tempdir().expect("temporary directory");
+        let store = Store::open(dir.path()).expect("store");
+        let prior = PriorEvidence {
+            evidence_id: sha256_hex(b"lost raw page"),
+            etag: Some("\"old\"".to_owned()),
+            last_modified: None,
+        };
+        let transport = SequencedTransport::new(vec![api_response(200, b"[]", vec![])]);
+        let (body, _) = fetch_source_with(
+            &store,
+            Some("source"),
+            &api_fetch_config(),
+            "https://webapi.legistar.com/v1/coloradosprings/events?$skip=0",
+            "2026-11-10T00:00:00Z",
+            Some(&prior),
+            &PublicResolver,
+            &transport,
+        )
+        .expect("unconditional recovery");
+        assert_eq!(body, b"[]");
+        assert!(transport.requests.borrow()[0].conditional_etag.is_none());
+    }
 
     fn request(mime_type: &str) -> IngestRequest {
         IngestRequest {
@@ -1604,12 +1938,14 @@ mod tests {
     fn discover_matters_uses_only_official_fields_and_https_hosts() {
         let event = serde_json::json!({
             "EventItems": [{
+                "EventItemMatterId": 2736,
                 "EventItemMatterFile": "25-581",
                 "EventItemTitle": "Ordinance No. 25-93",
                 "EventItemActionName": "finally passed",
-                "EventItemAttachments": [
-                    {"MatterAttachmentId": "1", "MatterAttachmentName": "draft.pdf", "Hyperlink": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=1"},
-                    {"MatterAttachmentId": "2", "MatterAttachmentName": "bad.pdf", "Hyperlink": "http://evil.example/View.ashx"}
+                "EventItemMatterAttachments": [
+                    {"MatterAttachmentId": 1, "MatterAttachmentName": "draft.pdf", "MatterAttachmentHyperlink": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=1"},
+                    {"MatterAttachmentId": 2, "MatterAttachmentName": "bad.pdf", "MatterAttachmentHyperlink": "http://evil.example/View.ashx"},
+                    {"MatterAttachmentId": 3, "MatterAttachmentName": "phishing.pdf", "MatterAttachmentHyperlink": "https://evil.example/View.ashx"}
                 ]
             }]
         });
@@ -1618,6 +1954,10 @@ mod tests {
                 .expect("discover");
         assert_eq!(matters.len(), 1);
         assert_eq!(matters[0].official_matter_id, "25-581");
+        assert_eq!(
+            matters[0].url,
+            "https://webapi.legistar.com/v1/coloradosprings/matters/2736"
+        );
         // Only the HTTPS official-host attachment is kept.
         assert_eq!(attachments.len(), 1);
         assert!(
@@ -1625,6 +1965,36 @@ mod tests {
                 .url
                 .starts_with("https://coloradosprings.legistar.com")
         );
+        assert_eq!(attachments[0].official_id, "1");
+    }
+
+    #[test]
+    fn checked_in_legistar_fixture_yields_real_attachment_links() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/co2/event-1109-2015-11-24.json");
+        let event: Value =
+            serde_json::from_slice(&fs::read(fixture).expect("event fixture")).expect("event JSON");
+        let (matters, attachments) = discover_matters_from_event(
+            &event,
+            "colorado-springs-legistar-events",
+            "https://webapi.legistar.com/v1/coloradosprings/events?$top=100",
+        )
+        .expect("discover official links");
+        assert!(!matters.is_empty());
+        assert!(!attachments.is_empty());
+        assert!(matters.iter().any(|matter| {
+            matter.url == "https://webapi.legistar.com/v1/coloradosprings/matters/2736"
+        }));
+        assert!(attachments.iter().any(|attachment| {
+            attachment.official_id == "4091"
+                && attachment
+                    .url
+                    .starts_with("https://legistar2.granicus.com/coloradosprings/attachments/")
+        }));
+        assert!(attachments.iter().all(|attachment| {
+            let url = Url::parse(&attachment.url).expect("stored URL");
+            official_legistar_attachment(&url, "coloradosprings")
+        }));
     }
 
     #[test]

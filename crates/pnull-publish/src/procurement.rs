@@ -339,7 +339,7 @@ pub fn build_procurement_site(
     output_dir: &Path,
     canonical_base_url: &str,
     written: &mut Vec<PathBuf>,
-) -> Result<(), PublishError> {
+) -> Result<BTreeSet<String>, PublishError> {
     let co = output_dir.join("co");
     let procurement_dir = co.join("procurement");
     std::fs::create_dir_all(&procurement_dir)?;
@@ -420,7 +420,7 @@ pub fn build_procurement_site(
     std::fs::write(&atom_path, atom.as_bytes())?;
     written.push(atom_path);
 
-    Ok(())
+    Ok(published_evidence.into_values().flatten().collect())
 }
 
 fn latest_matter_updated(store: &Store, content: &CaseFileContent) -> String {

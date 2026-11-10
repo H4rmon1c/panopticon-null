@@ -590,36 +590,38 @@ pub fn refresh_procurement(
     }
     let now = OffsetDateTime::now_utc();
     let (source, _) = check_live_gate(store, config, source_id, now)?;
-    let mut transport =
-        HttpTransport::new(source.maximum_bytes.min(MAX_FETCH_BYTES)).map_err(|e| anyhow!(e))?;
+    let mut transport = HttpTransport::new(store, source.maximum_bytes.min(MAX_FETCH_BYTES))
+        .map_err(|e| anyhow!(e))?;
     refresh_live_with(store, config, source_id, &mut transport, now)
 }
 
 /// The real DNS-safe conditional HTTPS transport. Only constructed on the
 /// `--live` path (never in tests or the demo). Wraps `pnull_http`'s
 /// provenance-aware fetch.
-struct HttpTransport {
+struct HttpTransport<'a> {
+    store: &'a Store,
     client: pnull_http::ReqwestTransport,
     max_bytes: usize,
 }
 
-impl HttpTransport {
-    fn new(max_bytes: usize) -> Result<Self, String> {
+impl<'a> HttpTransport<'a> {
+    fn new(store: &'a Store, max_bytes: usize) -> Result<Self, String> {
         let client = pnull_http::ReqwestTransport::new(max_bytes).map_err(|e| e.to_string())?;
-        Ok(Self { client, max_bytes })
+        Ok(Self {
+            store,
+            client,
+            max_bytes,
+        })
     }
-}
 
-/// Cap on the bytes fetched for a refreshed surface.
-const MAX_FETCH_BYTES: usize = 8 * 1024 * 1024;
-
-impl ProcurementTransport for HttpTransport {
-    fn fetch(
-        &mut self,
+    fn fetch_with(
+        &self,
         source_id: &str,
         url: &str,
         prior_etag: Option<&str>,
         retrieved_at: &str,
+        resolver: &dyn pnull_http::Resolver,
+        transport: &dyn pnull_http::Transport,
     ) -> Result<TransportFetch, String> {
         let parsed = url::Url::parse(url).map_err(|e| e.to_string())?;
         let host = parsed
@@ -631,7 +633,6 @@ impl ProcurementTransport for HttpTransport {
             reviewed_paths: Some(vec![parsed.path().to_owned()]),
             max_bytes: self.max_bytes,
         };
-        let resolver = pnull_http::SystemResolver;
         let prior = prior_etag.map(|etag| pnull_http::PriorEvidence {
             evidence_id: etag.to_owned(),
             etag: Some(etag.to_owned()),
@@ -643,8 +644,18 @@ impl ProcurementTransport for HttpTransport {
             retrieved_at: retrieved_at.to_owned(),
             prior,
         };
-        let result = pnull_http::provenance_fetch(&config, &resolver, &self.client, &request)
-            .map_err(|e| e.to_string())?;
+        let result =
+            match pnull_http::provenance_fetch_detailed(&config, resolver, transport, &request) {
+                Ok(result) => result,
+                Err(failure) => {
+                    for observation in &failure.observations {
+                        self.store
+                            .insert_fetch_observation(observation)
+                            .map_err(|error| error.to_string())?;
+                    }
+                    return Err(failure.error.to_string());
+                }
+            };
         let last = result.observations.last().cloned();
         Ok(TransportFetch {
             bytes: result.body.unwrap_or_default(),
@@ -658,11 +669,86 @@ impl ProcurementTransport for HttpTransport {
     }
 }
 
+/// Cap on the bytes fetched for a refreshed surface.
+const MAX_FETCH_BYTES: usize = 8 * 1024 * 1024;
+
+impl ProcurementTransport for HttpTransport<'_> {
+    fn fetch(
+        &mut self,
+        source_id: &str,
+        url: &str,
+        prior_etag: Option<&str>,
+        retrieved_at: &str,
+    ) -> Result<TransportFetch, String> {
+        self.fetch_with(
+            source_id,
+            url,
+            prior_etag,
+            retrieved_at,
+            &pnull_http::SystemResolver,
+            &self.client,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use pnull_core::SourceReview;
+    use pnull_http::{HttpError, Resolver, Transport, TransportRequest, TransportResponse};
+    use std::net::IpAddr;
     use tempfile::tempdir;
+
+    struct PublicResolver;
+
+    impl Resolver for PublicResolver {
+        fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, HttpError> {
+            Ok(vec!["93.184.216.34".parse().expect("public IP")])
+        }
+    }
+
+    struct FailedStatusTransport;
+
+    impl Transport for FailedStatusTransport {
+        fn request(&self, _request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            Ok(TransportResponse {
+                status_code: 503,
+                headers: vec![("retry-after".to_owned(), "120".to_owned())],
+                body: b"temporarily unavailable".to_vec(),
+            })
+        }
+    }
+
+    #[test]
+    fn real_procurement_transport_preserves_failed_http_receipt() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let transport = HttpTransport::new(&store, 1024).expect("transport");
+        let source_id = "colorado-springs-contract-awards";
+        let (url, _) = surface_url(source_id).expect("source URL");
+        let error = transport
+            .fetch_with(
+                source_id,
+                url,
+                None,
+                "2026-11-10T00:00:00Z",
+                &PublicResolver,
+                &FailedStatusTransport,
+            )
+            .err()
+            .expect("HTTP 503 must fail");
+        assert!(error.contains("network transport failed"));
+        let receipts = store.fetch_observations(source_id).expect("fetch receipts");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].status_code, 503);
+        assert_eq!(receipts[0].requested_url, url);
+        assert!(
+            receipts[0]
+                .allowlisted_headers
+                .iter()
+                .any(|(name, value)| name == "retry-after" && value == "120")
+        );
+    }
 
     fn test_config() -> crate::StateConfig {
         let mut config: crate::StateConfig = toml::from_str(include_str!(concat!(

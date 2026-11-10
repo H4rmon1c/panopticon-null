@@ -29,9 +29,9 @@ Reconciliation decisions cover the possible states of an uncertain attempt:
 - confirm none was posted;
 - mark the attempt partially posted;
 - abandon the attempt;
-- authorize a new attempt only after the previous attempt is resolved.
+- authorize a new attempt only after confirming that none posted.
 
-There is no blind retry of uncertain attempts, no deletion of audit history, and no way for a reconciliation to rewrite a prior decision. A new attempt is authorized only after the previous attempt is resolved.
+There is no blind retry of uncertain attempts, no deletion of audit history, and no way for a reconciliation to rewrite a prior decision. Partial and abandoned attempts retain their posting reservation and block new attempts. `confirm_posted` requires a remote ID for every segment; it can fill the sole missing ID during reconciliation.
 
 ## Publication gate
 

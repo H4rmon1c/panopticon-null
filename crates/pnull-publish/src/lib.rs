@@ -13,6 +13,7 @@ use pnull_core::{
     Store, sha256_hex, stable_id,
 };
 use thiserror::Error;
+use url::Url;
 
 #[derive(Debug, Error)]
 pub enum PublishError {
@@ -28,6 +29,8 @@ pub enum PublishError {
     Review(String),
     #[error("procurement case-file content unavailable: {0}")]
     Procurement(String),
+    #[error("invalid site configuration: {0}")]
+    InvalidConfig(String),
 }
 
 pub struct SiteConfig<'a> {
@@ -40,19 +43,50 @@ pub fn build_site(
     output_dir: impl AsRef<Path>,
     config: &SiteConfig<'_>,
 ) -> Result<Vec<PathBuf>, PublishError> {
+    let canonical = Url::parse(config.canonical_base_url)
+        .map_err(|_| PublishError::InvalidConfig("canonical URL is not a URL".to_owned()))?;
+    if canonical.scheme() != "https"
+        || canonical.host_str().is_none()
+        || !canonical.username().is_empty()
+        || canonical.password().is_some()
+        || canonical.query().is_some()
+        || canonical.fragment().is_some()
+    {
+        return Err(PublishError::InvalidConfig(
+            "canonical URL must be an HTTPS site path without credentials or query".to_owned(),
+        ));
+    }
     let output_dir = output_dir.as_ref();
-    let temporary = output_dir.with_extension("pnull-building");
-    if temporary.exists() {
-        fs::remove_dir_all(&temporary)?;
+    let parent = output_dir
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)?;
+    let temporary = tempfile::Builder::new()
+        .prefix(".pnull-site-")
+        .tempdir_in(parent)?;
+    let temporary_files = build_site_in(store, temporary.path(), config)?;
+    let backup = tempfile::Builder::new()
+        .prefix(".pnull-previous-")
+        .tempdir_in(parent)?;
+    let previous = backup.path().join("previous");
+    let had_previous = output_dir.exists();
+    if had_previous {
+        fs::rename(output_dir, &previous)?;
     }
-    let temporary_files = build_site_in(store, &temporary, config)?;
-    if output_dir.exists() {
-        fs::remove_dir_all(output_dir)?;
+    if let Err(error) = fs::rename(temporary.path(), output_dir) {
+        if had_previous && let Err(rollback) = fs::rename(&previous, output_dir) {
+            let kept = backup.keep();
+            return Err(PublishError::Io(std::io::Error::other(format!(
+                "site replace failed ({error}); rollback failed ({rollback}); previous site retained in {}",
+                kept.display()
+            ))));
+        }
+        return Err(error.into());
     }
-    fs::rename(&temporary, output_dir)?;
     Ok(temporary_files
         .into_iter()
-        .map(|path| output_dir.join(path.strip_prefix(&temporary).unwrap_or(&path)))
+        .map(|path| output_dir.join(path.strip_prefix(temporary.path()).unwrap_or(&path)))
         .collect())
 }
 
@@ -122,7 +156,31 @@ fn build_site_in(
             )?;
         }
     }
+    write_root_documents(output_dir, config, &approved_alerts, &mut written)?;
+    // The procurement chain (v0.0.4, Item 2): published under the same
+    // citation-review, allowlist, and privacy gates, rendered from the same
+    // deterministic case-file content that `case build` serializes.
+    let mut published_evidence = approved_alerts
+        .iter()
+        .flat_map(|alert| {
+            std::iter::once(alert.evidence_id.clone()).chain(
+                alert
+                    .citations
+                    .iter()
+                    .map(|citation| citation.evidence_id.clone()),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    published_evidence.extend(procurement::build_procurement_site(
+        store,
+        output_dir,
+        config.canonical_base_url,
+        &mut written,
+    )?);
     for (record, _) in &evidence {
+        if !published_evidence.contains(&record.id) {
+            continue;
+        }
         write_public(
             output_dir
                 .join("evidence")
@@ -131,16 +189,6 @@ fn build_site_in(
             &mut written,
         )?;
     }
-    write_root_documents(output_dir, config, &approved_alerts, &mut written)?;
-    // The procurement chain (v0.0.4, Item 2): published under the same
-    // citation-review, allowlist, and privacy gates, rendered from the same
-    // deterministic case-file content that `case build` serializes.
-    procurement::build_procurement_site(
-        store,
-        output_dir,
-        config.canonical_base_url,
-        &mut written,
-    )?;
     written.sort();
     Ok(written)
 }
@@ -186,6 +234,11 @@ pub fn assert_citations_approved(
     store: &Store,
     citations: &[Citation],
 ) -> Result<(), PublishError> {
+    if citations.is_empty() {
+        return Err(PublishError::Review(
+            "claim has no supporting citation".to_owned(),
+        ));
+    }
     for citation in citations {
         let id = citation_id(citation);
         let decision = store.current_review(&id)?;
@@ -222,14 +275,6 @@ pub fn publication_allowlist_allows(store: &Store, category: &str) -> Result<boo
     }))
 }
 
-/// Whether the current review for a citation id is `Approved`.
-fn citation_id_approved(store: &Store, id: &str) -> Result<bool, PublishError> {
-    Ok(match store.current_review(id)? {
-        Some(decision) => decision.state == ReviewState::Approved,
-        None => false,
-    })
-}
-
 /// Page citations for an evidence id whose current review is `Approved`.
 fn approved_page_citations(
     store: &Store,
@@ -237,11 +282,41 @@ fn approved_page_citations(
 ) -> Result<Vec<PageCitation>, PublishError> {
     let mut approved = Vec::new();
     for citation in store.page_citations(evidence_id)? {
-        if citation_id_approved(store, &citation.id)? {
+        let review = store.current_review(&citation.id)?;
+        if review.is_some_and(|decision| {
+            decision.state == ReviewState::Approved
+                && decision.bound_digest == page_citation_review_binding(&citation).digest()
+        }) {
             approved.push(citation);
         }
     }
     Ok(approved)
+}
+
+/// The binding used by both the reviewer CLI and the public page gate. It
+/// includes the visible geometry, so moving a highlight voids prior approval.
+pub fn page_citation_review_binding(citation: &PageCitation) -> ReviewBinding {
+    let geometry = serde_json::to_vec(&(
+        citation.page_number,
+        &citation.rects,
+        &citation.normalized_range,
+        citation.ocr_confidence,
+    ))
+    .expect("page citation geometry is serializable");
+    ReviewBinding {
+        evidence_id: citation.evidence_id.clone(),
+        source_digest: citation.evidence_digest.clone(),
+        locator_or_geometry: format!(
+            "page {} geometry sha256:{}",
+            citation.page_number,
+            sha256_hex(&geometry)
+        ),
+        quote: citation.quote.clone(),
+        quote_digest: citation.quote_digest.clone(),
+        rule_digest: String::new(),
+        processing_artifact_digest: citation.text_map_digest.clone(),
+        proposed_public_fields: "quote,locator,geometry".to_owned(),
+    }
 }
 
 /// Matters whose attachments reference the given evidence id.
@@ -329,6 +404,7 @@ fn write_public(
 }
 
 pub fn validate_public_text(text: &str) -> Result<(), PublishError> {
+    static PHONE_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let uppercase = text.to_uppercase();
     for marker in ["PLATE:", "PLATE NUMBER:", "LICENSE PLATE NUMBER:", "SSN:"] {
         if uppercase.contains(marker) {
@@ -350,6 +426,15 @@ pub fn validate_public_text(text: &str) -> Result<(), PublishError> {
     if contains_person_identifier(text) {
         return Err(PublishError::Sensitive(
             "person-level identifier or movement record".to_owned(),
+        ));
+    }
+    let phone = PHONE_PATTERN.get_or_init(|| {
+        regex::Regex::new(r"(?x)(?:\+?1[ .-]?)?\(?[2-9][0-9]{2}\)?[ .-][2-9][0-9]{2}[ .-][0-9]{4}")
+            .expect("static regex")
+    });
+    if phone.is_match(text) {
+        return Err(PublishError::Sensitive(
+            "phone-like private contact".to_owned(),
         ));
     }
     Ok(())
@@ -390,7 +475,29 @@ fn contains_street_address(text: &str) -> bool {
                     .trim_matches(|character: char| !character.is_ascii_alphabetic())
                     .to_ascii_lowercase()
                     .as_str(),
-                "street" | "st" | "avenue" | "ave" | "road" | "rd" | "boulevard" | "blvd"
+                "street"
+                    | "st"
+                    | "avenue"
+                    | "ave"
+                    | "road"
+                    | "rd"
+                    | "boulevard"
+                    | "blvd"
+                    | "lane"
+                    | "ln"
+                    | "drive"
+                    | "dr"
+                    | "court"
+                    | "ct"
+                    | "place"
+                    | "pl"
+                    | "circle"
+                    | "cir"
+                    | "terrace"
+                    | "ter"
+                    | "way"
+                    | "parkway"
+                    | "pkwy"
             )
     })
 }
@@ -598,7 +705,7 @@ fn subjects_actions_section(store: &Store, alert: &Alert) -> String {
             }
         };
         for subject in subjects {
-            if !citations_approved(store, &subject.citations) {
+            if !citations_approved(store, alert, &subject.citations) {
                 continue;
             }
             let known = if subject.known { "known" } else { "unknown" };
@@ -625,7 +732,7 @@ fn subjects_actions_section(store: &Store, alert: &Alert) -> String {
             }
         };
         for action in actions {
-            if !citations_approved(store, &action.citations) {
+            if !citations_approved(store, alert, &action.citations) {
                 continue;
             }
             let known = if action.known { "known" } else { "unknown" };
@@ -643,11 +750,16 @@ fn subjects_actions_section(store: &Store, alert: &Alert) -> String {
     body
 }
 
-/// Whether every referenced citation id has a current `Approved` review.
-fn citations_approved(store: &Store, citation_ids: &[String]) -> bool {
-    citation_ids
-        .iter()
-        .all(|id| citation_id_approved(store, id).unwrap_or(false))
+/// Whether every referenced citation belongs to this alert and still has its
+/// exact source/quote/locator binding approved.
+fn citations_approved(store: &Store, alert: &Alert, citation_ids: &[String]) -> bool {
+    !citation_ids.is_empty()
+        && citation_ids.iter().all(|id| {
+            alert.citations.iter().any(|citation| {
+                citation_id(citation) == *id
+                    && assert_citations_approved(store, std::slice::from_ref(citation)).is_ok()
+            })
+        })
 }
 
 fn citations_html(citations: &[Citation]) -> String {
@@ -767,7 +879,8 @@ const LEGAL: &str = r"<p>Lawfully dismantle the global surveillance panopticon b
 mod tests {
     use super::*;
     use pnull_core::{
-        FindingState, Locator, PublicationAllowlist, ReviewDecision, ReviewState, SourceType,
+        BoundingRect, FindingState, Locator, LocatorRange, PublicationAllowlist, ReviewDecision,
+        ReviewState, SourceType,
     };
     use quick_xml::Reader;
     use tempfile::tempdir;
@@ -895,6 +1008,8 @@ mod tests {
         assert!(validate_public_text("123 Main Street").is_err());
         assert!(validate_public_text("Social Security Number: 123-45-6789").is_err());
         assert!(validate_public_text("Movement log: 39.7,-104.9").is_err());
+        assert!(validate_public_text("Call 303-555-1212 for details").is_err());
+        assert!(validate_public_text("742 Evergreen Terrace").is_err());
     }
 
     #[test]
@@ -952,6 +1067,16 @@ mod tests {
         assert!(out.path().join("alerts/alert_approved.html").exists());
         assert!(!out.path().join("alerts/alert_unapproved.html").exists());
         assert!(
+            out.path()
+                .join(format!("evidence/{}.html", safe_id(&evid("a"))))
+                .exists()
+        );
+        assert!(
+            !out.path()
+                .join(format!("evidence/{}.html", safe_id(&evid("b"))))
+                .exists()
+        );
+        assert!(
             paths
                 .iter()
                 .any(|path| path.ends_with("alerts/alert_approved.html"))
@@ -961,6 +1086,130 @@ mod tests {
                 .iter()
                 .any(|path| path.ends_with("alerts/alert_unapproved.html"))
         );
+    }
+
+    #[test]
+    fn alert_without_citations_never_reaches_site_or_feed() {
+        let (_dir, store) = seed_site();
+        store
+            .insert_alert(&test_alert("alert:empty", &evid("a"), Vec::new()))
+            .unwrap();
+        let out = tempdir().unwrap();
+        build_site(&store, out.path(), &config()).unwrap();
+        assert!(!out.path().join("alerts/alert_empty.html").exists());
+        assert!(
+            !fs::read_to_string(out.path().join("atom.xml"))
+                .unwrap()
+                .contains("Alert alert:empty")
+        );
+    }
+
+    #[test]
+    fn site_build_does_not_delete_a_predictable_sibling_directory() {
+        let (_dir, store) = seed_site();
+        let parent = tempdir().unwrap();
+        let output = parent.path().join("site");
+        let unrelated = output.with_extension("pnull-building");
+        fs::create_dir(&unrelated).unwrap();
+        fs::write(unrelated.join("owner.txt"), b"keep this").unwrap();
+        build_site(&store, &output, &config()).unwrap();
+        assert_eq!(fs::read(unrelated.join("owner.txt")).unwrap(), b"keep this");
+        assert!(output.join("index.html").exists());
+    }
+
+    #[test]
+    fn page_citation_requires_current_review_binding() {
+        let (_dir, store) = seed_site();
+        let evidence_id = evid("a");
+        let quote = "Police Department Technology Surcharge";
+        let quote_digest = sha256_hex(quote.as_bytes());
+        let page = PageCitation {
+            id: PageCitation::id_for(&evidence_id, &quote_digest, 1),
+            evidence_id: evidence_id.clone(),
+            quote: quote.to_owned(),
+            quote_digest,
+            page_number: 1,
+            rects: Vec::new(),
+            normalized_range: LocatorRange { start: 0, end: 5 },
+            text_map_digest: "text-map-digest".to_owned(),
+            evidence_digest: "evidence-digest".to_owned(),
+            ocr_confidence: None,
+        };
+        store.insert_page_citation(&page).unwrap();
+        let decided_at = "2025-01-02T00:00:00Z";
+        store
+            .insert_review(&ReviewDecision {
+                id: ReviewDecision::id_for(&page.id, decided_at),
+                citation_id: page.id.clone(),
+                state: ReviewState::Approved,
+                reviewer: "Ada Editor".to_owned(),
+                note: String::new(),
+                bound_digest: "wrong-binding".to_owned(),
+                decision_digest: String::new(),
+                decided_at: decided_at.to_owned(),
+                supersedes: None,
+            })
+            .unwrap();
+        assert!(
+            approved_page_citations(&store, &evidence_id)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn page_citation_geometry_changes_its_review_binding() {
+        let evidence_id = evid("a");
+        let quote = "technology surcharge";
+        let quote_digest = sha256_hex(quote.as_bytes());
+        let page = PageCitation {
+            id: PageCitation::id_for(&evidence_id, &quote_digest, 1),
+            evidence_id,
+            quote: quote.to_owned(),
+            quote_digest,
+            page_number: 1,
+            rects: vec![BoundingRect {
+                x_min: 10.0,
+                y_min: 20.0,
+                x_max: 30.0,
+                y_max: 40.0,
+            }],
+            normalized_range: LocatorRange { start: 0, end: 20 },
+            text_map_digest: "text-map-digest".to_owned(),
+            evidence_digest: "evidence-digest".to_owned(),
+            ocr_confidence: Some(0.9),
+        };
+        let mut moved = page.clone();
+        moved.rects[0].x_max = 31.0;
+        assert_ne!(
+            page_citation_review_binding(&page).digest(),
+            page_citation_review_binding(&moved).digest()
+        );
+    }
+
+    #[test]
+    fn subject_action_cannot_borrow_unrelated_approved_citation() {
+        let (_dir, store) = seed_site();
+        let unrelated = test_citation(&evid("b"), "quote b", "L1");
+        approve(&store, &unrelated);
+        let alert = store.alert("alert:approved").unwrap();
+        assert!(!citations_approved(
+            &store,
+            &alert,
+            &[citation_id(&unrelated)]
+        ));
+        assert!(assert_citations_approved(&store, &alert.citations).is_ok());
+    }
+
+    #[test]
+    fn site_rejects_non_http_canonical_url() {
+        let (_dir, store) = seed_site();
+        let out = tempdir().unwrap();
+        let config = SiteConfig {
+            canonical_base_url: "javascript:alert(1)",
+            rules_yaml: "version: 1\nrules: []\n",
+        };
+        assert!(build_site(&store, out.path(), &config).is_err());
     }
 
     #[test]

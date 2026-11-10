@@ -44,9 +44,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
-web="$PNUL_REPO_DIR/web/panopticon-terminal"
-cp -a "$web"/{index.html,decision.html,styles.css,app.js,api.js,decision.css,decision.js} "$stage/"
-cp -a "$web"/{mock,portraits,public,templates,scripts,styles} "$stage/"
+web="$(realpath "$PNUL_REPO_DIR/web/panopticon-terminal")"
+asset_manifest="$(dirname -- "$(realpath -e -- "${BASH_SOURCE[0]}")")/public-assets.txt"
+[[ -f "$asset_manifest" ]] || { echo "public asset manifest is missing" >&2; exit 1; }
+while IFS= read -r asset || [[ -n "$asset" ]]; do
+    [[ -z "$asset" || "$asset" == \#* ]] && continue
+    if [[ ! "$asset" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] ||
+       [[ "$asset" == *".."* ]] || [[ "$asset" == *"//"* ]]; then
+        echo "invalid public asset path: $asset" >&2
+        exit 1
+    fi
+    source_path="$(realpath -e "$web/$asset")"
+    if [[ "$source_path" != "$web/"* || ! -f "$source_path" || -L "$web/$asset" ]]; then
+        echo "public asset escapes the web source or is not a regular file: $asset" >&2
+        exit 1
+    fi
+    mkdir -p -- "$stage/$(dirname -- "$asset")"
+    cp -- "$source_path" "$stage/$asset"
+done < "$asset_manifest"
+mkdir -p -- "$stage/public"
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2
     exit 1

@@ -9,6 +9,7 @@ WorkingDirectory=/srv/panopticon/repo
 EnvironmentFile=/etc/panopticon/panopticon.env
 ExecStart=/srv/panopticon/repo/deploy/selfhost/publish.sh
 StateDirectory=panopticon
+StateDirectoryMode=0700
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true

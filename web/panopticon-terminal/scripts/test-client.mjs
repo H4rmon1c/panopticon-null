@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { runInNewContext } from "node:vm";
 import { PanopticonClient, validateSnapshot } from "../api.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -102,6 +103,42 @@ test("published data requires case release, source verification, and supported l
   const vote = publicFixture();
   vote.entities[0].votes = [{ name: "Test", vote: "Yes", evidence_id: "missing" }];
   assert.throws(() => validateSnapshot(vote), /vote without evidence/);
+});
+
+test("record counts cannot carry markup into search or relationship cards", async () => {
+  const payload = '<img src=x onerror="alert(1)">';
+  const malformed = publicFixture();
+  malformed.entities[0].source_count = payload;
+  assert.throws(() => validateSnapshot(malformed), /invalid count/);
+  const malformedRelation = publicFixture();
+  malformedRelation.entities[0].relationships[0].source_count = payload;
+  assert.throws(() => validateSnapshot(malformedRelation), /invalid relationship count/);
+  const helpers = await readFile(join(root, "scripts/12-helpers.js"), "utf8");
+  const search = await readFile(join(root, "scripts/05-view-search.js"), "utf8");
+  const dossier = await readFile(join(root, "scripts/03-dossier.js"), "utf8");
+  const list = () => ({ children: [], replaceChildren() { this.children = []; }, append(child) { this.children.push(child); } });
+  const searchList = list();
+  const relationList = list();
+  const nodes = new Map([
+    ["#search-results", searchList], ["#search-result-count", {}],
+    ["#relation-list", relationList], ["#relation-count", {}],
+  ]);
+  const context = {
+    state: {
+      searchResults: [{ id: "record", type: "DECISION", name: "Record", source_count: payload }],
+      searchCursor: 0,
+      byId: new Map([["target", { name: "Target" }]]),
+    },
+    $: (selector) => nodes.get(selector),
+    document: { createElement: () => ({ addEventListener() {} }) },
+  };
+  runInNewContext(`${helpers}\n${search}\n${dossier}\nrenderSearch();`, context);
+  runInNewContext(`renderRelations({ relationships: [{ target_entity_id: "target", type: "CITES", label: "Source", source_count: ${JSON.stringify(payload)} }] });`, context);
+  for (const card of [searchList.children[0], relationList.children[0]]) {
+    assert.ok(card, "expected a rendered card");
+    assert.doesNotMatch(card.innerHTML, /<img/i);
+    assert.match(card.innerHTML, /&lt;img/);
+  }
 });
 
 test("decision model keeps ordinance votes separate from an unestablished contract", async () => {

@@ -6,6 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Component, Path};
 
 use pnull_core::{ReviewState, Store, sha256_hex, stable_id};
@@ -223,9 +224,16 @@ pub fn export_atlas(
         .parent()
         .ok_or_else(|| AtlasError::Manifest("output has no parent".to_owned()))?;
     fs::create_dir_all(parent)?;
-    let temporary = output_path.with_extension("json.pnull-building");
-    fs::write(&temporary, bytes)?;
-    fs::rename(temporary, output_path)?;
+    // A fixed temporary name can be pre-created as a symlink and can also be
+    // shared by concurrent preview and production exports.
+    let mut temporary = tempfile::Builder::new()
+        .prefix(".pnull-atlas-")
+        .tempfile_in(parent)?;
+    temporary.write_all(&bytes)?;
+    temporary.as_file().sync_all()?;
+    temporary
+        .persist(output_path)
+        .map_err(|error| AtlasError::Io(error.error))?;
     Ok(())
 }
 
@@ -278,6 +286,8 @@ fn validate_manifest(path: &Path) -> Result<Validated, AtlasError> {
             "required case records are missing".to_owned(),
         ));
     }
+    validate_case_claims(&manifest)?;
+    validate_case_proof_bindings(&manifest)?;
     let mut claims = vec![
         Claim::new(
             "jurisdiction",
@@ -353,6 +363,198 @@ impl Claim {
     }
 }
 
+// Schema v1 covers one reviewed case. These source-backed fields stay fixed
+// until a new manifest version has its own verification rules.
+fn validate_case_claims(manifest: &Manifest) -> Result<(), AtlasError> {
+    let systems = [
+        "Body Worn Camera (Axon)",
+        "Digital Evidence System & Storage (Axon)",
+        "AI Transcription & Reporting (Axon)",
+        "Vehicle Intelligence Cameras (Flock)",
+    ];
+    if manifest.jurisdiction.name != "Colorado Springs, Colorado"
+        || manifest.agency.name != "Colorado Springs Police Department"
+        || manifest.agency.relationship != "agency named in signed ordinance"
+        || manifest.decision.body != "Colorado Springs City Council"
+        || manifest.decision.summary
+            != "The City Council finally passed Ordinance 25-93, amending city code to assess a Police Department Technology Surcharge."
+        || manifest.technology_context.relationship
+            != "systems named in a supporting staff cost presentation; not contracts approved by this vote"
+        || !manifest
+            .technology_context
+            .systems
+            .iter()
+            .map(String::as_str)
+            .eq(systems)
+    {
+        return Err(AtlasError::Manifest(
+            "source-backed case claim differs from approved v1 facts".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_case_proof_bindings(manifest: &Manifest) -> Result<(), AtlasError> {
+    const ORDINANCE: &str = "fixtures/co/ordinance-25-93-signed.pdf";
+    const PRESENTATION: &str = "fixtures/co/police-technology-surcharge-presentation.pdf";
+    expect_pdf_proof(
+        &manifest.jurisdiction.proof,
+        ORDINANCE,
+        "PDF p. 1, enacting clause: City Council of the City of Colorado Springs",
+        &[],
+        "City Council of the City of Colorado Springs",
+    )?;
+    expect_pdf_proof(
+        &manifest.agency.proof,
+        ORDINANCE,
+        "PDF p. 1, title and Section 1(H)(1)",
+        &[],
+        "police department technology surcharge",
+    )?;
+    expect_event_proof(&manifest.decision.proofs[0])?;
+    expect_pdf_proof(
+        &manifest.decision.proofs[1],
+        ORDINANCE,
+        "",
+        &["PDF p. 1, Section 1(H)(1)", "PDF p. 2, finally passed date"],
+        "",
+    )?;
+    expect_pdf_proof(
+        &manifest.technology_context.proof,
+        PRESENTATION,
+        "PDF p. 7, 2026 Major Systems Costs table",
+        &[],
+        "",
+    )?;
+    for vote in &manifest.votes {
+        expect_vote_proof(&vote.proof)?;
+    }
+    Ok(())
+}
+
+fn expect_fixture(proof: &Proof, expected: &str) -> Result<(), AtlasError> {
+    if proof.fixture == expected {
+        Ok(())
+    } else {
+        Err(AtlasError::Source(format!(
+            "proof is bound to wrong preserved record: {}",
+            proof.fixture
+        )))
+    }
+}
+
+fn expect_event_proof(proof: &Proof) -> Result<(), AtlasError> {
+    expect_fixture(proof, "fixtures/co/event-2660-final-vote.json")?;
+    let expected = [
+        "$.EventItems[38].EventItemId",
+        "$.EventItems[38].EventItemMatterFile",
+        "$.EventItems[38].EventItemActionText",
+        "$.EventItems[38].EventItemPassedFlagName",
+    ];
+    if !proof.locator.is_empty()
+        || proof.quote.is_empty()
+        || !proof.locators.iter().map(String::as_str).eq(expected)
+        || !proof.name_locator.is_empty()
+        || !proof.name_quote.is_empty()
+        || !proof.vote_locator.is_empty()
+        || !proof.vote_quote.is_empty()
+        || !proof.event_item_locator.is_empty()
+        || !proof.event_item_quote.is_empty()
+        || !proof.person_id_locator.is_empty()
+        || !proof.person_id_quote.is_empty()
+    {
+        return Err(AtlasError::Source(
+            "decision proof locator differs from checked event item".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn expect_vote_proof(proof: &Proof) -> Result<(), AtlasError> {
+    expect_fixture(proof, "fixtures/co/votes-103550-final-vote.json")?;
+    let Some(base) = proof.name_locator.strip_suffix(".VotePersonName") else {
+        return Err(AtlasError::Source(
+            "vote name locator is invalid".to_owned(),
+        ));
+    };
+    if !base.starts_with("$[")
+        || !base.ends_with(']')
+        || proof.vote_locator != format!("{base}.VoteValueName")
+        || proof.event_item_locator != format!("{base}.VoteEventItemId")
+        || proof.person_id_locator != format!("{base}.VotePersonId")
+        || proof.name_quote.is_empty()
+        || proof.vote_quote.is_empty()
+        || proof.event_item_quote.is_empty()
+        || proof.person_id_quote.is_empty()
+        || !proof.locator.is_empty()
+        || !proof.locators.is_empty()
+        || !proof.quote.is_empty()
+    {
+        return Err(AtlasError::Source(
+            "vote proof locators do not refer to one roll-call row".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn expect_pdf_proof(
+    proof: &Proof,
+    fixture: &str,
+    locator: &str,
+    locators: &[&str],
+    quote: &str,
+) -> Result<(), AtlasError> {
+    expect_fixture(proof, fixture)?;
+    if proof.locator != locator
+        || proof.quote != quote
+        || !proof
+            .locators
+            .iter()
+            .map(String::as_str)
+            .eq(locators.iter().copied())
+        || !proof.name_locator.is_empty()
+        || !proof.name_quote.is_empty()
+        || !proof.vote_locator.is_empty()
+        || !proof.vote_quote.is_empty()
+        || !proof.event_item_locator.is_empty()
+        || !proof.event_item_quote.is_empty()
+        || !proof.person_id_locator.is_empty()
+        || !proof.person_id_quote.is_empty()
+    {
+        return Err(AtlasError::Source(format!(
+            "PDF proof differs from approved v1 locator or quote: {}",
+            proof.fixture
+        )));
+    }
+    Ok(())
+}
+
+fn trusted_source(fixture: &str) -> Option<(&'static str, &'static str, &'static str)> {
+    match fixture {
+        "fixtures/co/event-2660-final-vote.json" => Some((
+            "Colorado Springs City Council final vote event",
+            "https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+            "f11a5712daf21f8f7d345d772995efb1cbeb495da7981bd1a1a6aa22b57a6759",
+        )),
+        "fixtures/co/votes-103550-final-vote.json" => Some((
+            "Colorado Springs City Council roll call",
+            "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+            "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        )),
+        "fixtures/co/ordinance-25-93-signed.pdf" => Some((
+            "Signed Ordinance 25-93",
+            "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+            "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+        )),
+        "fixtures/co/police-technology-surcharge-presentation.pdf" => Some((
+            "Police Technology Surcharge staff presentation",
+            "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D",
+            "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8",
+        )),
+        _ => None,
+    }
+}
+
 fn fixture_path(manifest_path: &Path, relative: &str) -> Result<std::path::PathBuf, AtlasError> {
     let rel = Path::new(relative);
     if rel.is_absolute()
@@ -382,13 +584,16 @@ fn fixture_path(manifest_path: &Path, relative: &str) -> Result<std::path::PathB
 
 fn read_verified(manifest_path: &Path, proof: &Proof) -> Result<Vec<u8>, AtlasError> {
     let path = fixture_path(manifest_path, &proof.fixture)?;
-    if fs::metadata(&path)?.len() > MAX_FIXTURE_BYTES {
+    let mut raw = Vec::new();
+    fs::File::open(&path)?
+        .take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut raw)?;
+    if raw.len() as u64 > MAX_FIXTURE_BYTES {
         return Err(AtlasError::Source(format!(
             "fixture exceeds byte limit: {}",
             proof.fixture
         )));
     }
-    let raw = fs::read(path)?;
     if proof.sha256.len() != 64
         || !proof.sha256.bytes().all(|b| b.is_ascii_hexdigit())
         || sha256_hex(&raw) != proof.sha256
@@ -415,6 +620,17 @@ fn verify_proof(manifest_path: &Path, proof: &Proof) -> Result<Value, AtlasError
         return Err(AtlasError::Source(format!(
             "source is not an official HTTPS record: {}",
             proof.url
+        )));
+    }
+    let Some((title, expected_url, expected_sha256)) = trusted_source(&proof.fixture) else {
+        return Err(AtlasError::Source(
+            "unrecognized preserved record".to_owned(),
+        ));
+    };
+    if proof.url != expected_url || proof.sha256 != expected_sha256 {
+        return Err(AtlasError::Source(format!(
+            "source URL or digest differs from approved record: {}",
+            proof.fixture
         )));
     }
     let raw = read_verified(manifest_path, proof)?;
@@ -473,21 +689,6 @@ fn verify_proof(manifest_path: &Path, proof: &Proof) -> Result<Value, AtlasError
     {
         return Err(AtlasError::Source("unsupported fixture type".to_owned()));
     }
-    let title = match proof.fixture.as_str() {
-        "fixtures/co/event-2660-final-vote.json" => {
-            "Colorado Springs City Council final vote event"
-        }
-        "fixtures/co/votes-103550-final-vote.json" => "Colorado Springs City Council roll call",
-        "fixtures/co/ordinance-25-93-signed.pdf" => "Signed Ordinance 25-93",
-        "fixtures/co/police-technology-surcharge-presentation.pdf" => {
-            "Police Technology Surcharge staff presentation"
-        }
-        _ => {
-            return Err(AtlasError::Source(
-                "unrecognized preserved record".to_owned(),
-            ));
-        }
-    };
     Ok(json!({
         "id":source_id(proof), "title":title, "authority":"City of Colorado Springs",
         "source_type":"official_record", "canonical_url":proof.url,
@@ -538,6 +739,7 @@ fn verify_case_facts(path: &Path, manifest: &Manifest) -> Result<(), AtlasError>
             .unwrap_or("")
             .contains("6-3-0-0")
         || event["EventBodyName"] != "City Council"
+        || item["EventItemActionText"].as_str() != Some(manifest.decision.proofs[0].quote.as_str())
     {
         return Err(AtlasError::Source(
             "decision facts differ from preserved event".to_owned(),
@@ -654,6 +856,8 @@ fn production_gate(
         .map_err(|_| AtlasError::Review("invalid canonical site URL".to_owned()))?;
     if parsed.scheme() != "https"
         || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
         || parsed.host_str().is_some_and(|host| {
             host.contains("example") || host == "localhost" || host.ends_with(".invalid")
         })
@@ -927,19 +1131,9 @@ fn relationship(
 }
 
 fn validate_value(value: &Value) -> Result<(), AtlasError> {
-    static PHONE_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     match value {
         Value::String(s) => {
             validate_public_text(s).map_err(|e| AtlasError::Privacy(e.to_string()))?;
-            let phone = PHONE_PATTERN.get_or_init(|| {
-                regex::Regex::new(
-                    r"(?x)(?:\+?1[ .-]?)?\(?[2-9][0-9]{2}\)?[ .-][2-9][0-9]{2}[ .-][0-9]{4}",
-                )
-                .expect("static regex")
-            });
-            if phone.is_match(s) {
-                return Err(AtlasError::Privacy("phone-like private contact".to_owned()));
-            }
         }
         Value::Array(items) => {
             for item in items {
@@ -1323,7 +1517,7 @@ mod tests {
         assert_eq!(fs::read(&output).unwrap(), b"previous published bytes");
         let (_dir2, manifest2) = copied_case();
         edit_manifest(&manifest2, |m| {
-            m["decision"]["summary"] = json!("Call resident@example.com about this decision");
+            m["unresolved_question"] = json!("Call resident@example.com about this decision");
         });
         let private_store_dir = tempfile::tempdir().unwrap();
         let private_store = Store::open(private_store_dir.path()).unwrap();
@@ -1354,6 +1548,136 @@ mod tests {
         assert!(matches!(
             review_requirements(&manifest4),
             Err(AtlasError::Manifest(_))
+        ));
+    }
+
+    #[test]
+    fn proof_cannot_point_to_an_unrelated_official_page() {
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["decision"]["proofs"][0]["url"] =
+                json!("https://webapi.legistar.com/v1/coloradosprings/events/1");
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(_))
+        ));
+    }
+
+    #[test]
+    fn pdf_proof_cannot_claim_an_unchecked_quote_or_wrong_document() {
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["agency"]["proof"]["quote"] = json!("City Council approved a Flock contract");
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(_))
+        ));
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["decision"]["proofs"][1] = m["technology_context"]["proof"].clone();
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(_))
+        ));
+    }
+
+    #[test]
+    fn unchecked_technology_or_agency_cannot_be_marked_source_verified() {
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["technology_context"]["systems"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!("Face Recognition Network (fictional)"));
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Manifest(_) | AtlasError::Source(_))
+        ));
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["agency"]["name"] = json!("Fictional Police Department");
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Manifest(_) | AtlasError::Source(_))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preexisting_temporary_symlink_cannot_clobber_other_file() {
+        use std::os::unix::fs::symlink;
+
+        let (dir, manifest) = copied_case();
+        let store = Store::open(dir.path().join("db")).unwrap();
+        let output = dir.path().join("atlas.json");
+        let sentinel = dir.path().join("unrelated.txt");
+        fs::write(&sentinel, b"unrelated contents").unwrap();
+        symlink(&sentinel, output.with_extension("json.pnull-building")).unwrap();
+        export_atlas(&store, &manifest, &output, AtlasExportMode::Preview, None).unwrap();
+        assert_eq!(fs::read(&sentinel).unwrap(), b"unrelated contents");
+        let data: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        assert_eq!(data["preview"], true);
+    }
+
+    #[test]
+    fn event_and_vote_locators_must_refer_to_the_same_checked_record() {
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["decision"]["proofs"][0]["locators"][0] = json!("$.EventItems[37].EventItemId");
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(_))
+        ));
+
+        let (_dir, manifest) = copied_case();
+        edit_manifest(&manifest, |m| {
+            m["votes"][0]["proof"]["vote_locator"] = json!("$[2].VoteValueName");
+        });
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(_))
+        ));
+    }
+
+    #[test]
+    fn canonical_url_cannot_contain_credentials() {
+        let (dir, manifest) = copied_case();
+        let store = Store::open(dir.path().join("db")).unwrap();
+        allow_release(&store);
+        approve_release(&store, &manifest, "Ada Editor");
+        let output = dir.path().join("public.json");
+        assert!(matches!(
+            export_atlas(
+                &store,
+                &manifest,
+                &output,
+                AtlasExportMode::Production,
+                Some("https://editor:password@panopticon.fail/")
+            ),
+            Err(AtlasError::Review(_))
+        ));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn oversized_fixture_is_rejected_without_reading_unbounded_input() {
+        let (dir, manifest) = copied_case();
+        let fixture = dir.path().join("fixtures/co/votes-103550-final-vote.json");
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&fixture)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(matches!(
+            review_requirements(&manifest),
+            Err(AtlasError::Source(message)) if message.contains("byte limit")
         ));
     }
 }

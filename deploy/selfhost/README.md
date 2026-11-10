@@ -14,7 +14,7 @@ official sources → scheduled Rust collector → private /var/lib/panopticon
 
 `panopticon-collect.timer` starts 10 minutes after boot and then 25 hours after each completed collection. It invokes `collect.sh` to check the configured Colorado Springs Legistar events source and both procurement surfaces. The CLI enforces each source's reviewed scope, expiration, HTTPS/host rules, byte limits, and minimum request interval; unchanged and failed fetches are recorded according to the CLI's existing behavior. One failing source does not prevent checking the others, and the service reports failure for monitoring.
 
-Collection writes to the private ledger. **The current atlas exporter supports only the approved Colorado Springs Ordinance 25-93 manifest. New council matters and procurement changes do not yet become public atlas cases automatically.** `panopticon-publish.service` is a deliberate one-shot release, with no timer. It copies only selected static assets, generates a fresh approved snapshot into a staged directory, validates it, then atomically switches the public symlink. A failure leaves the previous release live. It never copies the private preview, SQLite database, evidence store, or operator notes.
+Collection writes to the private ledger. **The current atlas exporter supports only the approved Colorado Springs Ordinance 25-93 manifest. New council matters and procurement changes do not yet become public atlas cases automatically.** `panopticon-publish.service` is a deliberate one-shot release, with no timer. It copies only the files listed in `public-assets.txt`, generates a fresh approved snapshot into a staged directory, validates it, then atomically switches the public symlink. A failure leaves the previous release live. When adding a browser asset, add its exact path to that list; arbitrary files in an asset directory do not enter a release. The private preview, SQLite database, evidence store, and operator notes stay outside the public release.
 
 Source review is per source and expires; it is not a review task for every fetched record. An additional jurisdiction needs a configured source, adapter, and an expanded multi-case atlas exporter before it can appear publicly. Do not add arbitrary source IDs to the timer and expect the atlas to publish them.
 
@@ -68,6 +68,24 @@ sudo install -o root -g panopticon -m 0640 deploy/selfhost/panopticon.env.exampl
 sudo install -m 0644 deploy/selfhost/panopticon-collect.service deploy/selfhost/panopticon-collect.timer deploy/selfhost/panopticon-publish.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
+
+Before enabling collection, prove that the PDF sandbox works as the service
+user on this VPS. Build the ignored integration test, then run its binary under
+`panopticon` from the repository directory:
+
+```console
+cargo test --locked -p pnull-ingest --test real_sandbox_pdf --no-run
+test_bin="$(find target/debug/deps -maxdepth 1 -type f -name 'real_sandbox_pdf-*' -perm /111 -print -quit)"
+test -n "$test_bin"
+sudo -u panopticon "$PWD/$test_bin" --ignored --nocapture
+```
+
+The test must extract the fixture through Bubblewrap and Poppler. Ubuntu 24.04
+can restrict unprivileged user namespaces through AppArmor; if the test fails
+at sandbox setup, inspect the denial and configure a narrow profile for
+Bubblewrap before retrying. Keep the system-wide namespace restriction in
+place. See [Ubuntu's 24.04 security notes](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)
+and [AppArmor guidance](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
 
 The example uses `PNUL_SITE_URL=https://panopticon.fail`. The released decision page currently has matching static social metadata. If the host changes, update that metadata and the configured URL together before publishing; the validator rejects a mismatch. `PNUL_CONFIG_PATH` and `PNUL_MANIFEST_PATH` are resolved from the repository working directory.
 

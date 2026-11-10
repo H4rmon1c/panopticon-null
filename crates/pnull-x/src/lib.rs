@@ -8,7 +8,7 @@ use pnull_core::{
     Alert, CoreError, ProcurementAlert, Store, XAttempt, XReconciliation, XSegment, stable_id,
 };
 use reqwest::blocking::Client;
-use rusqlite::params;
+use rusqlite::{Transaction, params};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -51,6 +51,8 @@ pub enum XError {
     UncertainAttempt,
     #[error("unsupported reconciliation decision: {0}")]
     UnsupportedDecision(String),
+    #[error("unsafe reconciliation: {0}")]
+    UnsafeReconciliation(String),
     #[error("X credentials are not configured")]
     CredentialsMissing,
     #[error("the runtime secret file is not protected with mode 0600")]
@@ -275,18 +277,34 @@ pub fn post_with_attempt<T: XTransport>(
     if !confirmed {
         return Err(XError::NotConfirmed);
     }
+    if draft.posts.is_empty()
+        || draft.posts.len() > 8
+        || draft
+            .posts
+            .iter()
+            .any(|post| post.trim().is_empty() || post.chars().count() > X_CHARACTER_LIMIT)
+    {
+        return Err(XError::CharacterLimit);
+    }
+    for post in &draft.posts {
+        pnull_publish::validate_public_text(post).map_err(|_| XError::SensitiveData)?;
+    }
     let procurement_alert = store
         .all_procurement_alerts()?
         .into_iter()
         .find(|alert| alert.id == draft.alert_id);
     if let Some(alert) = procurement_alert.as_ref() {
         assert_procurement_published(store, alert)?;
-    } else if draft
-        .posts
-        .iter()
-        .any(|post| post.contains("/procurement/"))
-    {
-        return Err(XError::ProcurementNotPublished);
+    } else {
+        if draft
+            .posts
+            .iter()
+            .any(|post| post.contains("/procurement/"))
+        {
+            return Err(XError::ProcurementNotPublished);
+        }
+        let alert = store.alert(&draft.alert_id)?;
+        pnull_publish::assert_citations_approved(store, &alert.citations)?;
     }
     if store.approved_draft_digest(&draft.alert_id)?.as_deref() != Some(draft.digest().as_str()) {
         return Err(XError::NotApproved);
@@ -315,9 +333,7 @@ pub fn post_with_attempt<T: XTransport>(
         status: "in_progress".to_owned(),
         segments,
     };
-    store.insert_x_attempt(&attempt)?;
-
-    if !store.reserve_post(&draft.alert_id)? {
+    if !store.reserve_x_post_attempt(&attempt)? {
         return Err(XError::AlreadyPosted);
     }
 
@@ -327,7 +343,10 @@ pub fn post_with_attempt<T: XTransport>(
         let reply_to = remote_ids.last().map(String::as_str);
         match transport.submit(post, reply_to) {
             Ok(remote_id) => {
-                store.record_post_segment(&draft.alert_id, index, &remote_id)?;
+                if remote_id.trim().is_empty() {
+                    failure = Some(XError::Transport);
+                    break;
+                }
                 if let Some(segment) = attempt
                     .segments
                     .iter_mut()
@@ -336,7 +355,7 @@ pub fn post_with_attempt<T: XTransport>(
                     segment.remote_id = Some(remote_id.clone());
                     "posted".clone_into(&mut segment.state);
                 }
-                persist_attempt(store, &attempt)?;
+                persist_post_segment(store, &attempt, index, &remote_id)?;
                 remote_ids.push(remote_id);
             }
             Err(error) => {
@@ -351,9 +370,57 @@ pub fn post_with_attempt<T: XTransport>(
         return Err(error);
     }
     "complete".clone_into(&mut attempt.status);
-    persist_attempt(store, &attempt)?;
-    store.mark_posted(&draft.alert_id, &remote_ids, posted_at)?;
+    complete_attempt(store, &attempt, &remote_ids, posted_at)?;
     Ok(remote_ids)
+}
+
+fn persist_post_segment(
+    store: &Store,
+    attempt: &XAttempt,
+    index: usize,
+    remote_id: &str,
+) -> Result<(), XError> {
+    let json = serde_json::to_string(attempt).map_err(CoreError::from)?;
+    store.transaction(|transaction| {
+        transaction.execute(
+            "INSERT INTO post_segments(alert_id, segment_index, remote_id) VALUES (?1, ?2, ?3)",
+            params![
+                attempt.alert_id,
+                i64::try_from(index).unwrap_or(i64::MAX),
+                remote_id
+            ],
+        )?;
+        transaction.execute(
+            "UPDATE x_attempts SET attempt_json = ?1 WHERE id = ?2",
+            params![json, attempt.id],
+        )?;
+        Ok(())
+    })?;
+    Ok(())
+}
+
+fn complete_attempt(
+    store: &Store,
+    attempt: &XAttempt,
+    remote_ids: &[String],
+    posted_at: &str,
+) -> Result<(), XError> {
+    let attempt_json = serde_json::to_string(attempt).map_err(CoreError::from)?;
+    let remote_ids_json = serde_json::to_string(remote_ids).map_err(CoreError::from)?;
+    store.transaction(|transaction| {
+        if transaction.execute(
+            "UPDATE posts SET remote_ids_json = ?2, posted_at = ?3 WHERE alert_id = ?1 AND posted_at = 'IN_PROGRESS'",
+            params![attempt.alert_id, remote_ids_json, posted_at],
+        )? != 1 {
+            return Err(CoreError::PostStateConflict(attempt.alert_id.clone()));
+        }
+        transaction.execute(
+            "UPDATE x_attempts SET attempt_json = ?1 WHERE id = ?2",
+            params![attempt_json, attempt.id],
+        )?;
+        Ok(())
+    })?;
+    Ok(())
 }
 
 /// Refuses a new posting attempt while the most recent attempt for the alert
@@ -362,7 +429,10 @@ pub fn post_with_attempt<T: XTransport>(
 fn guard_against_blind_retry(store: &Store, alert_id: &str) -> Result<(), XError> {
     let attempts = load_attempts_for_alert(store, alert_id)?;
     if let Some(latest) = attempts.last()
-        && matches!(latest.status.as_str(), "uncertain" | "in_progress")
+        && matches!(
+            latest.status.as_str(),
+            "uncertain" | "in_progress" | "partial" | "abandoned"
+        )
     {
         return Err(XError::UncertainAttempt);
     }
@@ -424,7 +494,72 @@ pub fn reconcile(
     note: &str,
     decided_at: &str,
 ) -> Result<XReconciliation, XError> {
-    let mut attempt = store.x_attempt(attempt_id)?;
+    if !matches!(
+        decision,
+        "confirm_posted" | "confirm_none_posted" | "partial" | "abandon"
+    ) {
+        return Err(XError::UnsupportedDecision(decision.to_owned()));
+    }
+    if operator.trim().is_empty() || note.trim().is_empty() {
+        return Err(XError::UnsafeReconciliation(
+            "operator and note are required".to_owned(),
+        ));
+    }
+    if remote_id.is_some_and(|id| id.trim().is_empty()) {
+        return Err(XError::UnsafeReconciliation(
+            "remote ID cannot be blank".to_owned(),
+        ));
+    }
+    if decision != "confirm_posted" && remote_id.is_some() {
+        return Err(XError::UnsafeReconciliation(
+            "remote ID is only valid with confirm_posted".to_owned(),
+        ));
+    }
+    let transaction = store
+        .connection()
+        .unchecked_transaction()
+        .map_err(CoreError::from)?;
+    let attempt_json: String = transaction
+        .query_row(
+            "SELECT attempt_json FROM x_attempts WHERE id = ?1",
+            [attempt_id],
+            |row| row.get(0),
+        )
+        .map_err(CoreError::from)?;
+    let mut attempt: XAttempt = serde_json::from_str(&attempt_json).map_err(CoreError::from)?;
+    if !matches!(attempt.status.as_str(), "uncertain" | "in_progress") {
+        return Err(XError::UnsafeReconciliation(format!(
+            "attempt is already resolved ({})",
+            attempt.status
+        )));
+    }
+    let recorded: Vec<(u32, String)> = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT segment_index, remote_id FROM post_segments WHERE alert_id = ?1 ORDER BY segment_index",
+            )
+            .map_err(CoreError::from)?;
+        let rows = statement
+            .query_map([&attempt.alert_id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(CoreError::from)?;
+        rows.collect::<Result<_, _>>().map_err(CoreError::from)?
+    };
+    let known: Vec<(u32, String)> = attempt
+        .segments
+        .iter()
+        .filter_map(|segment| {
+            segment
+                .remote_id
+                .as_ref()
+                .map(|id| (segment.index, id.clone()))
+        })
+        .collect();
+    if recorded != known {
+        return Err(XError::UnsafeReconciliation(
+            "stored segment IDs disagree with the attempt; investigate before reconciling"
+                .to_owned(),
+        ));
+    }
     let item = XReconciliation {
         id: stable_id("x-reconcile", &[attempt_id, decided_at]),
         attempt_id: attempt_id.to_owned(),
@@ -434,68 +569,123 @@ pub fn reconcile(
         operator: operator.to_owned(),
         decided_at: decided_at.to_owned(),
     };
-    store.insert_x_reconciliation(&item)?;
+    apply_reconciliation_decision(
+        &transaction,
+        &mut attempt,
+        decision,
+        remote_id,
+        &known,
+        decided_at,
+    )?;
+    transaction
+        .execute(
+            "INSERT INTO x_reconciliations(id, attempt_id, reconciliation_json) VALUES (?1, ?2, ?3)",
+            params![item.id, item.attempt_id, serde_json::to_string(&item).map_err(CoreError::from)?],
+        )
+        .map_err(CoreError::from)?;
+    transaction
+        .execute(
+            "UPDATE x_attempts SET attempt_json = ?1 WHERE id = ?2",
+            params![
+                serde_json::to_string(&attempt).map_err(CoreError::from)?,
+                attempt.id
+            ],
+        )
+        .map_err(CoreError::from)?;
+    transaction.commit().map_err(CoreError::from)?;
+    Ok(item)
+}
 
+fn apply_reconciliation_decision(
+    transaction: &Transaction<'_>,
+    attempt: &mut XAttempt,
+    decision: &str,
+    remote_id: Option<&str>,
+    known: &[(u32, String)],
+    decided_at: &str,
+) -> Result<(), XError> {
     match decision {
         "confirm_posted" => {
-            if let Some(remote_id) = remote_id
-                && let Some(segment) = attempt
+            let missing = attempt
+                .segments
+                .iter()
+                .filter(|segment| segment.remote_id.is_none())
+                .count();
+            if missing != usize::from(remote_id.is_some()) {
+                return Err(XError::UnsafeReconciliation(
+                    "confirm_posted requires one remote ID for the sole missing segment, or none when all IDs are already recorded"
+                        .to_owned(),
+                ));
+            }
+            if let Some(remote_id) = remote_id {
+                if known.iter().any(|(_, id)| id == remote_id) {
+                    return Err(XError::UnsafeReconciliation(
+                        "remote ID is already assigned to another segment".to_owned(),
+                    ));
+                }
+                let segment = attempt
                     .segments
                     .iter_mut()
                     .find(|segment| segment.remote_id.is_none())
-            {
+                    .expect("validated exactly one missing segment");
                 segment.remote_id = Some(remote_id.to_owned());
-                store.record_post_segment(
-                    &attempt.alert_id,
-                    usize::try_from(segment.index).unwrap_or(usize::MAX),
-                    remote_id,
-                )?;
+                transaction
+                    .execute(
+                        "INSERT INTO post_segments(alert_id, segment_index, remote_id) VALUES (?1, ?2, ?3)",
+                        params![attempt.alert_id, segment.index, remote_id],
+                    )
+                    .map_err(CoreError::from)?;
             }
             for segment in &mut attempt.segments {
                 "posted".clone_into(&mut segment.state);
             }
             "reconciled".clone_into(&mut attempt.status);
-            if !store.is_posted(&attempt.alert_id)? {
-                let remote_ids: Vec<String> = attempt
-                    .segments
-                    .iter()
-                    .filter_map(|segment| segment.remote_id.clone())
-                    .collect();
-                store.mark_posted(&attempt.alert_id, &remote_ids, decided_at)?;
+            let remote_ids: Vec<String> = attempt
+                .segments
+                .iter()
+                .filter_map(|segment| segment.remote_id.clone())
+                .collect();
+            if transaction
+                .execute(
+                    "UPDATE posts SET remote_ids_json = ?2, posted_at = ?3 WHERE alert_id = ?1 AND posted_at = 'IN_PROGRESS'",
+                    params![attempt.alert_id, serde_json::to_string(&remote_ids).map_err(CoreError::from)?, decided_at],
+                )
+                .map_err(CoreError::from)?
+                != 1
+            {
+                return Err(XError::UnsafeReconciliation(
+                    "posting reservation is missing or already finalized".to_owned(),
+                ));
             }
         }
         "confirm_none_posted" => {
-            clear_in_progress_reservation(store, &attempt.alert_id)?;
+            if !known.is_empty() {
+                return Err(XError::UnsafeReconciliation(
+                    "one or more segments have recorded remote IDs".to_owned(),
+                ));
+            }
+            if transaction
+                .execute(
+                    "DELETE FROM posts WHERE alert_id = ?1 AND posted_at = 'IN_PROGRESS'",
+                    [&attempt.alert_id],
+                )
+                .map_err(CoreError::from)?
+                != 1
+            {
+                return Err(XError::UnsafeReconciliation(
+                    "posting reservation is missing or already finalized".to_owned(),
+                ));
+            }
             "reconciled".clone_into(&mut attempt.status);
         }
         "partial" => {
-            clear_in_progress_reservation(store, &attempt.alert_id)?;
             "partial".clone_into(&mut attempt.status);
         }
         "abandon" => {
             "abandoned".clone_into(&mut attempt.status);
         }
-        other => return Err(XError::UnsupportedDecision(other.to_owned())),
+        _ => unreachable!("decision was validated above"),
     }
-    persist_attempt(store, &attempt)?;
-    Ok(item)
-}
-
-/// Removes an un-finalized posting reservation (a `posts` row still marked
-/// `IN_PROGRESS`) and its segment rows so a fresh attempt may begin after a
-/// reconciliation that concluded nothing was (or should be) permanently posted.
-fn clear_in_progress_reservation(store: &Store, alert_id: &str) -> Result<(), XError> {
-    store.transaction(|transaction| {
-        transaction.execute(
-            "DELETE FROM post_segments WHERE alert_id = ?1",
-            params![alert_id],
-        )?;
-        transaction.execute(
-            "DELETE FROM posts WHERE alert_id = ?1 AND posted_at = 'IN_PROGRESS'",
-            params![alert_id],
-        )?;
-        Ok(())
-    })?;
     Ok(())
 }
 
@@ -629,6 +819,9 @@ impl XTransport for ReqwestXTransport {
             .and_then(reqwest::blocking::Response::error_for_status)
             .map_err(|_| XError::Transport)?;
         let body: TweetResponse = response.json().map_err(|_| XError::Transport)?;
+        if body.data.id.trim().is_empty() {
+            return Err(XError::Transport);
+        }
         Ok(body.data.id)
     }
 }
@@ -660,6 +853,14 @@ mod tests {
     struct FakeFailingTransport {
         calls: usize,
         succeed_for: usize,
+    }
+
+    struct BlankIdTransport;
+
+    impl XTransport for BlankIdTransport {
+        fn submit(&mut self, _text: &str, _reply_to: Option<&str>) -> Result<String, XError> {
+            Ok(String::new())
+        }
     }
 
     impl XTransport for FakeFailingTransport {
@@ -733,6 +934,23 @@ mod tests {
         };
         store.insert_evidence(&record, "Axon").expect("evidence");
         store.insert_alert(alert).expect("alert");
+        for citation in &alert.citations {
+            let citation_id = pnull_publish::citation_id(citation);
+            let decided_at = "2025-11-26T00:00:00Z".to_owned();
+            store
+                .insert_review(&ReviewDecision {
+                    id: ReviewDecision::id_for(&citation_id, &decided_at),
+                    citation_id,
+                    state: ReviewState::Approved,
+                    reviewer: "test".to_owned(),
+                    note: "test review".to_owned(),
+                    bound_digest: pnull_publish::citation_review_binding(citation).digest(),
+                    decision_digest: String::new(),
+                    decided_at,
+                    supersedes: None,
+                })
+                .expect("citation review");
+        }
     }
 
     #[test]
@@ -915,7 +1133,7 @@ mod tests {
             .expect("approval");
         let mut failing = FakeFailingTransport {
             calls: 0,
-            succeed_for: 1,
+            succeed_for: draft.posts.len() - 1,
         };
         assert!(matches!(
             post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut failing),
@@ -942,7 +1160,10 @@ mod tests {
                 .all(|segment| segment.state == "posted")
         );
         assert_eq!(
-            attempt.segments[1].remote_id.as_deref(),
+            attempt
+                .segments
+                .last()
+                .and_then(|segment| segment.remote_id.as_deref()),
             Some("manual-remote-2")
         );
         assert!(store.is_posted(&alert.id).expect("is posted"));
@@ -951,7 +1172,7 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_is_append_only_and_does_not_delete_history() {
+    fn reconciliation_cannot_be_rewritten_after_resolution() {
         let directory = tempdir().expect("temporary directory");
         let store = Store::open(directory.path()).expect("store");
         let alert = long_alert();
@@ -971,30 +1192,364 @@ mod tests {
         let attempt_id = attempts_for_alert(&store, &alert.id).expect("attempts")[0]
             .id
             .clone();
-        for (index, (decision, decided_at)) in [
-            ("confirm_none_posted", "2025-11-26T00:10:00Z"),
+        reconcile(
+            &store,
+            &attempt_id,
+            "confirm_none_posted",
+            None,
+            "op",
+            "nothing posted",
+            "2025-11-26T00:10:00Z",
+        )
+        .expect("reconcile");
+        for (decision, decided_at) in [
             ("confirm_posted", "2025-11-26T00:20:00Z"),
             ("partial", "2025-11-26T00:30:00Z"),
             ("abandon", "2025-11-26T00:40:00Z"),
-        ]
-        .iter()
-        .enumerate()
-        {
+        ] {
+            assert!(matches!(
+                reconcile(
+                    &store,
+                    &attempt_id,
+                    decision,
+                    None,
+                    "op",
+                    "note",
+                    decided_at
+                ),
+                Err(XError::UnsafeReconciliation(_))
+            ));
+            let history = load_reconciliations_for_attempt(&store, &attempt_id).expect("history");
+            assert_eq!(history.len(), 1);
+        }
+        let final_status = store.x_attempt(&attempt_id).expect("attempt").status;
+        assert_eq!(final_status, "reconciled");
+    }
+
+    #[test]
+    fn partial_reconciliation_preserves_posted_segments_and_blocks_retry() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = long_alert();
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        assert!(draft.posts.len() > 1);
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        let mut failing = FakeFailingTransport {
+            calls: 0,
+            succeed_for: 1,
+        };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut failing),
+            Err(XError::Transport)
+        ));
+        let attempt_id = attempts_for_alert(&store, &alert.id).expect("attempts")[0]
+            .id
+            .clone();
+        assert!(matches!(
             reconcile(
                 &store,
                 &attempt_id,
-                decision,
+                "confirm_none_posted",
+                None,
+                "op",
+                "none",
+                "2025-11-26T00:10:00Z"
+            ),
+            Err(XError::UnsafeReconciliation(_))
+        ));
+        assert!(matches!(
+            reconcile(
+                &store,
+                &attempt_id,
+                "confirm_posted",
+                Some("one-id"),
+                "op",
+                "all",
+                "2025-11-26T00:11:00Z"
+            ),
+            Err(XError::UnsafeReconciliation(_))
+        ));
+        assert!(
+            load_reconciliations_for_attempt(&store, &attempt_id)
+                .expect("history")
+                .is_empty()
+        );
+        reconcile(
+            &store,
+            &attempt_id,
+            "partial",
+            None,
+            "op",
+            "first segment posted, later segments unresolved",
+            "2025-11-26T00:12:00Z",
+        )
+        .expect("partial reconciliation");
+        assert_eq!(
+            store.post_segments(&alert.id).expect("segments"),
+            vec!["fake-1"]
+        );
+        let mut fake = FakeTransport { calls: 0 };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:20:00Z", &mut fake),
+            Err(XError::UncertainAttempt)
+        ));
+        assert_eq!(fake.calls, 0);
+    }
+
+    #[test]
+    fn invalid_reconciliation_never_writes_audit_history() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        let mut failing = FakeFailingTransport {
+            calls: 0,
+            succeed_for: 0,
+        };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut failing),
+            Err(XError::Transport)
+        ));
+        let attempt_id = attempts_for_alert(&store, &alert.id).expect("attempts")[0]
+            .id
+            .clone();
+        assert!(matches!(
+            reconcile(
+                &store,
+                &attempt_id,
+                "typo",
                 None,
                 "op",
                 "note",
-                decided_at,
-            )
-            .expect("reconcile");
-            let history = load_reconciliations_for_attempt(&store, &attempt_id).expect("history");
-            assert_eq!(history.len(), index + 1);
+                "2025-11-26T00:10:00Z"
+            ),
+            Err(XError::UnsupportedDecision(_))
+        ));
+        assert!(
+            load_reconciliations_for_attempt(&store, &attempt_id)
+                .expect("history")
+                .is_empty()
+        );
+        assert_eq!(
+            store.x_attempt(&attempt_id).expect("attempt").status,
+            "uncertain"
+        );
+    }
+
+    #[test]
+    fn contradictory_remote_id_cannot_clear_a_posting_reservation() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        let mut failing = FakeFailingTransport {
+            calls: 0,
+            succeed_for: 0,
+        };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut failing),
+            Err(XError::Transport)
+        ));
+        let attempt_id = attempts_for_alert(&store, &alert.id).expect("attempts")[0]
+            .id
+            .clone();
+        for decision in ["confirm_none_posted", "partial", "abandon"] {
+            assert!(matches!(
+                reconcile(
+                    &store,
+                    &attempt_id,
+                    decision,
+                    Some("known-remote-id"),
+                    "op",
+                    "found a remote ID",
+                    "2025-11-26T00:10:00Z"
+                ),
+                Err(XError::UnsafeReconciliation(_))
+            ));
         }
-        let final_status = store.x_attempt(&attempt_id).expect("attempt").status;
-        assert_eq!(final_status, "abandoned");
+        assert!(
+            load_reconciliations_for_attempt(&store, &attempt_id)
+                .expect("history")
+                .is_empty()
+        );
+        let mut fake = FakeTransport { calls: 0 };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:20:00Z", &mut fake),
+            Err(XError::UncertainAttempt)
+        ));
+    }
+
+    #[test]
+    fn blank_transport_id_remains_uncertain_and_cannot_be_retried() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        assert!(matches!(
+            post_with_attempt(
+                &store,
+                &draft,
+                true,
+                "2025-11-26T00:00:01Z",
+                &mut BlankIdTransport
+            ),
+            Err(XError::Transport)
+        ));
+        assert_eq!(
+            attempts_for_alert(&store, &alert.id).expect("attempts")[0].status,
+            "uncertain"
+        );
+        assert!(store.post_segments(&alert.id).expect("segments").is_empty());
+        let mut fake = FakeTransport { calls: 0 };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:20:00Z", &mut fake),
+            Err(XError::UncertainAttempt)
+        ));
+    }
+
+    #[test]
+    fn empty_or_unsafe_approved_thread_cannot_be_marked_posted() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let mut fake = FakeTransport { calls: 0 };
+        for posts in [
+            vec![],
+            vec![" ".to_owned()],
+            vec!["x".repeat(X_CHARACTER_LIMIT + 1)],
+            vec!["Plate: ABC123".to_owned()],
+        ] {
+            let draft = Draft {
+                alert_id: alert.id.clone(),
+                posts,
+            };
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO approvals(alert_id, draft_digest, approved_at) VALUES (?1, ?2, ?3)
+                     ON CONFLICT(alert_id) DO UPDATE SET draft_digest=excluded.draft_digest",
+                    params![alert.id, draft.digest(), "2025-11-26T00:00:00Z"],
+                )
+                .expect("approval");
+            assert!(
+                post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut fake).is_err()
+            );
+        }
+        assert_eq!(fake.calls, 0);
+        assert!(!store.is_posted(&alert.id).expect("post state"));
+    }
+
+    #[test]
+    fn revoked_ordinary_citation_blocks_post_before_transport() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        let citation = &alert.citations[0];
+        let citation_id = pnull_publish::citation_id(citation);
+        let decided_at = "2025-11-26T01:00:00Z".to_owned();
+        store
+            .insert_review(&ReviewDecision {
+                id: ReviewDecision::id_for(&citation_id, &decided_at),
+                citation_id,
+                state: ReviewState::Rejected,
+                reviewer: "test".to_owned(),
+                note: "revoked".to_owned(),
+                bound_digest: pnull_publish::citation_review_binding(citation).digest(),
+                decision_digest: String::new(),
+                decided_at,
+                supersedes: None,
+            })
+            .expect("revocation");
+        let mut fake = FakeTransport { calls: 0 };
+        assert!(matches!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T02:00:00Z", &mut fake),
+            Err(XError::Publish(_))
+        ));
+        assert_eq!(fake.calls, 0);
+    }
+
+    #[test]
+    fn segment_record_and_attempt_state_commit_together() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        store
+            .connection()
+            .execute_batch(
+                "CREATE TRIGGER fail_attempt_update BEFORE UPDATE ON x_attempts
+                 BEGIN SELECT RAISE(ABORT, 'injected attempt write failure'); END;",
+            )
+            .expect("trigger");
+        let mut transport = FakeTransport { calls: 0 };
+        assert!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut transport)
+                .is_err()
+        );
+        assert_eq!(transport.calls, 1);
+        assert!(store.post_segments(&alert.id).expect("segments").is_empty());
+        assert_eq!(
+            attempts_for_alert(&store, &alert.id).expect("attempts")[0].status,
+            "in_progress"
+        );
+    }
+
+    #[test]
+    fn final_attempt_and_post_status_commit_together() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let alert = alert("short");
+        seed(&store, &alert);
+        let draft = draft(&alert, "https://example.invalid/pnull").expect("draft");
+        store
+            .approve(&alert.id, &draft.digest(), "2025-11-26T00:00:00Z")
+            .expect("approval");
+        store
+            .connection()
+            .execute_batch(
+                "CREATE TRIGGER fail_post_update BEFORE UPDATE ON posts
+                 BEGIN SELECT RAISE(ABORT, 'injected post write failure'); END;",
+            )
+            .expect("trigger");
+        let mut transport = FakeTransport { calls: 0 };
+        assert!(
+            post_with_attempt(&store, &draft, true, "2025-11-26T00:00:01Z", &mut transport)
+                .is_err()
+        );
+        assert_eq!(transport.calls, draft.posts.len());
+        assert_eq!(
+            attempts_for_alert(&store, &alert.id).expect("attempts")[0].status,
+            "in_progress"
+        );
+        assert_eq!(
+            store.post_segments(&alert.id).expect("segments").len(),
+            draft.posts.len()
+        );
     }
 
     #[test]

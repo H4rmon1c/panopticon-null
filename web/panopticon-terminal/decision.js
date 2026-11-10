@@ -212,7 +212,10 @@ function renderVotes(model, mode) {
     }
     const text = node("div", "vote-card-text");
     const heading = node("div", "vote-card-heading");
-    heading.append(node("strong", "", name), node("span", `vote-position ${String(vote.vote ?? vote.position).toLowerCase() === "aye" ? "aye" : "no"}`, vote.vote ?? vote.position ?? "Vote unknown"));
+    const voteValue = vote.vote ?? vote.position;
+    const voteKey = String(voteValue ?? "").toLowerCase();
+    const voteClass = voteKey === "aye" ? "aye" : voteKey === "no" ? "no" : "";
+    heading.append(node("strong", "", name), node("span", `vote-position${voteClass ? ` ${voteClass}` : ""}`, voteValue ?? "Vote unknown"));
     text.append(heading);
     const role = vote.role ?? vote.office_role ?? "not established";
     const term = vote.term ?? vote.office_term ?? "not established";

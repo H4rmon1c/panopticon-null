@@ -61,7 +61,7 @@ function renderRelations(entity) {
     button.type = "button";
     button.className = "relation";
     button.title = "Open related entity. Hold Shift to inspect supporting evidence.";
-    button.innerHTML = `<em>${escapeHtml(item.type)}</em><span><b>${escapeHtml(target?.name ?? item.target_entity_id)}</b><small>${escapeHtml(item.label)} · ${item.source_count ?? 1} SOURCE${item.source_count === 1 ? "" : "S"}</small></span><strong>${Math.round(Number(item.confidence ?? 0) * 100)}%</strong>`;
+    button.innerHTML = `<em>${escapeHtml(item.type)}</em><span><b>${escapeHtml(target?.name ?? item.target_entity_id)}</b><small>${escapeHtml(item.label)} · ${escapeHtml(item.source_count ?? 1)} SOURCE${item.source_count === 1 ? "" : "S"}</small></span><strong>${Math.round(Number(item.confidence ?? 0) * 100)}%</strong>`;
     button.addEventListener("click", (event) => event.shiftKey && item.evidence_id ? openEvidence(item.evidence_id) : selectEntity(item.target_entity_id));
     list.append(button);
   });

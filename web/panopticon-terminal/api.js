@@ -113,6 +113,9 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     throw new Error("Public snapshot is missing status, entities, evidence, or sources");
   }
   if (snapshot.activity && !Array.isArray(snapshot.activity)) throw new Error("Public activity must be a list");
+  for (const value of Object.values(snapshot.status.counts ?? {})) {
+    if (!validCount(value)) throw new Error("Public status has an invalid count");
+  }
   const hasRecords = snapshot.entities.length + snapshot.evidence.length + snapshot.sources.length + (snapshot.activity?.length ?? 0) > 0;
   if (preview && (snapshot.status.state !== "pending_release" || snapshot.release_review?.state !== "PENDING_RELEASE")) {
     throw new Error("Private preview lacks a pending case release");
@@ -151,9 +154,11 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
   }
   for (const entity of snapshot.entities) {
     if (!entity.id || !entity.type || !entity.name) throw new Error("Public entity lacks an ID, type, or name");
+    if (!validCount(entity.source_count) || !validCount(entity.relation_count)) throw new Error(`Entity ${entity.id} has an invalid count`);
     if (!demo && (entity.tags ?? []).includes("DEMO DATA")) throw new Error(`Entity ${entity.id} crosses the demonstration boundary`);
     for (const id of entity.source_ids ?? []) if (!sources.has(id)) throw new Error(`Entity ${entity.id} has an unknown source`);
     for (const relation of entity.relationships ?? []) {
+      if (!validCount(relation.source_count)) throw new Error(`Entity ${entity.id} has an invalid relationship count`);
       if (!entities.has(relation.target_entity_id) || !evidence.has(relation.evidence_id)) {
         throw new Error(`Entity ${entity.id} has an unsupported relationship`);
       }
@@ -173,6 +178,10 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     }
   }
   return snapshot;
+}
+
+function validCount(value) {
+  return value === undefined || (Number.isSafeInteger(value) && value >= 0);
 }
 
 function safePublicUrl(value) {

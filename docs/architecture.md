@@ -149,7 +149,7 @@ The site, Atom feed, and X pipeline fail closed on pending, rejected, stale, or 
 
 ## X reconciliation
 
-X thread safety is built around append-only attempts and operator decisions. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` operate with a dry-run default. A new attempt is authorized only after the previous attempt is resolved; uncertain attempts are never blindly retried. No audit history is deleted, and no test, fixture, or demo constructs a live X transport.
+X thread safety is built around append-only attempts and operator decisions. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` operate with a dry-run default. A new attempt is authorized only after confirming that none posted; partial and abandoned attempts remain blocked. No audit history is deleted, and no test, fixture, or demo constructs a live X transport.
 
 ## Determinism
 

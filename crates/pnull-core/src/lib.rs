@@ -71,6 +71,8 @@ pub enum CoreError {
     InvalidApproval(String),
     #[error("approval record {0} already exists with different content")]
     ApprovalConflict(String),
+    #[error("posting state conflict for alert {0}")]
+    PostStateConflict(String),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -585,6 +587,25 @@ impl Store {
             "INSERT OR IGNORE INTO posts(alert_id, remote_ids_json, posted_at) VALUES (?1, '[]', 'IN_PROGRESS')",
             [alert_id],
         )? == 1)
+    }
+
+    /// Reserve the post and persist its recovery record in one transaction.
+    /// A concurrent loser must not leave a phantom in-progress attempt behind.
+    pub fn reserve_x_post_attempt(&self, attempt: &XAttempt) -> Result<bool, CoreError> {
+        self.transaction(|transaction| {
+            let reserved = transaction.execute(
+                "INSERT OR IGNORE INTO posts(alert_id, remote_ids_json, posted_at) VALUES (?1, '[]', 'IN_PROGRESS')",
+                [&attempt.alert_id],
+            )? == 1;
+            if !reserved {
+                return Ok(false);
+            }
+            transaction.execute(
+                "INSERT INTO x_attempts(id, alert_id, attempt_json) VALUES (?1, ?2, ?3)",
+                params![attempt.id, attempt.alert_id, serde_json::to_string(attempt)?],
+            )?;
+            Ok(true)
+        })
     }
 
     pub fn record_post_segment(

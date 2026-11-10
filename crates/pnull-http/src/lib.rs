@@ -42,6 +42,8 @@ pub enum HttpError {
     RedirectLoop,
     #[error("too many redirects")]
     TooManyRedirects,
+    #[error("304 Not Modified without a conditional request on this URL")]
+    UnexpectedNotModified,
     #[error("network transport failed")]
     Transport,
     #[error("response exceeds the configured {0}-byte limit")]
@@ -339,6 +341,26 @@ pub struct FetchResult {
     pub unchanged: bool,
 }
 
+/// A failed fetch with the completed HTTP hops available for persistence.
+#[derive(Debug)]
+pub struct FetchFailure {
+    pub error: HttpError,
+    pub observations: Vec<FetchObservation>,
+}
+
+fn fetch_failure(error: HttpError, observations: &[FetchObservation]) -> FetchFailure {
+    let mut observations = observations.to_vec();
+    if let Some(last) = observations.last_mut()
+        && last.error.is_none()
+    {
+        last.error = Some(observation_error("fetch_failed", error.to_string()));
+    }
+    FetchFailure {
+        error,
+        observations,
+    }
+}
+
 /// Parameters for a provenance-aware fetch.
 #[derive(Clone, Debug)]
 pub struct FetchRequest {
@@ -359,6 +381,18 @@ pub fn provenance_fetch(
     transport: &dyn Transport,
     request: &FetchRequest,
 ) -> Result<FetchResult, HttpError> {
+    provenance_fetch_detailed(config, resolver, transport, request).map_err(|failure| failure.error)
+}
+
+/// Like [`provenance_fetch`], but retains completed HTTP observations on error.
+/// The caller must persist `FetchFailure::observations` before reporting the
+/// failure if it needs a complete request audit trail.
+pub fn provenance_fetch_detailed(
+    config: &FetchConfig,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+    request: &FetchRequest,
+) -> Result<FetchResult, FetchFailure> {
     provenance_fetch_inner(config, resolver, transport, request, false)
 }
 
@@ -371,10 +405,25 @@ pub fn provenance_fetch_robots(
     transport: &dyn Transport,
     request: &FetchRequest,
 ) -> Result<FetchResult, HttpError> {
+    provenance_fetch_robots_detailed(config, resolver, transport, request)
+        .map_err(|failure| failure.error)
+}
+
+/// Detailed robots capture, preserving completed hops if a redirect or HTTP
+/// status makes the capture fail.
+pub fn provenance_fetch_robots_detailed(
+    config: &FetchConfig,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+    request: &FetchRequest,
+) -> Result<FetchResult, FetchFailure> {
     let url = Url::parse(&request.requested_url)
-        .map_err(|error| HttpError::InvalidUrl(error.to_string()))?;
+        .map_err(|error| fetch_failure(HttpError::InvalidUrl(error.to_string()), &[]))?;
     if url.path() != "/robots.txt" {
-        return Err(HttpError::UnreviewedEndpoint(url.path().to_owned()));
+        return Err(fetch_failure(
+            HttpError::UnreviewedEndpoint(url.path().to_owned()),
+            &[],
+        ));
     }
     provenance_fetch_inner(config, resolver, transport, request, true)
 }
@@ -385,10 +434,10 @@ fn provenance_fetch_inner(
     transport: &dyn Transport,
     request: &FetchRequest,
     allow_robots_not_found: bool,
-) -> Result<FetchResult, HttpError> {
-    let url =
-        Url::parse(&request.requested_url).map_err(|e| HttpError::InvalidUrl(e.to_string()))?;
-    validate_url_scope(config, &url)?;
+) -> Result<FetchResult, FetchFailure> {
+    let url = Url::parse(&request.requested_url)
+        .map_err(|error| fetch_failure(HttpError::InvalidUrl(error.to_string()), &[]))?;
+    validate_url_scope(config, &url).map_err(|error| fetch_failure(error, &[]))?;
     let mut observations = Vec::new();
     let mut current_url = url.clone();
     let mut redirects = 0usize;
@@ -396,28 +445,15 @@ fn provenance_fetch_inner(
     let mut unchanged = false;
 
     loop {
-        let current_host = validate_url_scope(config, &current_url)?;
-        let addresses = resolver.resolve(&current_host)?;
-        validate_resolved(&current_host, &addresses)?;
-
-        let conditional_etag = if redirects == 0 {
-            request.prior.as_ref().and_then(|p| p.etag.clone())
-        } else {
-            None
-        };
-        let conditional_modified = if redirects == 0 {
-            request.prior.as_ref().and_then(|p| p.last_modified.clone())
-        } else {
-            None
-        };
-
-        let response = transport.request(&TransportRequest {
-            url: current_url.clone(),
-            resolved_ips: addresses.clone(),
-            max_bytes: config.max_bytes,
-            conditional_etag,
-            conditional_modified,
-        })?;
+        let (response, addresses) = fetch_hop(
+            config,
+            resolver,
+            transport,
+            request,
+            &current_url,
+            redirects,
+            &mut observations,
+        )?;
 
         let allowlisted = allowlist_headers(&response.headers);
         let observation = build_observation(
@@ -435,7 +471,10 @@ fn provenance_fetch_inner(
                 if (200..=204).contains(&status) || (allow_robots_not_found && status == 404) =>
             {
                 if response.body.len() > config.max_bytes {
-                    return Err(HttpError::Oversized(config.max_bytes));
+                    return Err(fetch_failure(
+                        HttpError::Oversized(config.max_bytes),
+                        &observations,
+                    ));
                 }
                 let digest = sha256_hex(&response.body);
                 if let Some(last) = observations.last_mut() {
@@ -445,6 +484,17 @@ fn provenance_fetch_inner(
                 break;
             }
             304 => {
+                if redirects != 0
+                    || request
+                        .prior
+                        .as_ref()
+                        .is_none_or(|prior| prior.etag.is_none() && prior.last_modified.is_none())
+                {
+                    return Err(fetch_failure(
+                        HttpError::UnexpectedNotModified,
+                        &observations,
+                    ));
+                }
                 unchanged = true;
                 break;
             }
@@ -453,12 +503,13 @@ fn provenance_fetch_inner(
                     .last()
                     .and_then(|item| item.redirect_target.clone());
                 let (next, new_redirects) =
-                    follow_redirect(config, &current_url, target, redirects)?;
+                    follow_redirect(config, &current_url, target, redirects)
+                        .map_err(|error| fetch_failure(error, &observations))?;
                 redirects = new_redirects;
                 current_url = next;
             }
             _ => {
-                return Err(HttpError::Transport);
+                return Err(fetch_failure(HttpError::Transport, &observations));
             }
         }
     }
@@ -469,6 +520,69 @@ fn provenance_fetch_inner(
         final_url: current_url.to_string(),
         unchanged,
     })
+}
+
+fn fetch_hop(
+    config: &FetchConfig,
+    resolver: &dyn Resolver,
+    transport: &dyn Transport,
+    request: &FetchRequest,
+    current_url: &Url,
+    redirects: usize,
+    observations: &mut Vec<FetchObservation>,
+) -> Result<(TransportResponse, Vec<IpAddr>), FetchFailure> {
+    let current_host = validate_url_scope(config, current_url)
+        .map_err(|error| fetch_failure(error, observations))?;
+    let addresses = match resolver.resolve(&current_host) {
+        Ok(addresses) => addresses,
+        Err(error) => {
+            observations.push(failed_attempt_observation(
+                request,
+                current_url,
+                &[],
+                &error,
+            ));
+            return Err(fetch_failure(error, observations));
+        }
+    };
+    if let Err(error) = validate_resolved(&current_host, &addresses) {
+        observations.push(failed_attempt_observation(
+            request,
+            current_url,
+            &addresses,
+            &error,
+        ));
+        return Err(fetch_failure(error, observations));
+    }
+    let conditional_etag = if redirects == 0 {
+        request.prior.as_ref().and_then(|p| p.etag.clone())
+    } else {
+        None
+    };
+    let conditional_modified = if redirects == 0 {
+        request.prior.as_ref().and_then(|p| p.last_modified.clone())
+    } else {
+        None
+    };
+    let response = match transport.request(&TransportRequest {
+        url: current_url.clone(),
+        resolved_ips: addresses.clone(),
+        max_bytes: config.max_bytes,
+        conditional_etag,
+        conditional_modified,
+    }) {
+        Ok(response) => response,
+        Err(error) => {
+            observations.push(failed_attempt_observation(
+                request,
+                current_url,
+                &addresses,
+                &error,
+            ));
+            return Err(fetch_failure(error, observations));
+        }
+    };
+    Ok((response, addresses))
 }
 
 fn build_observation(
@@ -500,6 +614,28 @@ fn build_observation(
         body_digest: None,
         error: None,
     }
+}
+
+fn failed_attempt_observation(
+    request: &FetchRequest,
+    current_url: &Url,
+    addresses: &[IpAddr],
+    error: &HttpError,
+) -> FetchObservation {
+    let mut observation = build_observation(
+        request.source_id.as_deref(),
+        current_url,
+        &request.retrieved_at,
+        addresses,
+        &TransportResponse {
+            status_code: 0,
+            headers: Vec::new(),
+            body: Vec::new(),
+        },
+        &[],
+    );
+    observation.error = Some(observation_error("fetch_failed", error.to_string()));
+    observation
 }
 
 fn follow_redirect(
@@ -627,6 +763,34 @@ mod tests {
                 headers: vec![("location".to_owned(), "/outside".to_owned())],
                 body: Vec::new(),
             })
+        }
+    }
+
+    struct RedirectThenNotModified {
+        calls: Cell<usize>,
+    }
+
+    struct FailedTransport;
+
+    impl Transport for FailedTransport {
+        fn request(&self, _request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            Err(HttpError::Oversized(1024))
+        }
+    }
+
+    impl Transport for RedirectThenNotModified {
+        fn request(&self, _request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            let calls = self.calls.get();
+            self.calls.set(calls + 1);
+            if calls == 0 {
+                Ok(TransportResponse {
+                    status_code: 302,
+                    headers: vec![("location".to_owned(), "/other".to_owned())],
+                    body: Vec::new(),
+                })
+            } else {
+                Ok(response(304, b""))
+            }
         }
     }
 
@@ -784,6 +948,48 @@ mod tests {
     }
 
     #[test]
+    fn unsolicited_or_redirected_304_cannot_reuse_prior_evidence() {
+        let resolver = FakeResolver(vec!["93.184.216.34".parse().unwrap()]);
+        let unsolicited = FakeTransport {
+            responses: vec![response(304, b"")],
+        };
+        assert!(matches!(
+            provenance_fetch(&config(), &resolver, &unsolicited, &request(None)),
+            Err(HttpError::UnexpectedNotModified)
+        ));
+        assert!(matches!(
+            provenance_fetch(
+                &config(),
+                &resolver,
+                &unsolicited,
+                &request(Some(PriorEvidence {
+                    evidence_id: "prior".to_owned(),
+                    etag: None,
+                    last_modified: None,
+                }))
+            ),
+            Err(HttpError::UnexpectedNotModified)
+        ));
+        let redirected = RedirectThenNotModified {
+            calls: Cell::new(0),
+        };
+        assert!(matches!(
+            provenance_fetch(
+                &config(),
+                &resolver,
+                &redirected,
+                &request(Some(PriorEvidence {
+                    evidence_id: "prior".to_owned(),
+                    etag: Some("\"prior\"".to_owned()),
+                    last_modified: None,
+                }))
+            ),
+            Err(HttpError::UnexpectedNotModified)
+        ));
+        assert_eq!(redirected.calls.get(), 2);
+    }
+
+    #[test]
     fn robots_404_is_preserved_only_by_explicit_capture_path() {
         let resolver = FakeResolver(vec!["93.184.216.34".parse().unwrap()]);
         let mut robots = request(None);
@@ -816,6 +1022,51 @@ mod tests {
             provenance_fetch_robots(&config(), &resolver, &oversized, &robots),
             Err(HttpError::Oversized(1024))
         ));
+    }
+
+    #[test]
+    fn detailed_failures_keep_completed_responses_and_failed_attempts() {
+        let resolver = FakeResolver(vec!["93.184.216.34".parse().unwrap()]);
+        let failed_status = FakeTransport {
+            responses: vec![response(503, b"unavailable")],
+        };
+        let failure =
+            provenance_fetch_detailed(&config(), &resolver, &failed_status, &request(None))
+                .expect_err("503 must fail");
+        assert!(matches!(failure.error, HttpError::Transport));
+        assert_eq!(failure.observations.len(), 1);
+        assert_eq!(failure.observations[0].status_code, 503);
+
+        let mut robots = request(None);
+        robots.requested_url = "https://example.test/robots.txt".to_owned();
+        let mut scoped = config();
+        scoped.reviewed_paths = Some(vec!["/robots.txt".to_owned()]);
+        let redirected = RedirectingTransport {
+            calls: Cell::new(0),
+        };
+        let failure = provenance_fetch_robots_detailed(&scoped, &resolver, &redirected, &robots)
+            .expect_err("off-scope redirect must fail");
+        assert!(matches!(failure.error, HttpError::UnreviewedEndpoint(_)));
+        assert_eq!(failure.observations.len(), 1);
+        assert_eq!(failure.observations[0].status_code, 302);
+        assert_eq!(
+            failure.observations[0].redirect_target.as_deref(),
+            Some("/outside")
+        );
+
+        let failure =
+            provenance_fetch_detailed(&config(), &resolver, &FailedTransport, &request(None))
+                .expect_err("oversized response must fail");
+        assert!(matches!(failure.error, HttpError::Oversized(1024)));
+        assert_eq!(failure.observations.len(), 1);
+        assert_eq!(failure.observations[0].status_code, 0);
+        assert_eq!(
+            failure.observations[0]
+                .error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("fetch_failed")
+        );
     }
 
     #[test]

@@ -68,7 +68,7 @@ function renderSearch() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `search-result${index === state.searchCursor ? " is-selected" : ""}`;
-    button.innerHTML = `<em>${escapeHtml(result.type ?? result.kind ?? "RECORD")}</em><span><b>${escapeHtml(result.name ?? result.title ?? result.id)}</b><small>${escapeHtml(result.subtitle ?? "")}</small></span><strong>${result.source_count ?? 0} SRC</strong>`;
+    button.innerHTML = `<em>${escapeHtml(result.type ?? result.kind ?? "RECORD")}</em><span><b>${escapeHtml(result.name ?? result.title ?? result.id)}</b><small>${escapeHtml(result.subtitle ?? "")}</small></span><strong>${escapeHtml(result.source_count ?? 0)} SRC</strong>`;
     button.addEventListener("click", () => activateResult(result));
     list.append(button);
   });
