@@ -31,6 +31,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 mod approval_cmd;
+mod archive;
 mod procurement_cmd;
 mod refresh;
 
@@ -154,7 +155,7 @@ enum AtlasCommand {
     /// Export the reviewed public atlas dataset, or a clearly labeled private preview.
     Export {
         #[arg(long, default_value = "fixtures/atlas/colorado-springs-25-93.v1.json")]
-        manifest: PathBuf,
+        manifest: Vec<PathBuf>,
         #[arg(long)]
         output: Option<PathBuf>,
         /// Include pending claims only in a separate editorial preview artifact.
@@ -335,6 +336,14 @@ enum SourceCommand {
     Review {
         #[command(subcommand)]
         command: SourceReviewCommand,
+    },
+    /// Preserve one reviewed official HTML, PDF, or JSON record without publishing it.
+    Archive {
+        source_id: String,
+    },
+    /// Archive an official Legistar calendar and retain meeting/document link candidates privately.
+    DiscoverCalendar {
+        source_id: String,
     },
 }
 
@@ -530,6 +539,12 @@ fn run(cli: Cli) -> Result<()> {
         Command::Source {
             command: SourceCommand::Review { command },
         } => source_review_command(&cli.data_dir, &config, command),
+        Command::Source {
+            command: SourceCommand::Archive { source_id },
+        } => archive::archive_source(&cli.data_dir, &config, &source_id),
+        Command::Source {
+            command: SourceCommand::DiscoverCalendar { source_id },
+        } => archive::discover_calendar(&cli.data_dir, &config, &source_id),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
         Command::Scan => scan_all(&cli.data_dir, &cli.rules),
         Command::Diff {
@@ -569,7 +584,7 @@ fn atlas_command(
     explicit_site_url: Option<&str>,
     command: AtlasCommand,
 ) -> Result<()> {
-    use pnull_publish::atlas::{AtlasExportMode, export_atlas, review_requirements};
+    use pnull_publish::atlas::{AtlasExportMode, export_atlas_bundle, review_requirements};
 
     let store = Store::open(data_dir)?;
     match command {
@@ -591,6 +606,8 @@ fn atlas_command(
                         review.state.label(),
                         current
                     );
+                } else if requirement.kind == "auto_source_verified" {
+                    println!("  review: AUTOMATIC SOURCE VERIFICATION (no case review required)");
                 } else {
                     println!("  review: PENDING");
                 }
@@ -701,7 +718,7 @@ fn atlas_command(
                     .filter(|host| !host.ends_with(".invalid"))
                     .map(|_| config.canonical_base_url.as_str())
             });
-            export_atlas(&store, &manifest, &output, mode, site_url)?;
+            export_atlas_bundle(&store, &manifest, &output, mode, site_url)?;
             println!("wrote {}", output.display());
             Ok(())
         }

@@ -2,9 +2,28 @@ import { PanopticonClient } from "./api.js";
 import { votePortraits } from "./portraits/portraits.js";
 
 const params = new URLSearchParams(location.search);
-const demo = params.get("demo") === "1";
-const preview = params.get("preview") === "1";
+const casePath = /\/decisions\/([a-z0-9-]+)\.html$/.exec(location.pathname ?? "");
+export function decisionModeFromLocation(pathname, search) {
+  const staticCase = /\/decisions\/[a-z0-9-]+\.html$/.test(pathname ?? "");
+  const query = new URLSearchParams(search ?? "");
+  return { demo: !staticCase && query.get("demo") === "1", preview: !staticCase && query.get("preview") === "1" };
+}
+const { demo, preview } = decisionModeFromLocation(location.pathname, location.search);
+const rootPrefix = casePath ? "../" : "./";
 const page = document.querySelector("#decision-page");
+
+export function decisionIdFromLocation(pathname, search) {
+  return /\/decisions\/([a-z0-9-]+)\.html$/.exec(pathname ?? "")?.[1]
+    ?? new URLSearchParams(search ?? "").get("decision");
+}
+
+function decisionPageLink(entity) {
+  const slug = entity.slug ?? entity.id;
+  if (!demo && !preview && entity.share_url?.endsWith(`/decisions/${slug}.html`)) {
+    return `${rootPrefix}decisions/${encodeURIComponent(slug)}.html`;
+  }
+  return `${rootPrefix}decision.html?decision=${encodeURIComponent(slug)}${demo ? "&demo=1" : preview ? "&preview=1" : ""}`;
+}
 
 function node(tag, className = "", value = "") {
   const item = document.createElement(tag);
@@ -29,7 +48,7 @@ function publicLink(url, label) {
 
 function atlasLink(entity, label = entity.name) {
   const link = node("a", "", label);
-  link.href = `./index.html${demo ? "?demo=1" : preview ? "?preview=1" : ""}#entity=${encodeURIComponent(entity.id)}`;
+  link.href = `${rootPrefix}index.html${demo ? "?demo=1" : preview ? "?preview=1" : ""}#entity=${encodeURIComponent(entity.id)}`;
   return link;
 }
 
@@ -40,6 +59,11 @@ function evidenceIds(entity) {
     ...(entity.timeline ?? []).map((item) => item.evidence_id),
     ...(entity.votes ?? []).map((item) => item.evidence_id),
     ...(entity.technology_context ?? []).map((item) => item.evidence_id),
+    entity.consent_block?.motion_evidence_id,
+    entity.consent_block?.motion_title_evidence_id,
+    entity.consent_block?.motion_action_evidence_id,
+    entity.consent_block?.motion_outcome_evidence_id,
+    entity.consent_block?.item_consent_evidence_id,
   ].filter(Boolean))];
 }
 
@@ -151,8 +175,10 @@ function renderTechnology(model) {
     .filter(({ target }) => String(target.type).toUpperCase() === "TECHNOLOGY")
     .map(({ target, evidence }) => ({ name: target.name, context: "Named in supporting materials", evidence }));
   if (!technologies.length) return null;
-  const panel = section("Technology named in staff materials");
-  panel.append(node("p", "", "These systems appear in supporting materials. Their mention does not establish a contract or award from this ordinance."));
+  const panel = section("Technology in the cited record");
+  panel.append(node("p", "", model.contracts.length
+    ? "An evidence-backed agreement link is shown for this decision. The source card states what that link establishes; execution, deployment, and payment require separate evidence."
+    : "These systems appear in the cited materials. Their mention alone does not establish a contract or award from this decision."));
   const list = node("ul", "source-list");
   for (const { name, context, evidence } of technologies) {
     const item = node("li");
@@ -184,12 +210,32 @@ function initials(name) {
 }
 
 function renderVotes(model, mode) {
-  const panel = section("Recorded votes on this ordinance");
+  const consent = model.decision.consent_block;
+  const panel = section(consent ? "Consent agenda vote" : "Recorded votes on this decision");
+  if (consent) {
+    panel.append(node("p", "vote-note", `This item was included in consent motion ${consent.motion_item_id}, “${consent.motion_title}” (${consent.motion_outcome}). The roll call covers the block of items.`));
+    const links = node("p", "vote-links");
+    for (const [id, label] of [
+      [consent.item_consent_evidence_id, "Item's consent designation ↗"],
+      [consent.motion_evidence_id, "Motion item ID ↗"],
+      [consent.motion_title_evidence_id, "Motion title ↗"],
+      [consent.motion_action_evidence_id, "Motion action ↗"],
+      [consent.motion_outcome_evidence_id, "Motion outcome ↗"],
+    ]) {
+      const link = node("a", "", label);
+      link.href = `#evidence-${encodeURIComponent(id)}`;
+      links.append(link);
+    }
+    panel.append(links, node("p", "empty", "Individual votes on this item are not established."));
+    const blockSource = model.sourceById.get(consent.block_vote_source_id);
+    if (blockSource && mode !== "demo") panel.append(publicLink(blockSource.canonical_url, "Block roll call source (context) ↗"));
+    return panel;
+  }
   if (!model.votes.length) {
     panel.append(node("p", "empty", "Individual votes are not established in this dataset."));
     return panel;
   }
-  panel.append(node("p", "vote-note", "City portraits identify the people named in the roll call. Open each vote record for the recorded position."));
+  panel.append(node("p", "vote-note", "Recorded positions come from the cited roll call. Official portraits appear where a source is available."));
   const list = node("ul", "vote-list");
   for (const vote of model.votes) {
     const item = node("li", "vote-card");
@@ -201,7 +247,7 @@ function renderVotes(model, mode) {
     media.append(fallback);
     if (portrait) {
       const img = node("img");
-      img.src = portrait.src;
+      img.src = `${rootPrefix}${portrait.src.replace(/^\.\//, "")}`;
       img.alt = `Portrait of ${name}`;
       img.loading = "lazy";
       img.decoding = "async";
@@ -227,7 +273,7 @@ function renderVotes(model, mode) {
       link.href = `#evidence-${encodeURIComponent(vote.evidence_id)}`;
       links.append(link);
     }
-    if (portrait) links.append(publicLink(portrait.source_url, "Photo: City of Colorado Springs ↗"));
+    if (portrait) links.append(publicLink(portrait.source_url, `Photo: ${portrait.credit ?? "official source"} ↗`));
     text.append(links);
     item.append(media, text);
     list.append(item);
@@ -287,7 +333,8 @@ function renderDecision(model, snapshot, mode) {
   page.append(node("h1", "", model.decision.name));
   if (model.decision.description) page.append(node("p", "lead", model.decision.description));
   const meta = node("div", "meta");
-  addMeta(meta, `Case release: ${mode === "preview" ? "PENDING" : mode === "demo" ? "SYNTHETIC DEMO" : "APPROVED"}`);
+  const caseRelease = snapshot.case_releases?.find((item) => item.case_id === model.decision.slug)?.release ?? snapshot.release_review;
+  addMeta(meta, `Case release: ${mode === "preview" ? "PENDING" : mode === "demo" ? "SYNTHETIC DEMO" : caseRelease?.state === "SOURCE_VERIFIED" ? "SOURCE VERIFIED" : "APPROVED"}`);
   if (mode === "public") addMeta(meta, "Sources: VERIFIED");
   const date = model.decision.date ?? model.decision.timeline?.[0]?.date;
   if (date) addMeta(meta, `Decision date: ${date}`);
@@ -308,16 +355,21 @@ function renderDecision(model, snapshot, mode) {
   if (mode === "public") {
     const canonical = document.querySelector('link[rel="canonical"]') ?? node("link");
     canonical.rel = "canonical";
-    canonical.href = `${location.origin}${location.pathname}?decision=${encodeURIComponent(model.decision.slug ?? model.decision.id)}`;
+    canonical.href = casePath ? `${location.origin}${location.pathname}` : `${location.origin}${location.pathname}?decision=${encodeURIComponent(model.decision.slug ?? model.decision.id)}`;
     if (!canonical.isConnected) document.head.append(canonical);
   }
 }
 
 async function main() {
-  const client = new PanopticonClient({ demo, preview });
+  const client = new PanopticonClient({
+    demo, preview,
+    publicUrl: `${rootPrefix}public/public-snapshot.json`,
+    demoUrl: `${rootPrefix}mock/public-snapshot.json`,
+    previewUrl: `${rootPrefix}preview-snapshot.json`,
+  });
   await client.bootstrap();
   const snapshot = client.snapshot;
-  const id = params.get("decision");
+  const id = decisionIdFromLocation(location.pathname, location.search);
   if (!id) {
     page.replaceChildren();
     addNotice(client.mode);
@@ -327,7 +379,7 @@ async function main() {
     const list = node("ul", "source-list");
     for (const item of decisions) {
       const link = node("a", "", item.name);
-      link.href = `./decision.html?decision=${encodeURIComponent(item.slug ?? item.id)}${demo ? "&demo=1" : preview ? "&preview=1" : ""}`;
+      link.href = decisionPageLink(item);
       const li = node("li");
       li.append(link);
       list.append(li);

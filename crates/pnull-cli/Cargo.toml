@@ -23,6 +23,7 @@ pnull-procurement = { path = "../pnull-procurement", version = "=0.0.4" }
 pnull-x = { path = "../pnull-x", version = "=0.0.4" }
 serde.workspace = true
 serde_json.workspace = true
+scraper.workspace = true
 time.workspace = true
 toml.workspace = true
 url.workspace = true

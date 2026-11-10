@@ -13,8 +13,9 @@ repo_dir="$(cd -- "$script_dir/../.." && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 
-mkdir -p "$scratch/source/web" "$scratch/private" "$scratch/site"
+mkdir -p "$scratch/source/web" "$scratch/source/fixtures/atlas" "$scratch/private" "$scratch/site"
 cp -a "$repo_dir/web/panopticon-terminal" "$scratch/source/web/"
+cp -- "$repo_dir/fixtures/atlas/colorado-springs-25-93.v1.json" "$scratch/source/fixtures/atlas/"
 printf '%s\n' 'PRIVATE PREVIEW' > "$scratch/source/web/panopticon-terminal/preview-snapshot.json"
 printf '%s\n' 'PRIVATE DATABASE' > "$scratch/private/pnull.db"
 
@@ -51,6 +52,7 @@ export PNUL_TEST_SNAPSHOT="$repo_dir/web/panopticon-terminal/public/public-snaps
 [[ ! -e "$PNUL_CURRENT_LINK/pnull.db" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/validate.mjs" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/test-client.mjs" ]]
+[[ ! -e "$PNUL_CURRENT_LINK/scripts/build-decision-pages.mjs" ]]
 first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 
 printf '%s\n' 'PRIVATE TOKEN' > "$scratch/source/web/panopticon-terminal/scripts/.env"
@@ -60,6 +62,7 @@ printf '%s\n' 'PRIVATE NOTE' > "$scratch/source/web/panopticon-terminal/portrait
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/.env" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/public/pnull.db" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/portraits/private-note.txt" ]]
+[[ ! -e "$PNUL_CURRENT_LINK/geography/source-archives" ]]
 first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 
 mv -- "$scratch/source/web/panopticon-terminal/portraits/tom-bailey.jpg" "$scratch/tom-bailey.jpg"

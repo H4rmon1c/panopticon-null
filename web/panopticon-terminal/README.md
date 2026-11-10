@@ -107,3 +107,7 @@ Opening `index.html` directly is not supported because browsers restrict module 
 ## Design rule
 
 > Nothing here asks for your trust. Every claim has a source.
+
+## Colorado geography
+
+The separate [Colorado jurisdiction roster](geography/README.md) lists official places and provisional district discovery entries without treating them as published cases. Its source archives are kept outside the web release allowlist.

@@ -120,14 +120,29 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
   if (preview && (snapshot.status.state !== "pending_release" || snapshot.release_review?.state !== "PENDING_RELEASE")) {
     throw new Error("Private preview lacks a pending case release");
   }
-  if (!demo && !preview && hasRecords && (snapshot.status.state !== "released" || snapshot.release_review?.state !== "APPROVED" || !snapshot.release_review.reviewed_at)) {
-    throw new Error("Public snapshot lacks an approved case release");
+  if (!demo && !preview && hasRecords && (snapshot.status.state !== "released" || !validPublicRelease(snapshot.release_review))) {
+    throw new Error("Public snapshot lacks an approved or source-verified case release");
   }
   if (!demo && !preview && snapshot.status.state === "empty" && hasRecords) {
     throw new Error("Empty public snapshot contains records");
   }
   if (!demo && (preview || hasRecords) && !/^sha256:[a-f0-9]{64}$/.test(snapshot.release_review?.bound_digest ?? "")) {
     throw new Error("Case release lacks a bound digest");
+  }
+  if (!demo && !preview && snapshot.case_releases !== undefined) {
+    if (!Array.isArray(snapshot.case_releases)) throw new Error("Case releases must be a list");
+    const decisions = snapshot.entities.filter((entity) => entity.type === "DECISION");
+    const slugs = new Set(decisions.map((entity) => entity.slug));
+    const released = new Set();
+    for (const item of snapshot.case_releases) {
+      if (!item?.case_id || !slugs.has(item.case_id) || released.has(item.case_id) || !validPublicRelease(item.release)) {
+        throw new Error("Case release does not match a verified decision");
+      }
+      released.add(item.case_id);
+    }
+    if (released.size !== slugs.size) throw new Error("A published decision lacks a case release");
+    const aggregate = snapshot.case_releases.some((item) => item.release.state === "SOURCE_VERIFIED") ? "SOURCE_VERIFIED" : "APPROVED";
+    if (snapshot.release_review?.state !== aggregate) throw new Error("Aggregate case release state is inconsistent");
   }
 
   const entities = new Set(snapshot.entities.map((entity) => entity.id));
@@ -157,6 +172,30 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     if (!validCount(entity.source_count) || !validCount(entity.relation_count)) throw new Error(`Entity ${entity.id} has an invalid count`);
     if (!demo && (entity.tags ?? []).includes("DEMO DATA")) throw new Error(`Entity ${entity.id} crosses the demonstration boundary`);
     for (const id of entity.source_ids ?? []) if (!sources.has(id)) throw new Error(`Entity ${entity.id} has an unknown source`);
+    if (entity.vote_record_state === "consent_block") {
+      const block = entity.consent_block;
+      const motion = evidence.get(block?.motion_evidence_id);
+      const title = evidence.get(block?.motion_title_evidence_id);
+      const action = evidence.get(block?.motion_action_evidence_id);
+      const outcome = evidence.get(block?.motion_outcome_evidence_id);
+      const item = evidence.get(block?.item_consent_evidence_id);
+      const motionRow = motion?.locator?.replace(/\.EventItemId$/, "");
+      if (entity.type !== "DECISION" || (entity.votes ?? []).length || !block ||
+          !block.motion_item_id || !block.motion_title || block.motion_outcome !== "Pass" ||
+          !sources.has(block.block_vote_source_id) || !motion || !title || !action || !outcome || !item ||
+          motion.claim !== block.motion_item_id || title.claim !== block.motion_title ||
+          outcome.claim !== block.motion_outcome || item.claim !== "1" ||
+          !motion?.locator?.endsWith(".EventItemId") || !motionRow ||
+          title.locator !== `${motionRow}.EventItemTitle` ||
+          action.locator !== `${motionRow}.EventItemActionText` ||
+          outcome.locator !== `${motionRow}.EventItemPassedFlagName` ||
+          !item.locator?.endsWith(".EventItemConsent") ||
+          [title, action, outcome, item].some((record) => record.source_id !== motion.source_id)) {
+        throw new Error(`Entity ${entity.id} has an invalid consent-block record`);
+      }
+    } else if (entity.consent_block) {
+      throw new Error(`Entity ${entity.id} has an unbound consent-block record`);
+    }
     for (const relation of entity.relationships ?? []) {
       if (!validCount(relation.source_count)) throw new Error(`Entity ${entity.id} has an invalid relationship count`);
       if (!entities.has(relation.target_entity_id) || !evidence.has(relation.evidence_id)) {
@@ -182,6 +221,13 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
 
 function validCount(value) {
   return value === undefined || (Number.isSafeInteger(value) && value >= 0);
+}
+
+function validPublicRelease(release) {
+  if (!release || !/^sha256:[a-f0-9]{64}$/.test(release.bound_digest ?? "")) return false;
+  if (release.state === "APPROVED") return typeof release.reviewed_at === "string" && release.reviewed_at.length > 0;
+  if (release.state === "SOURCE_VERIFIED") return release.reviewed_at === null && Array.isArray(release.corrections);
+  return false;
 }
 
 function safePublicUrl(value) {

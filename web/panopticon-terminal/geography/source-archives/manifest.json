@@ -1,0 +1,25 @@
+{
+  "archived_on": "2026-11-10",
+  "files": {
+    "census_counties": {
+      "file": "counties.zip",
+      "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_county_500k.zip",
+      "sha256": "aa976c00b181939755d0da757f4c7c2dc0103c3b3b4530fb2a91c2bb62fc777c"
+    },
+    "census_places": {
+      "file": "places.zip",
+      "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_08_place_500k.zip",
+      "sha256": "ea2574a32b092ddd0d4da836c4bc25c1bffd45f96886cc044f2eb4f2ddeeba45"
+    },
+    "census_schools": {
+      "file": "unified_school.zip",
+      "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_08_unsd_500k.zip",
+      "sha256": "90dad2f14d2cbf8e426a8f250082006a08c5dd6acc289f2f1129a6f928db2388"
+    },
+    "dola_districts": {
+      "file": "dola_districts.json",
+      "url": "https://data.colorado.gov/resource/7rar-v5z8.json?$select=lgid,name,lgtype_id,lgstatus_i,lastupdate,source&$limit=5000&$order=lgid",
+      "sha256": "34cdd2e34dbfdac358da3477c5b7bf56b811175dd8c5180691c08b5c944b018c"
+    }
+  }
+}

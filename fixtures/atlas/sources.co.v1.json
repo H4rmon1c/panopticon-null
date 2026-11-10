@@ -1,0 +1,506 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "co-springs-2025-final-event",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co/event-2660-final-vote.json",
+      "sha256": "f11a5712daf21f8f7d345d772995efb1cbeb495da7981bd1a1a6aa22b57a6759",
+      "title": "Colorado Springs City Council final vote event, November 25, 2025",
+      "format": "json"
+    },
+    {
+      "id": "co-springs-2025-roll-call",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+      "fixture": "fixtures/co/votes-103550-final-vote.json",
+      "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+      "title": "Colorado Springs City Council roll call on Ordinance 25-93",
+      "format": "json"
+    },
+    {
+      "id": "co-springs-2025-signed-ordinance",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+      "fixture": "fixtures/co/ordinance-25-93-signed.pdf",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "title": "Signed Ordinance 25-93",
+      "format": "pdf"
+    },
+    {
+      "id": "co-springs-2025-staff-presentation",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D",
+      "fixture": "fixtures/co/police-technology-surcharge-presentation.pdf",
+      "sha256": "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8",
+      "title": "Police Technology Surcharge staff presentation",
+      "format": "pdf"
+    },
+    {
+      "id": "co-springs-2015-matter",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/coloradosprings/matters/2971?MatterAttachments=1&MatterSponsors=1&MatterHistory=1",
+      "fixture": "fixtures/co2/matter-15-00663-ordinance-15-84.json",
+      "sha256": "a6406503183deeb82d660b6e1c82b4f812200f2e375ca96a1587f19e40899d73",
+      "title": "Ordinance 15-84 matter and history",
+      "format": "json"
+    },
+    {
+      "id": "co-springs-2015-final-event",
+      "authority": "Colorado Springs City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/coloradosprings/events/1109?EventItems=1&EventItemAttachments=1",
+      "fixture": "fixtures/co2/event-1109-2015-11-24.json",
+      "sha256": "c019d02d7f2da00fa9aebbc4c4d3f37c98c051bc1d028db4c215fa30a70739b0",
+      "title": "Colorado Springs City Council event, November 24, 2015",
+      "format": "json"
+    },
+    {
+      "id": "co-commerce-2023-event",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/commerce/Events/3644?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-commerce/event-3644-2023-12-04.json",
+      "sha256": "ddc56eaf5da9618a33122f350a2d5ac6aa548e337c05d9eb669bfb5f5870d64e",
+      "title": "Commerce City Council event, December 4, 2023",
+      "format": "json"
+    },
+    {
+      "id": "co-commerce-2023-consent-votes",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/commerce/EventItems/56779/Votes",
+      "fixture": "fixtures/co-commerce/votes-56779-consent-2023-12-04.json",
+      "sha256": "bebbe74a9257a7cde5f7dd029a5ee58c577b244af4da51752297829aa960d59b",
+      "title": "Commerce City consent-agenda roll call, December 4, 2023",
+      "format": "json"
+    },
+    {
+      "id": "co-commerce-2023-resolution",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://legistar.granicus.com/Commerce/attachments/f96e68eb-2de2-491a-a635-6f64f2f8779d.pdf",
+      "fixture": "fixtures/co-commerce/res-2023-135-resolution.pdf",
+      "sha256": "b372539e8bb5a7150555d0b6fe7641654e0811e1dcabebf8cc79da90e3a07195",
+      "title": "Commerce City Resolution 2023-135",
+      "format": "pdf"
+    },
+    {
+      "id": "co-commerce-2026-event",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/commerce/Events/4626?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-commerce/event-4626-2026-04-06.json",
+      "sha256": "ac67461a6c9f0c325a868e36ff13b764bd5365d2f6ed238fc7ad612f4564c27f",
+      "title": "Commerce City Council event, April 6, 2026",
+      "format": "json",
+      "acquisition_source_id": "commerce-ord2755-event-json",
+      "acquisition_config_digest": "1dee450adf21579bdd8c5d7d8c6c7a478fffb6401fe60dede272c3f7686cd165"
+    },
+    {
+      "id": "co-commerce-2026-ord2755-votes",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/commerce/EventItems/70384/Votes",
+      "fixture": "fixtures/co-commerce/votes-70384-ord-2755.json",
+      "sha256": "67eb8e6366ef906af2d580c7e15d717f28535eba5923d0005a710b8cdd6fef3c",
+      "title": "Commerce City roll call on Ordinance 2755",
+      "format": "json",
+      "acquisition_source_id": "commerce-ord2755-votes-json",
+      "acquisition_config_digest": "faf013b8da2f699cf0c51998e8abffb1996a80d472c88c90d4814f3074362c66"
+    },
+    {
+      "id": "co-commerce-2026-ord2756-votes",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/commerce/EventItems/70385/Votes",
+      "fixture": "fixtures/co-commerce/votes-70385-ord-2756.json",
+      "sha256": "e468a986197ca83475a976e0f4e2ab39b83181504cd9bff63892325b9a21e817",
+      "title": "Commerce City roll call on Ordinance 2756",
+      "format": "json",
+      "acquisition_source_id": "commerce-ord2756-votes-json",
+      "acquisition_config_digest": "431e5d6d2534433ec7298bcf45a140332f7a1de903e709373f067b92a09fd5e6"
+    },
+    {
+      "id": "co-commerce-2026-minutes",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://commerce.legistar.com/View.ashx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&M=M",
+      "fixture": "fixtures/co-commerce/minutes-2026-04-06.pdf",
+      "sha256": "f42a97603ecd32c3e3f34e426d21e61763c9a6e7e8d3f2d08a5393f6b6ded55c",
+      "title": "Commerce City Council final minutes, April 6, 2026",
+      "format": "pdf",
+      "acquisition_source_id": "commerce-ord2755-minutes",
+      "acquisition_config_digest": "5c3edc7f62c4b99626519522ab97fcb3d54d27f36cac73f7f17ba7142f787a60"
+    },
+    {
+      "id": "co-commerce-2026-ordinance",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://legistar.granicus.com/Commerce/attachments/c23f7685-bbef-4a3c-9a78-f3d9da853712.pdf",
+      "fixture": "fixtures/co-commerce/ord-2755-ordinance.pdf",
+      "sha256": "1f23f310a08238afa9b0d028c316a1c030377c6d3655bdc3916d6790548de63b",
+      "title": "Commerce City Ordinance 2755",
+      "format": "pdf",
+      "acquisition_source_id": "commerce-ord2755-ordinance",
+      "acquisition_config_digest": "a8cfa2d7bf8d096630452096f6634511ed86c2a9e9abc7e21464555fc734c28f"
+    },
+    {
+      "id": "co-commerce-2026-unsigned-agreement",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://legistar.granicus.com/Commerce/attachments/06403380-2a4b-4a4f-b1c1-db847b8e94eb.pdf",
+      "fixture": "fixtures/co-commerce/ord-2755-unsigned-agreement.pdf",
+      "sha256": "bcc092839a0aa91535ba9d935ebde521dce42c18ca2651489d88bc8cf5dc0a37",
+      "title": "Commerce City Ordinance 2755 agreement attachment, unsigned in preserved copy",
+      "format": "pdf",
+      "acquisition_source_id": "commerce-ord2755-agreement",
+      "acquisition_config_digest": "764f7cf7ccf155cfc06936aaa1b9511b8e5cd06f4fd1924f24834822322d744b"
+    },
+    {
+      "id": "co-castle-rock-2025-event",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://webapi.legistar.com/v1/castlerock-co/Events/4406?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-castlerock/event-4406-2025-06-03.json",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "title": "Castle Rock Town Council event, June 3, 2025",
+      "format": "json",
+      "acquisition_source_id": "castle-rock-res2025-071-event-json",
+      "acquisition_config_digest": "265e27280dfbfa54191ff5136e5bbe1d8c7f81795be8f77551f9dde864710946"
+    },
+    {
+      "id": "co-castle-rock-2025-matter",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://webapi.legistar.com/v1/castlerock-co/Matters/10968?MatterAttachments=1&MatterSponsors=1&MatterHistory=1",
+      "fixture": "fixtures/co-castlerock/matter-10968-res-2025-071.json",
+      "sha256": "625a030e98c23527790f7fd94d8464ea7cdd53d450bc8bb02b758f73d1c77c20",
+      "title": "Castle Rock Resolution 2025-071 matter",
+      "format": "json",
+      "acquisition_source_id": "castle-rock-res2025-071-matter-json",
+      "acquisition_config_digest": "9b74c64d313d7afd71706f2e5e63877c971dc4e8a4fe0c982af400e53f04f62a"
+    },
+    {
+      "id": "co-castle-rock-2025-votes",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://webapi.legistar.com/v1/castlerock-co/EventItems/66424/Votes",
+      "fixture": "fixtures/co-castlerock/votes-66424-res-2025-071.json",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "title": "Castle Rock roll call on Resolution 2025-071",
+      "format": "json",
+      "acquisition_source_id": "castle-rock-res2025-071-votes-json",
+      "acquisition_config_digest": "9d7a36d50a43e2a45712cb41df5ca12c3df92356dc4f47494023e8863abfb5ce"
+    },
+    {
+      "id": "co-castle-rock-2025-detail",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429",
+      "fixture": "fixtures/co-castlerock/res-2025-071-detail.html",
+      "sha256": "7ab7e31f16a7355cf45b15c881ca1d4680bec50f249b5d579ca7e6c5fb9f16f1",
+      "title": "Castle Rock Resolution 2025-071 detail and staff memo",
+      "format": "html",
+      "acquisition_source_id": "castle-rock-res2025-071-detail",
+      "acquisition_config_digest": "8fbd5b6eff30bad331eab1911fb5b44c730ff0ee7cd3576ab4e6a2caaae3bed8"
+    },
+    {
+      "id": "co-castle-rock-2025-resolution",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://legistar2.granicus.com/castlerock-co/attachments/d6660dea-d318-4275-8c15-7e32426fab79.docx",
+      "fixture": "fixtures/co-castlerock/res-2025-071-resolution.docx",
+      "sha256": "47fdad3cd79c22f371ad1e05a4a650feca629ba70553402748017240164301ad",
+      "title": "Castle Rock Resolution 2025-071 attachment",
+      "format": "docx"
+    },
+    {
+      "id": "co-castle-rock-2025-sole-source",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://legistar2.granicus.com/castlerock-co/attachments/48523085-e394-409a-ac2d-b08e84c51fcc.pdf",
+      "fixture": "fixtures/co-castlerock/res-2025-071-sole-source-request.pdf",
+      "sha256": "198cb05a0e58d10c5468f9df3a7bed28e5edb5926e816b204fe95f181be8aeaf",
+      "title": "Castle Rock sole-source request and quote",
+      "format": "pdf",
+      "acquisition_source_id": "castle-rock-res2025-071-sole-source",
+      "acquisition_config_digest": "b9232f2784272eee0aed42a0df3622decee3b3ac0fa8fa8985b69c4574d7ea82"
+    },
+    {
+      "id": "co-castle-rock-2025-vendor-signed-agreement",
+      "authority": "Town of Castle Rock via Legistar",
+      "url": "https://legistar2.granicus.com/castlerock-co/attachments/4a2b2ae6-5147-454c-808d-81bcae9a0b3d.pdf",
+      "fixture": "fixtures/co-castlerock/res-2025-071-vendor-signed-agreement.pdf",
+      "sha256": "648c877cfacd0d59c86bae37bd4f5a75c5da09e93399d35cfd57275906af2ed8",
+      "title": "Castle Rock Flock agreement attachment, vendor signed only in preserved copy",
+      "format": "pdf",
+      "acquisition_source_id": "castle-rock-res2025-071-agreement",
+      "acquisition_config_digest": "413b810dcb480f5bb869d4a06c684b7ddb2745f427918e7c2dd96dfc7ccb6ccc"
+    },
+    {
+      "id": "co-denver-2025-flock-event",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/Events/9502?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-denver/event-9502-2025-05-05.json",
+      "sha256": "9e0067617983e5675ac4dbe1a98046686b7079a2e23eb254a6b17d465dfba2b4",
+      "title": "Denver City Council event, May 5, 2025",
+      "format": "json",
+      "acquisition_source_id": "denver-25-0413-event-json",
+      "acquisition_config_digest": "4c0044bb320f5ce0abb3d40f108ba5c6ec1e63e0e3ce4f1b97f803a0ea417da5"
+    },
+    {
+      "id": "co-denver-2025-flock-votes",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/EventItems/187514/Votes",
+      "fixture": "fixtures/co-denver/votes-187514-flock-failed.json",
+      "sha256": "6e1108c96375f3a6d6e5fe6cf2327dd98dfdb46f2e1425acd5a24677e9e2ba43",
+      "title": "Denver roll call on failed Flock Resolution 25-0413",
+      "format": "json",
+      "acquisition_source_id": "denver-25-0413-votes-json",
+      "acquisition_config_digest": "19b7e2a203e3a24e655809f0bf77061ea15bcc4723343b6bc8cea6bd36194753"
+    },
+    {
+      "id": "co-denver-2025-flock-matter",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/Matters/27055?MatterAttachments=1&MatterHistory=1",
+      "fixture": "fixtures/co-denver/matter-27055-flock-failed.json",
+      "sha256": "6e48d050a84715ff113bfe928c1adb9bc0808ec3faf0b56fb369649e3c1a537b",
+      "title": "Denver failed Flock Resolution 25-0413 matter",
+      "format": "json",
+      "acquisition_source_id": "denver-25-0413-matter-json",
+      "acquisition_config_digest": "e8341ab1c36c01f31bb1a16f67fc2479a37ae4f02bb07c5c1a1a47baf7b795c9"
+    },
+    {
+      "id": "co-denver-2025-flock-minutes",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://denver.legistar.com/View.ashx?GUID=5306BD9D-0288-4AAE-8A29-B0B319A57C19&ID=14206445&M=F",
+      "fixture": "fixtures/co-denver/minutes-2025-05-05.pdf",
+      "sha256": "01c1b2ce2b83a2e89c7845814025e4f1e1db11831f4fbf0a902f5b98b713eb2c",
+      "title": "Denver City Council final minutes, May 5, 2025",
+      "format": "pdf",
+      "acquisition_source_id": "denver-25-0413-minutes",
+      "acquisition_config_digest": "58fc36cac5703667aa9fdf223632d1822a99811e47db63f46e0ead1aa96bd6bc"
+    },
+    {
+      "id": "co-denver-2025-flock-proposed-amendment",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://denver.legistar1.com/denver/attachments/595d8ed7-b93d-47b6-8f2a-593e5ad088c3.pdf",
+      "fixture": "fixtures/co-denver/25-0413-proposed-failed-amendment.pdf",
+      "sha256": "21b5c3a668f21cd5110a65e383e27d112e376bbacc401c8942b5ccf24d991352",
+      "title": "Denver proposed Flock amendment, not adopted",
+      "format": "pdf",
+      "acquisition_source_id": "denver-25-0413-proposed-amendment",
+      "acquisition_config_digest": "9e0317224711db2b72e91548d6bb715298b30c46f480cc08b6e6530f7fbb34ab"
+    },
+    {
+      "id": "co-denver-2025-axon-event",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/Events/9898?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-denver/event-9898-2025-12-08.json",
+      "sha256": "8f8c7f23a67b3f2ce311606e0ec8981039c5dafd5e64292776b683d65c59d40e",
+      "title": "Denver City Council event, December 8, 2025",
+      "format": "json",
+      "acquisition_source_id": "denver-25-1967-1968-event-json",
+      "acquisition_config_digest": "e901d1cdb5077fef5f8d66034ace95f719aef34090120abb66a649419af3df8d"
+    },
+    {
+      "id": "co-denver-2025-axon-block-votes",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/EventItems/199484/Votes",
+      "fixture": "fixtures/co-denver/votes-199484-consent.json",
+      "sha256": "8502aafce7a9a69c7e0d6fff551744dace9a576f72ea68ef6db5ea0bfd19f7ef",
+      "title": "Denver consent agenda block roll call, not an Axon-only vote",
+      "format": "json",
+      "acquisition_source_id": "denver-25-1967-1968-consent-votes-json",
+      "acquisition_config_digest": "d9a63c381dbe40c610428317b2f36afaf4a8b61d2f5cf7a359787bb5c45ceab8"
+    },
+    {
+      "id": "co-denver-2025-axon-amendment-matter",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/Matters/28523?MatterAttachments=1&MatterHistory=1",
+      "fixture": "fixtures/co-denver/matter-28523-axon-amendment.json",
+      "sha256": "d829a67b97849d2fc9c415fdf58581b1d1046c9d94108ec6bafe953e92cd77f3",
+      "title": "Denver Axon Resolution 25-1967 matter",
+      "format": "json"
+    },
+    {
+      "id": "co-denver-2025-axon-framework-matter",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://webapi.legistar.com/v1/denver/Matters/28524?MatterAttachments=1&MatterHistory=1",
+      "fixture": "fixtures/co-denver/matter-28524-axon-framework.json",
+      "sha256": "abccf1831b10318d1fb09f2b9acd1088d377f613e2a6230cab5a39fae2bec286",
+      "title": "Denver Axon Resolution 25-1968 matter",
+      "format": "json"
+    },
+    {
+      "id": "co-denver-2025-axon-minutes",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://denver.legistar.com/View.ashx?GUID=01E28288-E47A-428D-88CB-D92504BF83C7&ID=1362533&M=M",
+      "fixture": "fixtures/co-denver/minutes-2025-12-08.pdf",
+      "sha256": "73b6fef2a195d58f3faad83074eb152473451d791f91d7c6cf098a60a324d09c",
+      "title": "Denver City Council final minutes, December 8, 2025",
+      "format": "pdf",
+      "acquisition_source_id": "denver-25-1967-1968-minutes",
+      "acquisition_config_digest": "d5fa03f4503107afa4741577dcd5fbd6b8cfb92c3baaa28b0bd3191e59c32869"
+    },
+    {
+      "id": "co-denver-2025-axon-vendor-amendment",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://denver.legistar1.com/denver/attachments/aa29683d-1010-4f4d-8e41-d3c182db110a.pdf",
+      "fixture": "fixtures/co-denver/25-1967-vendor-signed-amendment.pdf",
+      "sha256": "4d58fc24040afd4bed5b42e44881c60a5234be53e93a3ac28d04eb0f5e17e298",
+      "title": "Denver Axon amendment attachment, City execution not shown",
+      "format": "pdf"
+    },
+    {
+      "id": "co-denver-2025-axon-framework",
+      "authority": "Denver City Council via Legistar",
+      "url": "https://denver.legistar1.com/denver/attachments/87f43a4a-f683-4aed-b53a-a093dbe23043.pdf",
+      "fixture": "fixtures/co-denver/25-1968-proposed-framework.pdf",
+      "sha256": "3213fabf409bccd666b9d70b548121bcd617f2c6a2fd9f1bd0c7289e7e50fdf9",
+      "title": "Denver Axon framework attachment, City execution not shown",
+      "format": "pdf",
+      "acquisition_source_id": "denver-25-1968-framework",
+      "acquisition_config_digest": "dd6543a33ff68432d4b9b513a9e1cc85fe61b24986efafe0cf60cfa2cb5e398c"
+    },
+    {
+      "id": "co-arapahoe-event-2335-2024-11-26",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/Events/2335?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-arapahoe/event-2335-2024-11-26.json",
+      "sha256": "60ca6bed0e21567db3116c2b48e5a6aa2aac51a7d7dba379c31ebbf753b3dcd3",
+      "title": "Arapahoe County BOCC event, event-2335-2024-11-26.json",
+      "format": "json",
+      "acquisition_source_id": "arapahoe-24-633-event-json",
+      "acquisition_config_digest": "6d85ce730079b76e421f5c100195666f29973f303c2160d77718473e1437fa82"
+    },
+    {
+      "id": "co-arapahoe-votes-38020-consent-2024-11-26",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/EventItems/38020/Votes",
+      "fixture": "fixtures/co-arapahoe/votes-38020-consent-2024-11-26.json",
+      "sha256": "deeb4c793b0f8edaced935c4bca0e3665e466055489d6d45acb375c18c3d64e3",
+      "title": "Arapahoe County Consent-block roll call, votes-38020-consent-2024-11-26.json",
+      "format": "json",
+      "acquisition_source_id": "arapahoe-24-633-consent-votes-json",
+      "acquisition_config_digest": "c5ef2545dfc325a48245ede2cfe5304704da72399c2ec5934cf161551fde5691"
+    },
+    {
+      "id": "co-arapahoe-matter-4198-24-633",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/Matters/4198?MatterAttachments=1&MatterHistory=1",
+      "fixture": "fixtures/co-arapahoe/matter-4198-24-633.json",
+      "sha256": "89923f7c2727da0fd3360057bb9de2dd76d257740d58dcf91ecb7e15fa8c820a",
+      "title": "Arapahoe County Matter, matter-4198-24-633.json",
+      "format": "json"
+    },
+    {
+      "id": "co-arapahoe-24-633-detail",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar.com/LegislationDetail.aspx?GUID=7475B68D-6763-4E77-BE25-509D1EFB7152&ID=7029722&Options=&Search=",
+      "fixture": "fixtures/co-arapahoe/24-633-detail.html",
+      "sha256": "9096cb3b50d905c830bae4a6da74c59a7c2d1cebe5ab5790bd95e6f4733fe284",
+      "title": "Arapahoe County Detail with staff text, 24-633-detail.html",
+      "format": "html",
+      "acquisition_source_id": "arapahoe-24-633-detail",
+      "acquisition_config_digest": "5ef28ccda8adf5eb5698ef5f2245e235a78fc12d944bc94935758814caee0234"
+    },
+    {
+      "id": "co-arapahoe-24-633-board-report",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/attachments/b41a182d-b444-4a35-8937-5193e3b184ca.pdf",
+      "fixture": "fixtures/co-arapahoe/24-633-board-report.pdf",
+      "sha256": "2f6376a306ed58653440781caf647067c1f6f1b3b60689a9e33194e046b29bcb",
+      "title": "Arapahoe County Board summary, 24-633-board-report.pdf",
+      "format": "pdf"
+    },
+    {
+      "id": "co-arapahoe-minutes-2024-11-26",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/meetings/2024/11/2335_M_Board_of_County_Commissioners_Business_Meeting_24-11-26_Meeting_Minute_Summaries_%28Business_Meeting%29.pdf",
+      "fixture": "fixtures/co-arapahoe/minutes-2024-11-26.pdf",
+      "sha256": "b5c9d7e4a38acc94ed96160e222f9f9211792a03690ab585c66cb91ab5fc62a6",
+      "title": "Arapahoe County Final meeting minutes, minutes-2024-11-26.pdf",
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-24-633-minutes",
+      "acquisition_config_digest": "2bd37bc9d937af116bae9eda834e4ee4e4f90fa72cb56ed1c5086cc73cb58288"
+    },
+    {
+      "id": "co-arapahoe-24-633-unsigned-agreement",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/attachments/aaf08286-9337-4628-829d-38698a0ecb8c.pdf",
+      "fixture": "fixtures/co-arapahoe/24-633-unsigned-agreement.pdf",
+      "sha256": "3a7c5e780121ca6bde51f0cba1f46e4dae25f247b42f72b334eb61e78bdaa968",
+      "title": "Arapahoe County Agreement attachment, 24-633-unsigned-agreement.pdf",
+      "format": "pdf"
+    },
+    {
+      "id": "co-arapahoe-event-2604-2025-07-22",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/Events/2604?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "fixture": "fixtures/co-arapahoe/event-2604-2025-07-22.json",
+      "sha256": "ebbac02c49118c81d794b7f14eaf299cfc38966329bffd0ff85821522ae63e09",
+      "title": "Arapahoe County BOCC event, event-2604-2025-07-22.json",
+      "format": "json",
+      "acquisition_source_id": "arapahoe-25-378-event-json",
+      "acquisition_config_digest": "63e81fefee9cbce8de41533f2933412232f871dbd4ac62def6ffaf17c184d7a2"
+    },
+    {
+      "id": "co-arapahoe-votes-40833-consent-2025-07-22",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/EventItems/40833/Votes",
+      "fixture": "fixtures/co-arapahoe/votes-40833-consent-2025-07-22.json",
+      "sha256": "c139c4626f62feac394b4a769deb7e7e4cdc34fe1799f4dfa281c7a54ecad77a",
+      "title": "Arapahoe County Consent-block roll call, votes-40833-consent-2025-07-22.json",
+      "format": "json",
+      "acquisition_source_id": "arapahoe-25-378-consent-votes-json",
+      "acquisition_config_digest": "820ba93de368ed1675cbf554f6f89cc3b3903c9b69060cdc68406f6326d6b9ef"
+    },
+    {
+      "id": "co-arapahoe-matter-4672-25-378",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://webapi.legistar.com/v1/arapahoe/Matters/4672?MatterAttachments=1&MatterHistory=1",
+      "fixture": "fixtures/co-arapahoe/matter-4672-25-378.json",
+      "sha256": "3f14c3beaea7eeef4d100f055e03689e5397ac679a446623e27b2f0879a7f406",
+      "title": "Arapahoe County Matter, matter-4672-25-378.json",
+      "format": "json"
+    },
+    {
+      "id": "co-arapahoe-25-378-detail",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar.com/LegislationDetail.aspx?FullText=1&GUID=C835AA7A-4579-4F7F-A3C4-B6BFBEE67013&ID=7489125&Options=&Search=",
+      "fixture": "fixtures/co-arapahoe/25-378-detail.html",
+      "sha256": "85f052c5aa13e49c89af3d5cf11b3c367062fb6880c2bc2446e6798dd684be50",
+      "title": "Arapahoe County Detail with staff text, 25-378-detail.html",
+      "format": "html",
+      "acquisition_source_id": "arapahoe-25-378-detail",
+      "acquisition_config_digest": "e2c63023e07de5daed1dc7fb751f8702de6fb169be908258e446a278f2c6f6d1"
+    },
+    {
+      "id": "co-arapahoe-25-378-board-report",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/attachments/b5c12320-4ae6-4a50-bd23-5fce48123cdd.pdf",
+      "fixture": "fixtures/co-arapahoe/25-378-board-report.pdf",
+      "sha256": "132f1c64b86323dabc4937678c517a561b5947d610f5c3bf5bdf1e84d5b9e2f8",
+      "title": "Arapahoe County Board summary, 25-378-board-report.pdf",
+      "format": "pdf"
+    },
+    {
+      "id": "co-arapahoe-minutes-2025-07-22",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/meetings/2025/7/2604_M_Board_of_County_Commissioners_Business_Meeting_25-07-22_Meeting_Minute_Summaries_%28Business_Meeting%29.pdf",
+      "fixture": "fixtures/co-arapahoe/minutes-2025-07-22.pdf",
+      "sha256": "71b62782fb610652e4045306d61ff9e412fb677ca18fc7186959a30047cf2ca5",
+      "title": "Arapahoe County Final meeting minutes, minutes-2025-07-22.pdf",
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-25-378-minutes",
+      "acquisition_config_digest": "bec5fe61c30da70ebf618600c3087ba5d4d5c9a99dd34ab5d17bd8449e8a5cb5"
+    },
+    {
+      "id": "co-arapahoe-25-378-unsigned-expansion",
+      "authority": "Arapahoe County Board of County Commissioners via Legistar",
+      "url": "https://arapahoe.legistar1.com/arapahoe/attachments/826ed5c4-2ac3-4b2e-aad3-c3fdc031d1f4.pdf",
+      "fixture": "fixtures/co-arapahoe/25-378-unsigned-expansion.pdf",
+      "sha256": "09690cabdb7ebc481dca1e9a7309486b5313a03f98eeca5abd012c3aa78e7134",
+      "title": "Arapahoe County Draft expansion order form, 25-378-unsigned-expansion.pdf",
+      "format": "pdf"
+    },
+    {
+      "id": "co-commerce-2026-detail",
+      "authority": "Commerce City Council via Legistar",
+      "url": "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search=",
+      "fixture": "fixtures/co-commerce/ord-2755-detail.html",
+      "sha256": "ada4cce4631cd37f95d1a6282ac48045e5ac6f15eae79c13b2993fa20355499b",
+      "title": "Commerce City Ordinance 2755 official legislation detail",
+      "format": "html",
+      "acquisition_source_id": "commerce-ord2755-detail",
+      "acquisition_config_digest": "9b66ab75501dd0b84be5e1e32252768ab8a993f0abc37a9bfccb84c52f417af6"
+    }
+  ]
+}

@@ -103,3 +103,17 @@ retrieval_timestamp = "2026-08-16T11:41:00Z"
 source_type = "official_api"
 mime_type = "application/json"
 sha256 = "c019d02d7f2da00fa9aebbc4c4d3f37c98c051bc1d028db4c215fa30a70739b0"
+
+# Official HTML calendar for document-first, private candidate discovery.
+# The API event feed above remains an optional fallback and is not scheduled.
+[[sources]]
+id = "colorado-springs-calendar"
+name = "Colorado Springs City Council official meeting calendar"
+url = "https://coloradosprings.legistar.com/Calendar.aspx"
+source_type = "html_page"
+documented_at = "https://coloradosprings.legistar.com/Calendar.aspx"
+official_discovery_url = "https://coloradosprings.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review the official HTML calendar and current terms before scheduled retrieval; candidates remain private until independently verified."

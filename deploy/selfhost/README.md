@@ -4,7 +4,7 @@ Use a Linux VPS that you control, including a Namecheap VPS or a comparable prov
 
 ```text
 official sources → scheduled Rust collector → private /var/lib/panopticon
-                                             ↓ approved case export
+                                             ↓ verified case export
                          /srv/panopticon/site/releases/<release>
                                              ↓ atomic current symlink
                                     Caddy → panopticon.fail
@@ -12,11 +12,13 @@ official sources → scheduled Rust collector → private /var/lib/panopticon
 
 ## What runs automatically today
 
-`panopticon-collect.timer` starts 10 minutes after boot and then 25 hours after each completed collection. It invokes `collect.sh` to check the configured Colorado Springs Legistar events source and both procurement surfaces. The CLI enforces each source's reviewed scope, expiration, HTTPS/host rules, byte limits, and minimum request interval; unchanged and failed fetches are recorded according to the CLI's existing behavior. One failing source does not prevent checking the others, and the service reports failure for monitoring.
+`panopticon-collect.timer` starts 10 minutes after boot and then 25 hours after each completed collection. It invokes `collect.sh`, which reads the validated [collection matrix](collection-sources.tsv). The matrix schedules official HTML meeting calendars for Colorado Springs, Denver, Commerce City, Castle Rock, and Arapahoe County, plus the Colorado Springs procurement mirrors. The Legistar API event feeds remain configured as optional fallbacks but are not scheduled. The CLI enforces each source's reviewed scope, expiration, HTTPS/host rules, byte limits, and minimum request interval. A source without a current review is skipped and makes the service report failure for monitoring; the remaining sources are still checked. Add each new jurisdiction's official source as a separate config and matrix row rather than reusing another city's source ID or jurisdiction. See [document-first discovery](../../docs/document-first-discovery.md).
 
-Collection writes to the private ledger. **The current atlas exporter supports only the approved Colorado Springs Ordinance 25-93 manifest. New council matters and procurement changes do not yet become public atlas cases automatically.** `panopticon-publish.service` is a deliberate one-shot release, with no timer. It copies only the files listed in `public-assets.txt`, generates a fresh approved snapshot into a staged directory, validates it, then atomically switches the public symlink. A failure leaves the previous release live. When adding a browser asset, add its exact path to that list; arbitrary files in an asset directory do not enter a release. The private preview, SQLite database, evidence store, and operator notes stay outside the public release.
+Collection writes to the private ledger. **The HTML calendar collector preserves meeting, agenda, and minutes link candidates privately; it does not yet follow those links or generate evidence-backed atlas cases.** `panopticon-publish.service` is a deliberate one-shot release, with no timer. It copies only the files listed in `public-assets.txt`, generates a fresh approved snapshot into a staged directory, validates it, then atomically switches the public symlink. A failure leaves the previous release live. When adding a browser asset, add its exact path to that list; arbitrary files in an asset directory do not enter a release. The private preview, SQLite database, evidence store, and operator notes stay outside the public release.
 
-Source review is per source and expires; it is not a review task for every fetched record. An additional jurisdiction needs a configured source, adapter, and an expanded multi-case atlas exporter before it can appear publicly. Do not add arbitrary source IDs to the timer and expect the atlas to publish them.
+Source review is per source and expires; it is not a review task for every fetched record. Scheduling a source does not publish its findings. Additional jurisdictions need official source adapters, preserved evidence, and a verified atlas case before a decision appears publicly. The coverage map may show a registered jurisdiction with no indexed case.
+
+The browser and public Caddy server make no Legistar, Census, or DOLA API calls. Official documents and API responses used as evidence are archived locally with SHA-256 digests. [Direct-document archiving](../../docs/colorado-direct-archive.md) supports 30 fixed municipal HTML, PDF, and JSON endpoints through the same bounded, DNS-safe private fetcher. These document endpoints are configured but not in the active matrix until their source reviews are recorded. The scheduled calendars are HTML pages; every link they yield remains a private candidate until its document is archived and independently verified.
 
 ## Provision a VPS
 
@@ -87,13 +89,13 @@ Bubblewrap before retrying. Keep the system-wide namespace restriction in
 place. See [Ubuntu's 24.04 security notes](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)
 and [AppArmor guidance](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
 
-The example uses `PNUL_SITE_URL=https://panopticon.fail`. The released decision page currently has matching static social metadata. If the host changes, update that metadata and the configured URL together before publishing; the validator rejects a mismatch. `PNUL_CONFIG_PATH` and `PNUL_MANIFEST_PATH` are resolved from the repository working directory.
+The example uses `PNUL_SITE_URL=https://panopticon.fail`. The released decision page currently has matching static social metadata. If the host changes, update that metadata and the configured URL together before publishing; the validator rejects a mismatch. `PNUL_CONFIG_PATH` and `PNUL_MANIFEST_PATH` are resolved from the repository working directory. The default manifest is the already approved Colorado Springs case. Once each of the 17 cited sources for the four new cases has a current review and matching private archive capture, set `PNUL_MANIFEST_PATHS` to a space-separated list of the five manifest paths under `fixtures/atlas/`. The exporter will refuse an incomplete bundle; the publish script leaves the prior release live. See [the Colorado coverage inventory](../../docs/colorado-coverage.md) for the exact case filenames and attribution limits.
 
 Install `web/panopticon-terminal/deploy/Caddyfile.example` as the Caddy site. Its root is `/srv/panopticon/site/current`, and it refuses the preview snapshot path. In Namecheap Advanced DNS, remove the existing apex URL Redirect/parking A record and parked `www` CNAME before the cutover; URL Redirect can create a hidden A record. Then point the domain's A record at **your VPS IP** (and add an AAAA only if the VPS has working IPv6), and let Caddy obtain TLS. Do not use the earlier ChatGPT Site DNS targets. The `panopticon` user must be able to write the release directory; the Caddy user needs read/traverse access only to `/srv/panopticon/site/current` and its release target. See [Namecheap's redirect-record instructions](https://www.namecheap.com/support/knowledgebase/article.aspx/385/2237/how-to-set-up-a-url-redirect-for-a-domain/).
 
 ## First release and daily checks
 
-Before enabling collection, capture and record current source reviews as described in [`../../docs/operator-guide-source-review.md`](../../docs/operator-guide-source-review.md). The configured source reviews currently say they are not ready for unattended retrieval. The Legistar API currently returns HTTP 404 for `robots.txt`; the capture preserves that status and its bytes, and the reviewer must explicitly address it and the source's terms in the note before collection can begin. A 404 is not automatic permission. A review expires or becomes invalid if its source configuration changes; the collector then stops fetching that source and logs the reason.
+Before enabling collection, capture and record current source reviews as described in [`../../docs/operator-guide-source-review.md`](../../docs/operator-guide-source-review.md). The configured source reviews currently say they are not ready for unattended retrieval. If any host returns HTTP 404 for `robots.txt`, the capture preserves that status and its bytes, and the reviewer must explicitly address it and the source's terms in the note before collection can begin. A 404 is not automatic permission. A review expires or becomes invalid if its source configuration changes; the collector then stops fetching that source and logs the reason.
 
 ```console
 sudo systemctl start panopticon-publish.service
@@ -105,11 +107,11 @@ journalctl -u panopticon-collect.service -n 100 --no-pager
 
 Run `sudo systemctl start panopticon-publish.service` again after a reviewed case manifest or frontend release is ready. The publish service does not post to X. Keep database backups and a release rollback procedure: `current` is an atomic symlink, so an operator can point it back to a previously validated release if needed.
 
-Run the deployment script's isolation and rollback test locally with `bash deploy/selfhost/test-publish.sh`. It uses a fake exporter and a temporary site; it does not touch production state.
+Run `bash deploy/selfhost/test-collect.sh` to check profile routing and source-review failure isolation, then `bash deploy/selfhost/test-publish.sh` to check publication isolation and rollback. Both use temporary state and fake CLI/exporter commands; neither touches production state.
 
 ## Work needed for continuous public expansion
 
-1. Generalize the exporter from its hard-coded Colorado Springs manifest to a versioned directory of cases and a combined public snapshot. Give each case a stable ID and independently verifiable source bindings.
-2. Build source adapters and scheduled discovery for each jurisdiction; persist new matters, votes, signed actions, awards, and revisions in the private ledger.
-3. Convert detected changes into proposed evidence-backed cases and explicit gaps. Validate each connection against preserved bytes before it enters the public read model. Decide a release policy for newly generated cases; the current code requires one case-level approval.
-4. Generate per-case share pages and social metadata from the released dataset, then add monitoring for collector failures, source-review expiry, and stale public snapshots.
+1. Archive and review the fixed official endpoints used by the four new Colorado cases. The version 2 exporter checks their exact locators, source digests, current reviews, private fetch receipts, and raw blobs; it does not require a human decision for each case. An explicit rejection or correction blocks release.
+2. Expand reviewed official document-index discovery beyond the first five Colorado calendars. The current calendars archive private link candidates but do not fetch candidate documents or generate cases. Add a bounded reviewed path policy for following candidate links, then persist proposed matters, votes, signatures, awards, and revisions in the private ledger. Require complete evidence chains before publication.
+3. Add vote-block modeling for consent items, official role and term evidence for durable officeholder profiles, correction/withdrawal history for individual facts, and coverage monitoring for all indexed jurisdictions.
+4. Verify source-review expiry, stale public snapshots, backup/restore, Caddy TLS, and release rollback on the actual VPS. The static exporter and per-decision share-page generator are ready for this check once source provenance is captured.

@@ -1,0 +1,233 @@
+const SVG_NS = "http://www.w3.org/2000/svg";
+const KIND_LABELS = {
+  state: "State",
+  county: "County",
+  municipality: "City or town",
+  school_district: "Unified school district",
+  district_provisional: "District in DOLA discovery layer",
+};
+
+// A geography row cannot create a case. Only a released decision in the
+// validated public snapshot can be linked to it.
+export function coverageDecisionIndex(records, snapshot) {
+  const index = new Map();
+  if (snapshot?.mode !== "public") return index;
+  const entities = snapshot.entities ?? [];
+  const byPublishedId = new Map(records.filter((record) => record.published_entity_id).map((record) => [record.published_entity_id, record.id]));
+  const byRef = new Set(records.map((record) => record.id));
+  const entityToRecords = new Map();
+  for (const entity of entities) {
+    if (entity.type !== "JURISDICTION") continue;
+    const ids = new Set([
+      byPublishedId.get(entity.id),
+      byRef.has(entity.jurisdiction_ref) ? entity.jurisdiction_ref : undefined,
+    ].filter(Boolean));
+    if (ids.size) entityToRecords.set(entity.id, ids);
+  }
+  for (const entity of entities) {
+    if (entity.type !== "DECISION" || !entity.slug) continue;
+    const matched = new Set((entity.jurisdiction_ids ?? []).flatMap((id) => [...(entityToRecords.get(id) ?? [])]));
+    for (const recordId of matched) {
+      if (!index.has(recordId)) index.set(recordId, []);
+      index.get(recordId).push(entity);
+    }
+  }
+  return index;
+}
+
+export function coverageDecisionsFor(record, snapshot) {
+  return record ? coverageDecisionIndex([record], snapshot).get(record.id) ?? [] : [];
+}
+
+function countyPath(geometry) {
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  const parts = [];
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      if (!ring.length) continue;
+      const points = ring.map(([lon, lat]) => [
+        ((lon + 109.1) / 7.1 * 700).toFixed(2),
+        ((41.1 - lat) / 4.2 * 440).toFixed(2),
+      ]);
+      parts.push(`M${points.map((point) => point.join(" ")).join("L")}Z`);
+    }
+  }
+  return parts.join("");
+}
+
+function element(tag, className, textValue) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (textValue !== undefined) node.textContent = textValue;
+  return node;
+}
+
+export function installColoradoCoverage({ getSnapshot }) {
+  const dialog = document.querySelector("#coverage-dialog");
+  const openButton = document.querySelector("#coverage-open");
+  if (!dialog || !openButton) return;
+  const closeButton = dialog.querySelector("#coverage-close");
+  const summary = dialog.querySelector("#coverage-summary");
+  const list = dialog.querySelector("#coverage-list");
+  const map = dialog.querySelector("#coverage-map");
+  const detail = dialog.querySelector("#coverage-detail");
+  const search = dialog.querySelector("#coverage-search");
+  const resultCount = dialog.querySelector("#coverage-result-count");
+  const tabs = [...dialog.querySelectorAll("[data-coverage-kind]")];
+  let registry;
+  let loadPromise;
+  let kind = "municipality";
+  let selectedId = null;
+  let indexedEntities = null;
+  let indexedMode = null;
+  let caseIndex = new Map();
+
+  function ensureCaseIndex() {
+    const snapshot = getSnapshot();
+    if (snapshot.entities !== indexedEntities || snapshot.mode !== indexedMode) {
+      caseIndex = coverageDecisionIndex(registry.jurisdictions, snapshot);
+      indexedEntities = snapshot.entities;
+      indexedMode = snapshot.mode;
+    }
+  }
+
+  function casesFor(record) {
+    ensureCaseIndex();
+    return caseIndex.get(record.id) ?? [];
+  }
+
+  function select(record) {
+    selectedId = record.id;
+    if (kind !== record.kind) {
+      kind = record.kind;
+      search.value = "";
+    }
+    tabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.coverageKind === kind));
+    renderList();
+    renderDetail(record);
+    map.querySelectorAll("path").forEach((path) => path.classList.toggle("is-selected", path.dataset.id === record.id));
+  }
+
+  function renderMap() {
+    map.replaceChildren();
+    for (const county of registry.jurisdictions.filter((record) => record.kind === "county")) {
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", countyPath(county.geometry));
+      path.setAttribute("fill-rule", "evenodd");
+      path.setAttribute("tabindex", "0");
+      path.setAttribute("role", "button");
+      path.setAttribute("aria-label", county.name);
+      path.dataset.id = county.id;
+      path.addEventListener("click", () => select(county));
+      path.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          select(county);
+        }
+      });
+      map.append(path);
+    }
+  }
+
+  function renderList() {
+    if (!registry) return;
+    const query = search.value.trim().toLocaleLowerCase();
+    const matches = registry.jurisdictions.filter((record) =>
+      record.kind === kind &&
+      (!query || `${record.name} ${record.code}`.toLocaleLowerCase().includes(query))
+    );
+    resultCount.textContent = `${matches.length.toLocaleString()} matches${matches.length > 100 ? " · showing first 100; narrow the search to find more" : ""}`;
+    list.replaceChildren();
+    for (const record of matches.slice(0, 100)) {
+      const button = element("button", "coverage-result");
+      button.type = "button";
+      button.classList.toggle("is-selected", record.id === selectedId);
+      button.append(element("strong", "", record.name));
+      const decisionCount = casesFor(record).length;
+      button.append(element("span", decisionCount ? "coverage-result__published" : "", decisionCount
+        ? `${decisionCount} published decision${decisionCount === 1 ? "" : "s"}`
+        : "Records not indexed"));
+      button.addEventListener("click", () => select(record));
+      list.append(button);
+    }
+  }
+
+  function renderDetail(record) {
+    detail.replaceChildren();
+    const heading = element("h3", "", record.name);
+    detail.append(heading);
+    detail.append(element("p", "coverage-detail__meta", `${KIND_LABELS[record.kind]} · Official code ${record.code} · ${record.source_locator}`));
+    const decisions = casesFor(record);
+    if (decisions.length) {
+      detail.append(element("p", "coverage-detail__published", `${decisions.length} published decision${decisions.length === 1 ? "" : "s"} linked by a reviewed jurisdiction record.`));
+      for (const decision of decisions) {
+        const link = element("a", "coverage-decision-link", `Read ${decision.name} and its sources →`);
+        link.href = decision.share_url?.includes(`/decisions/${decision.slug}.html`)
+          ? `./decisions/${encodeURIComponent(decision.slug)}.html`
+          : `./decision.html?decision=${encodeURIComponent(decision.slug)}`;
+        detail.append(link);
+      }
+    } else {
+      detail.append(element("p", "coverage-detail__unknown", "Records not indexed here. This does not establish that no relevant decision, contract, or technology exists."));
+    }
+    if (record.kind === "district_provisional") {
+      detail.append(element("p", "coverage-detail__caveat", `DOLA discovery layer · source status code ${record.source_status_code ?? "unknown"} · source update ${record.source_last_update ?? "unknown"}. District identity, current legal status, and boundary need independent checking before a case is attributed.`));
+    }
+    const source = registry.sources[record.source_id];
+    const link = element("a", "coverage-source-link", "Open official geography source (may have changed) ↗");
+    link.href = source.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    detail.append(link);
+    detail.append(element("p", "coverage-detail__digest", `Archived source bytes SHA-256 ${source.sha256}`));
+  }
+
+  function render() {
+    const counts = registry.counts;
+    ensureCaseIndex();
+    const linked = new Set([...caseIndex.values()].flat().map((decision) => decision.id)).size;
+    summary.textContent = `${registry.jurisdictions.length.toLocaleString()} geography entries indexed · 1 state · ${counts.county} counties · ${counts.municipality} cities and towns · ${counts.school_district} school districts · ${counts.district_provisional.toLocaleString()} provisional DOLA district entries · ${linked} linked published decision${linked === 1 ? "" : "s"}`;
+    renderMap();
+    const publishedPlace = registry.jurisdictions.find((record) => record.published_entity_id === "jurisdiction_co_colorado_springs");
+    if (publishedPlace) selectedId = publishedPlace.id;
+    renderList();
+    if (publishedPlace) renderDetail(publishedPlace);
+  }
+
+  function open() {
+    dialog.showModal();
+    if (registry) {
+      render();
+      return;
+    }
+    if (!loadPromise) {
+      loadPromise = fetch("./geography/colorado-jurisdictions.json", { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Geography unavailable (${response.status})`);
+          return response.json();
+        })
+        .then((data) => {
+          if (data.schema_version !== 1 || data.counts?.county !== 64 || !Array.isArray(data.jurisdictions)) {
+            throw new Error("Geography registry failed validation");
+          }
+          registry = data;
+          render();
+        })
+        .catch((error) => {
+          summary.textContent = error.message;
+          loadPromise = null;
+        });
+    }
+  }
+
+  openButton.addEventListener("click", open);
+  closeButton.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+  tabs.forEach((tab) => tab.addEventListener("click", () => {
+    kind = tab.dataset.coverageKind;
+    search.value = "";
+    tabs.forEach((item) => item.classList.toggle("is-active", item === tab));
+    renderList();
+  }));
+  search.addEventListener("input", renderList);
+}

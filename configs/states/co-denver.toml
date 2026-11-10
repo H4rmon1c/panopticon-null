@@ -1,0 +1,33 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Denver, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Denver surveillance alerts"
+default_dry_run = true
+demo_documents = []
+
+[[sources]]
+id = "denver-legistar-events"
+name = "Denver City Council Legistar events"
+url = "https://webapi.legistar.com/v1/denver/events?$filter=EventDate%20ge%20datetime%272025-01-01%27&$orderby=EventDate%20desc&$top=100&EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 20971520
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Operator must review current Legistar API scope and terms before live retrieval; use one request at a time, caching, and backoff."
+
+# Official HTML calendar for document-first, private candidate discovery.
+# The API event feed above remains an optional fallback and is not scheduled.
+[[sources]]
+id = "denver-calendar"
+name = "Denver City Council official meeting calendar"
+url = "https://denver.legistar.com/Calendar.aspx"
+source_type = "html_page"
+documented_at = "https://denver.legistar.com/Calendar.aspx"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review the official HTML calendar and current terms before scheduled retrieval; candidates remain private until independently verified."

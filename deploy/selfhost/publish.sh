@@ -11,13 +11,28 @@ set -euo pipefail
 pnull_bin="${PNUL_BIN:-/usr/local/bin/pnull}"
 node_bin="${PNUL_NODE_BIN:-node}"
 config_path="${PNUL_CONFIG_PATH:-configs/states/co.toml}"
-manifest_path="${PNUL_MANIFEST_PATH:-fixtures/atlas/colorado-springs-25-93.v1.json}"
+manifest_paths="${PNUL_MANIFEST_PATHS:-${PNUL_MANIFEST_PATH:-fixtures/atlas/colorado-springs-25-93.v1.json}}"
 
 for path in "$PNUL_REPO_DIR" "$PNUL_DATA_DIR" "$PNUL_RELEASE_ROOT" "$PNUL_CURRENT_LINK"; do
     [[ "$path" == /* ]] || { echo "deployment paths must be absolute: $path" >&2; exit 1; }
 done
 [[ -d "$PNUL_REPO_DIR/web/panopticon-terminal" ]] || { echo "web source is missing" >&2; exit 1; }
 [[ -d "$PNUL_DATA_DIR" ]] || { echo "private collector state is missing" >&2; exit 1; }
+
+read -r -a manifest_list <<< "$manifest_paths"
+[[ ${#manifest_list[@]} -gt 0 ]] || { echo "no atlas manifests configured" >&2; exit 1; }
+manifest_args=()
+declare -A seen_manifests=()
+for manifest in "${manifest_list[@]}"; do
+    [[ "$manifest" =~ ^fixtures/atlas/[a-zA-Z0-9._/-]+\.json$ &&
+       "$manifest" != *..* && -z "${seen_manifests[$manifest]:-}" &&
+       -f "$PNUL_REPO_DIR/$manifest" && ! -L "$PNUL_REPO_DIR/$manifest" ]] || {
+        echo "invalid or duplicate atlas manifest: $manifest" >&2
+        exit 1
+    }
+    seen_manifests[$manifest]=1
+    manifest_args+=(--manifest "$manifest")
+done
 [[ -e "$PNUL_CURRENT_LINK" && ! -L "$PNUL_CURRENT_LINK" ]] && {
     echo "current path exists and is not a symlink" >&2
     exit 1
@@ -74,13 +89,14 @@ fi
 
 cd "$PNUL_REPO_DIR"
 "$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config_path" \
-    --site-url "$PNUL_SITE_URL" atlas export --manifest "$manifest_path" \
+    --site-url "$PNUL_SITE_URL" atlas export "${manifest_args[@]}" \
     --output "$stage/public/public-snapshot.json"
-"$node_bin" "$stage/scripts/validate.mjs"
+"$node_bin" "$stage/scripts/build-decision-pages.mjs" "$stage" "$PNUL_SITE_URL"
+PNUL_VALIDATE_RELEASE=1 "$node_bin" "$stage/scripts/validate.mjs"
 "$node_bin" --test "$stage/scripts/test-client.mjs"
 
-# These two operator scripts are needed for staging validation, not for browsers.
-rm -- "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
+# Operator scripts are needed for staging validation, not for browsers.
+rm -- "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
 find "$stage" -type d -exec chmod 755 {} +
 find "$stage" -type f -exec chmod 644 {} +
 

@@ -27,11 +27,26 @@ jobs:
           node --check web/panopticon-terminal/app.js
           node --check web/panopticon-terminal/decision.js
           node --check web/panopticon-terminal/scripts/validate.mjs
+          node --check web/panopticon-terminal/scripts/build-decision-pages.mjs
+          node --check web/panopticon-terminal/scripts/24-colorado-coverage.mjs
           for script in web/panopticon-terminal/scripts/[0-9][0-9]-*.js; do
             node --check "$script"
           done
       - name: Validate shell, snapshot, and references
         run: node web/panopticon-terminal/scripts/validate.mjs
+      - name: Verify archived Colorado geography rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pnull-geography-venv
+          /tmp/pnull-geography-venv/bin/pip install -r web/panopticon-terminal/scripts/requirements-geography.txt
+          /tmp/pnull-geography-venv/bin/python web/panopticon-terminal/scripts/build-colorado-geography.py --output /tmp/pnull-colorado-rebuilt.json
+          cmp web/panopticon-terminal/geography/colorado-jurisdictions.json /tmp/pnull-colorado-rebuilt.json
+          node web/panopticon-terminal/scripts/test-colorado-geography.mjs
+      - name: Test multi-jurisdiction collection schedule
+        run: bash deploy/selfhost/test-collect.sh
+      - name: Verify fixed official archive profiles
+        run: python3 deploy/selfhost/test-archive-profiles.py
       - name: Test staged publication and rollback
         run: bash deploy/selfhost/test-publish.sh
       - name: Browser smoke test
@@ -121,7 +136,7 @@ jobs:
             cat /tmp/pnull-terminal-chrome.log
             exit "$status"
           fi
-          grep --quiet "Recorded votes on this ordinance" /tmp/pnull-terminal-decision-dom.html
+          grep --quiet "Recorded votes on this decision" /tmp/pnull-terminal-decision-dom.html
           grep --quiet "Portrait of Tom Bailey" /tmp/pnull-terminal-decision-dom.html
           grep --quiet "Public role and term: not established" /tmp/pnull-terminal-decision-dom.html
 

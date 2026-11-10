@@ -16,13 +16,15 @@ const scripts = [
   "scripts/15-civic-actions.js", "scripts/16-civic-context.js", "scripts/17-civic-atlas-core.js",
   "scripts/18-civic-atlas-layout.js", "scripts/19-civic-atlas-ground.js", "scripts/20-civic-atlas-links.js",
   "scripts/21-civic-atlas-helpers.js", "scripts/22-civic-runtime.js", "scripts/23-civic-polish.js",
+  "scripts/24-colorado-coverage.mjs",
 ];
 const styles = [
   ...Array.from({ length: 8 }, (_, index) => `styles/0${index}.css`),
   "styles/08-civic.css",
   "styles/09-civic-polish.css",
+  "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "mock/public-snapshot.json", "public/public-snapshot.json", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -140,7 +142,8 @@ if (snapshot) {
 
 try {
   const published = validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
-  const decision = published.entities.find((entity) => entity.type === "DECISION");
+  const decisions = published.entities.filter((entity) => entity.type === "DECISION");
+  const decision = decisions.find((entity) => entity.slug === "co-colorado-springs-25-581-2025-11-25");
   const voters = new Map((decision?.votes ?? []).map((vote) => [vote.voter_entity_id, vote.name]));
   for (const [id, name] of voters) {
     const portrait = votePortraits[id];
@@ -166,6 +169,20 @@ try {
     const socialUrl = decisionHtml.match(/property="og:url" content="([^"]+)"/)?.[1];
     if (socialUrl !== decision.share_url) failures.push("decision.html: social URL differs from the released decision URL");
     if (!decisionHtml.includes('name="twitter:card" content="summary"')) failures.push("decision.html: missing X summary card metadata");
+  }
+  if (process.env.PNUL_VALIDATE_RELEASE === "1") {
+    for (const item of decisions) {
+      const slug = item.slug;
+      if (!/^co-[a-z0-9-]+$/.test(slug ?? "")) { failures.push(`decision ${item.id}: unsafe slug`); continue; }
+      if (!item.share_url?.endsWith(`/decisions/${slug}.html`)) continue;
+      const path = `decisions/${slug}.html`;
+      try {
+        const html = await readFile(join(root, path), "utf8");
+        if (!html.includes(`property="og:url" content="${item.share_url}"`)) failures.push(`${path}: wrong social URL`);
+        if (!html.includes(`rel="canonical" href="${item.share_url}"`)) failures.push(`${path}: wrong canonical URL`);
+        if (!html.includes('href="../decision.css"') || !html.includes('src="../decision.js"')) failures.push(`${path}: broken relative assets`);
+      } catch (error) { failures.push(`${path}: missing static case page (${error.message})`); }
+    }
   }
 } catch (error) {
   failures.push(`public/public-snapshot.json: ${error.message}`);

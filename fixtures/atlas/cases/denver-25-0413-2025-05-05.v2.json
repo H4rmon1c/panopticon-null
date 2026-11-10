@@ -1,0 +1,651 @@
+{
+  "schema_version": 2,
+  "case_id": "co-denver-25-0413-2025-05-05",
+  "synthetic": false,
+  "review_state": "source_verified",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-denver",
+    "jurisdiction_ref": "us-co-place-0820000",
+    "name": {
+      "value": "City and County of Denver",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemTitle",
+        "quote": "City and County of Denver"
+      }
+    },
+    "display_name": "City and County of Denver"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "25-0413",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemMatterFile",
+        "quote": "25-0413"
+      }
+    },
+    "event_item_id": {
+      "value": "187514",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemId",
+        "quote": "187514"
+      }
+    },
+    "title": {
+      "value": "A resolution approving a proposed Amendatory Agreement between the City and County of Denver and Flock Group, Inc. to provide solar-powered license plate recognition cameras.\r\nAmends a Framework Agreement with Flock Group Inc to add $666,000.00 for a new total of $1,005,450.00 and 24 months for a new end date of 02-28-2027 to provide solar-powered license plate recognition cameras, citywide (POLIC-202472539-00/POLIC-202578012-01). The last regularly scheduled Council meeting within the 30-day review period is on 5-19-2025. The Committee approved filing this item at its meeting on 4-2-2025.",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemTitle",
+        "quote": "A resolution approving a proposed Amendatory Agreement between the City and County of Denver and Flock Group, Inc. to provide solar-powered license plate recognition cameras.\r\nAmends a Framework Agreement with Flock Group Inc to add $666,000.00 for a new total of $1,005,450.00 and 24 months for a new end date of 02-28-2027 to provide solar-powered license plate recognition cameras, citywide (POLIC-202472539-00/POLIC-202578012-01). The last regularly scheduled Council meeting within the 30-day review period is on 5-19-2025. The Committee approved filing this item at its meeting on 4-2-2025."
+      }
+    },
+    "short_label": {
+      "value": "Flock Group, Inc.",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemTitle",
+        "quote": "Flock Group, Inc."
+      }
+    },
+    "display_title": "25-0413: Flock Group, Inc.",
+    "date": {
+      "value": "2025-05-05",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventDate",
+        "quote": "2025-05-05T00:00:00"
+      }
+    },
+    "body": {
+      "value": "City Council",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventBodyName",
+        "quote": "City Council"
+      }
+    },
+    "outcome": {
+      "value": "Fail",
+      "proof": {
+        "source_id": "co-denver-2025-flock-event",
+        "locator": "$.EventItems[44].EventItemPassedFlagName",
+        "quote": "Fail"
+      }
+    },
+    "outcome_class": "failed"
+  },
+  "votes": [
+    {
+      "person_name": {
+        "value": "Flor Alvidrez",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[0].VotePersonName",
+          "quote": "Flor Alvidrez"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[0].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220951",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[0].VoteId",
+          "quote": "220951"
+        }
+      },
+      "official_person_id": {
+        "value": "517",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[0].VotePersonId",
+          "quote": "517"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[0].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Kevin Flynn",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[1].VotePersonName",
+          "quote": "Kevin Flynn"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[1].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220952",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[1].VoteId",
+          "quote": "220952"
+        }
+      },
+      "official_person_id": {
+        "value": "265",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[1].VotePersonId",
+          "quote": "265"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[1].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Stacie Gilmore",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[2].VotePersonName",
+          "quote": "Stacie Gilmore"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[2].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220953",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[2].VoteId",
+          "quote": "220953"
+        }
+      },
+      "official_person_id": {
+        "value": "256",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[2].VotePersonId",
+          "quote": "256"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[2].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Serena Gonzales-Gutierrez",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[3].VotePersonName",
+          "quote": "Serena Gonzales-Gutierrez"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[3].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220954",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[3].VoteId",
+          "quote": "220954"
+        }
+      },
+      "official_person_id": {
+        "value": "520",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[3].VotePersonId",
+          "quote": "520"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[3].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Chris Hinds",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[4].VotePersonName",
+          "quote": "Chris Hinds"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[4].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220955",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[4].VoteId",
+          "quote": "220955"
+        }
+      },
+      "official_person_id": {
+        "value": "473",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[4].VotePersonId",
+          "quote": "473"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[4].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Paul Kashmann",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[5].VotePersonName",
+          "quote": "Paul Kashmann"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[5].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220956",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[5].VoteId",
+          "quote": "220956"
+        }
+      },
+      "official_person_id": {
+        "value": "277",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[5].VotePersonId",
+          "quote": "277"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[5].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Shontel Lewis",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[6].VotePersonName",
+          "quote": "Shontel Lewis"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[6].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220957",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[6].VoteId",
+          "quote": "220957"
+        }
+      },
+      "official_person_id": {
+        "value": "518",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[6].VotePersonId",
+          "quote": "518"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[6].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Sarah Parady",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[7].VotePersonName",
+          "quote": "Sarah Parady"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[7].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220958",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[7].VoteId",
+          "quote": "220958"
+        }
+      },
+      "official_person_id": {
+        "value": "521",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[7].VotePersonId",
+          "quote": "521"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[7].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Diana Romero Campbell",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[8].VotePersonName",
+          "quote": "Diana Romero Campbell"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[8].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220959",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[8].VoteId",
+          "quote": "220959"
+        }
+      },
+      "official_person_id": {
+        "value": "516",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[8].VotePersonId",
+          "quote": "516"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[8].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Amanda Sandoval",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[9].VotePersonName",
+          "quote": "Amanda Sandoval"
+        }
+      },
+      "recorded_vote": {
+        "value": "Absent",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[9].VoteValueName",
+          "quote": "Absent"
+        }
+      },
+      "official_vote_id": {
+        "value": "220960",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[9].VoteId",
+          "quote": "220960"
+        }
+      },
+      "official_person_id": {
+        "value": "470",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[9].VotePersonId",
+          "quote": "470"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[9].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Amanda Sawyer",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[10].VotePersonName",
+          "quote": "Amanda Sawyer"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[10].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220961",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[10].VoteId",
+          "quote": "220961"
+        }
+      },
+      "official_person_id": {
+        "value": "471",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[10].VotePersonId",
+          "quote": "471"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[10].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Jamie Torres",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[11].VotePersonName",
+          "quote": "Jamie Torres"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[11].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220962",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[11].VoteId",
+          "quote": "220962"
+        }
+      },
+      "official_person_id": {
+        "value": "474",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[11].VotePersonId",
+          "quote": "474"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[11].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Darrell Watson",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[12].VotePersonName",
+          "quote": "Darrell Watson"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[12].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "220963",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[12].VoteId",
+          "quote": "220963"
+        }
+      },
+      "official_person_id": {
+        "value": "519",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[12].VotePersonId",
+          "quote": "519"
+        }
+      },
+      "decision_ref": {
+        "value": "187514",
+        "proof": {
+          "source_id": "co-denver-2025-flock-votes",
+          "locator": "$[12].VoteEventItemId",
+          "quote": "187514"
+        }
+      }
+    }
+  ],
+  "contract_link": {
+    "state": "not_established",
+    "detail": "This proposed amendment failed. The recorded vote does not approve that additional amount, a new execution, or payment."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "solar-powered license plate recognition cameras",
+        "proof": {
+          "source_id": "co-denver-2025-flock-event",
+          "locator": "$.EventItems[44].EventItemTitle",
+          "quote": "solar-powered license plate recognition cameras"
+        }
+      }
+    }
+  ],
+  "supporting_sources": [
+    "co-denver-2025-flock-matter",
+    "co-denver-2025-flock-minutes",
+    "co-denver-2025-flock-proposed-amendment"
+  ],
+  "unresolved_question": "What agreements or deployments, if any, proceeded under the pre-existing framework after this failed amendment?",
+  "vote_record_state": "direct"
+}

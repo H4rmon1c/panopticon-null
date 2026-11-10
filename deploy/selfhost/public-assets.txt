@@ -45,7 +45,10 @@ scripts/20-civic-atlas-links.js
 scripts/21-civic-atlas-helpers.js
 scripts/22-civic-runtime.js
 scripts/23-civic-polish.js
+scripts/24-colorado-coverage.mjs
+geography/colorado-jurisdictions.json
 scripts/test-client.mjs
+scripts/build-decision-pages.mjs
 scripts/validate.mjs
 styles/00.css
 styles/01.css
@@ -57,3 +60,4 @@ styles/06.css
 styles/07.css
 styles/08-civic.css
 styles/09-civic-polish.css
+styles/10-colorado-coverage.css

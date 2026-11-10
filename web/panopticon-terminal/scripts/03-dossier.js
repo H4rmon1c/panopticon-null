@@ -1,3 +1,10 @@
+function dossierDecisionHref(entity, mode) {
+  const slug = entity.slug ?? entity.id;
+  return mode === "public" && entity.share_url?.endsWith(`/decisions/${slug}.html`)
+    ? `./decisions/${encodeURIComponent(slug)}.html`
+    : `./decision.html?decision=${encodeURIComponent(slug)}${mode === "demo" ? "&demo=1" : mode === "preview" ? "&preview=1" : ""}`;
+}
+
 function renderDossier(entity) {
   $("#dossier-empty").hidden = true;
   $("#dossier-record").hidden = false;
@@ -8,7 +15,7 @@ function renderDossier(entity) {
   $("#entity-description").textContent = entity.description ?? "No public description available.";
   const decisionLink = $("#decision-page-link");
   decisionLink.hidden = String(entity.type).toUpperCase() !== "DECISION";
-  if (!decisionLink.hidden) decisionLink.href = `./decision.html?decision=${encodeURIComponent(entity.slug ?? entity.id)}${state.mode === "demo" ? "&demo=1" : state.mode === "preview" ? "&preview=1" : ""}`;
+  if (!decisionLink.hidden) decisionLink.href = dossierDecisionHref(entity, state.mode);
   $("#entity-status").textContent = entity.status ?? "STATUS UNKNOWN";
   $("#entity-location").textContent = entity.geo?.label ?? "NON-SPATIAL RECORD";
   $("#entity-updated").textContent = entity.updated_at ? `UPDATED ${relative(entity.updated_at)}` : "UPDATED UNKNOWN";

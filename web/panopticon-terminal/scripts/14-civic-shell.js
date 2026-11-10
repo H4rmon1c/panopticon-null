@@ -50,7 +50,7 @@ function applyCivicShell() {
     <section class="civic-place-panel" aria-labelledby="civic-place-title">
       <header class="civic-place-panel__head">
         <div><span class="eyebrow">START WITH A PLACE</span><h2 id="civic-place-title">What is happening here?</h2></div>
-        <span>PLACE LENS</span>
+        <button id="coverage-open" class="civic-coverage-trigger" type="button">COLORADO INDEX ↗</button>
       </header>
       <form id="civic-place-form" class="civic-place-form">
         <input id="civic-place-input" value="Colorado Springs, CO" autocomplete="off" aria-label="Town, county, or ZIP code" />
@@ -76,6 +76,37 @@ function applyCivicShell() {
       <strong id="civic-brief-text">Loading the source-verified public record…</strong>
       <p id="civic-brief-proof">Published claims have source links and preserved digests.</p>
     </section>
+  `);
+
+  document.body.insertAdjacentHTML("beforeend", `
+    <dialog id="coverage-dialog" class="coverage-dialog" aria-labelledby="coverage-title">
+      <header class="coverage-dialog__head">
+        <div><span class="eyebrow">COLORADO JURISDICTION INDEX</span><h2 id="coverage-title">Explore the statewide roster</h2></div>
+        <button id="coverage-close" type="button" aria-label="Close Colorado jurisdiction index">✕</button>
+      </header>
+      <p class="coverage-dialog__intro">A listed jurisdiction is a place to search. It is not evidence that a surveillance decision, contract, or deployment exists there. Only released cases are linked.</p>
+      <div id="coverage-summary" class="coverage-summary" aria-live="polite">Loading official geography…</div>
+      <div class="coverage-dialog__body">
+        <section class="coverage-map-panel" aria-label="Colorado county map">
+          <svg id="coverage-map" viewBox="0 0 700 440" role="group" aria-label="Colorado county boundaries; select a county"></svg>
+          <p>County outlines: U.S. Census Bureau, January 2025. These boundaries are geographic reference only.</p>
+        </section>
+        <section class="coverage-browser" aria-label="Jurisdiction browser">
+          <div class="coverage-tabs" role="group" aria-label="Jurisdiction type">
+            <button type="button" data-coverage-kind="state">STATE</button>
+            <button type="button" data-coverage-kind="county">COUNTIES</button>
+            <button type="button" data-coverage-kind="municipality" class="is-active">CITIES & TOWNS</button>
+            <button type="button" data-coverage-kind="school_district">SCHOOLS</button>
+            <button type="button" data-coverage-kind="district_provisional">OTHER DISTRICTS</button>
+          </div>
+          <label class="coverage-search-label" for="coverage-search">FIND A JURISDICTION</label>
+          <input id="coverage-search" type="search" autocomplete="off" placeholder="Name or official code" />
+          <p id="coverage-result-count" class="coverage-result-count"></p>
+          <div id="coverage-list" class="coverage-list"></div>
+        </section>
+      </div>
+      <section id="coverage-detail" class="coverage-detail" aria-live="polite"></section>
+    </dialog>
   `);
 
   relabelPrimaryUi();

@@ -1,8 +1,8 @@
-//! Deterministic, reviewed static data for the public atlas.
+//! Deterministic, source-backed static data for the public atlas.
 //!
-//! The input is a small, versioned editorial manifest. Its claims are checked
-//! against preserved raw bytes, then bound to one case-level human release decision.
-//! Preview output is explicitly marked and cannot be mistaken for a release.
+//! The legacy case uses a case-level release review. Version 2 cases verify
+//! preserved bytes, exact claims, reviewed source captures, and private fetch
+//! receipts before production release. Preview output is explicitly marked.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -16,6 +16,8 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{publication_allowlist_allows, validate_public_text};
+
+mod v2;
 
 pub const ATLAS_RELEASE_CATEGORY: &str = "atlas_release";
 const MAX_FIXTURE_BYTES: u64 = 20 * 1024 * 1024;
@@ -198,6 +200,9 @@ struct Validated {
 pub fn review_requirements(
     manifest_path: &Path,
 ) -> Result<Vec<AtlasReviewRequirement>, AtlasError> {
+    if manifest_version(manifest_path)? == 2 {
+        return Ok(vec![v2::requirement(&v2::inspect(manifest_path)?)]);
+    }
     let checked = validate_manifest(manifest_path)?;
     Ok(requirements(&checked))
 }
@@ -211,13 +216,223 @@ pub fn export_atlas(
     mode: AtlasExportMode,
     site_url: Option<&str>,
 ) -> Result<(), AtlasError> {
+    let snapshot = build_snapshot(store, manifest_path, mode, site_url)?;
+    write_snapshot(&snapshot, output_path)
+}
+
+/// Export several independently verified cases as one deterministic atlas.
+/// All cases pass their own release gate before the destination is replaced.
+#[allow(clippy::too_many_lines)]
+pub fn export_atlas_bundle(
+    store: &Store,
+    manifests: &[std::path::PathBuf],
+    output_path: &Path,
+    mode: AtlasExportMode,
+    site_url: Option<&str>,
+) -> Result<(), AtlasError> {
+    if manifests.is_empty() {
+        return Err(AtlasError::Manifest(
+            "bundle has no case manifests".to_owned(),
+        ));
+    }
+    if manifests.len() == 1 {
+        return export_atlas(store, &manifests[0], output_path, mode, site_url);
+    }
+    if manifests.len() > 256 {
+        return Err(AtlasError::Manifest("bundle exceeds 256 cases".to_owned()));
+    }
+    let mut cases = Vec::new();
+    let mut seen_cases = BTreeSet::new();
+    for path in manifests {
+        let snapshot = build_snapshot(store, path, mode, site_url)?;
+        let id = snapshot["entities"]
+            .as_array()
+            .and_then(|entities| entities.iter().find(|entity| entity["type"] == "DECISION"))
+            .and_then(|entity| entity["slug"].as_str())
+            .ok_or_else(|| AtlasError::Manifest("case lacks a decision slug".to_owned()))?
+            .to_owned();
+        if !seen_cases.insert(id.clone()) {
+            return Err(AtlasError::Manifest(format!(
+                "duplicate case in bundle: {id}"
+            )));
+        }
+        cases.push((id, snapshot));
+    }
+    cases.sort_by(|left, right| left.0.cmp(&right.0));
+    let demo = cases[0].1["demo"].as_bool().unwrap_or(false);
+    if cases.iter().any(|(_, value)| value["demo"] != demo) {
+        return Err(AtlasError::Manifest(
+            "synthetic and official cases cannot share a bundle".to_owned(),
+        ));
+    }
+    let mut sources = BTreeMap::<String, Value>::new();
+    let mut evidence = BTreeMap::<String, Value>::new();
+    let mut entities = BTreeMap::<String, Value>::new();
+    let mut release = Vec::new();
+    let mut bindings = Vec::new();
+    for (case_id, snapshot) in cases {
+        let case_review = snapshot["release_review"].clone();
+        bindings.push(
+            case_review["bound_digest"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned(),
+        );
+        release.push(json!({"case_id":case_id,"release":case_review}));
+        for source in snapshot["sources"]
+            .as_array()
+            .expect("verified snapshot sources")
+        {
+            insert_consistent(&mut sources, source, "source")?;
+        }
+        for claim in snapshot["evidence"]
+            .as_array()
+            .expect("verified snapshot evidence")
+        {
+            insert_consistent(&mut evidence, claim, "evidence")?;
+        }
+        for entity in snapshot["entities"]
+            .as_array()
+            .expect("verified snapshot entities")
+        {
+            let id = entity["id"].as_str().unwrap_or("").to_owned();
+            if let Some(existing) = entities.get_mut(&id) {
+                merge_shared_entity(existing, entity)?;
+            } else {
+                entities.insert(id, entity.clone());
+            }
+        }
+    }
+    let parts = bindings.iter().map(String::as_str).collect::<Vec<_>>();
+    let digest = review_digest("atlas-bundle-binding", &parts);
+    let is_preview = mode == AtlasExportMode::Preview;
+    let all_human_approved = release
+        .iter()
+        .all(|item| item["release"]["state"] == "APPROVED");
+    let reviewed_at = if !is_preview && all_human_approved {
+        release
+            .iter()
+            .filter_map(|item| item["release"]["reviewed_at"].as_str())
+            .max()
+            .map(str::to_owned)
+    } else {
+        None
+    };
+    let release_review = json!({
+        "state":if is_preview {"PENDING_RELEASE"} else if all_human_approved {"APPROVED"} else {"SOURCE_VERIFIED"},
+        "bound_digest":digest,"reviewed_at":reviewed_at,"corrections":[],
+        "verification_method":if !is_preview && !all_human_approved {
+            Some("preserved_source_bytes_and_exact_locators")
+        } else {None},
+    });
+    let relationship_count = entities
+        .values()
+        .map(|entity| entity["relationships"].as_array().map_or(0, Vec::len))
+        .sum::<usize>();
+    let output = json!({
+        "schema_version":"pnull-public-snapshot-v1","demo":demo,"preview":is_preview,
+        "status":{"state":if is_preview {"pending_release"} else {"released"},
+            "dataset_version":digest,"last_ingest":null,"last_publish":null,
+            "manifest_digest":digest,
+            "counts":{"entities":entities.len(),"records":evidence.len(),
+                "sources":sources.len(),"relationships":relationship_count}},
+        "release_review":release_review,"case_releases":release,
+        "activity":[],"entities":entities.into_values().collect::<Vec<_>>(),
+        "evidence":evidence.into_values().collect::<Vec<_>>(),
+        "sources":sources.into_values().collect::<Vec<_>>(),
+    });
+    write_snapshot(&output, output_path)
+}
+
+fn insert_consistent(
+    collection: &mut BTreeMap<String, Value>,
+    item: &Value,
+    kind: &str,
+) -> Result<(), AtlasError> {
+    let id = item["id"]
+        .as_str()
+        .ok_or_else(|| AtlasError::Manifest(format!("{kind} lacks id")))?;
+    if let Some(previous) = collection.get(id) {
+        if previous != item {
+            return Err(AtlasError::Manifest(format!(
+                "conflicting {kind} id in bundle: {id}"
+            )));
+        }
+    } else {
+        collection.insert(id.to_owned(), item.clone());
+    }
+    Ok(())
+}
+
+fn merge_shared_entity(existing: &mut Value, next: &Value) -> Result<(), AtlasError> {
+    let kind = existing["type"].as_str().unwrap_or("");
+    if !matches!(kind, "JURISDICTION" | "AGENCY")
+        || next["type"] != kind
+        || next["name"] != existing["name"]
+        || next["jurisdiction_ref"] != existing["jurisdiction_ref"]
+        || next["geo"] != existing["geo"]
+        || next["status"] != existing["status"]
+    {
+        return Err(AtlasError::Manifest(format!(
+            "conflicting entity id in bundle: {}",
+            existing["id"]
+        )));
+    }
+    let mut ids = existing["source_ids"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    ids.extend(next["source_ids"].as_array().cloned().unwrap_or_default());
+    ids.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
+    ids.dedup();
+    existing["source_count"] = json!(ids.len());
+    existing["source_ids"] = json!(ids);
+    let mut attributes = existing["attributes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    for attribute in next["attributes"].as_array().cloned().unwrap_or_default() {
+        if !attributes.contains(&attribute) {
+            attributes.push(attribute);
+        }
+    }
+    existing["attributes"] = json!(attributes);
+    if next["updated_at"].as_str() > existing["updated_at"].as_str() {
+        existing["updated_at"] = next["updated_at"].clone();
+    }
+    Ok(())
+}
+
+fn manifest_version(path: &Path) -> Result<u64, AtlasError> {
+    let header: Value = serde_json::from_slice(&fs::read(path)?)?;
+    header["schema_version"]
+        .as_u64()
+        .ok_or_else(|| AtlasError::Manifest("manifest lacks numeric schema_version".to_owned()))
+}
+
+fn build_snapshot(
+    store: &Store,
+    manifest_path: &Path,
+    mode: AtlasExportMode,
+    site_url: Option<&str>,
+) -> Result<Value, AtlasError> {
+    if manifest_version(manifest_path)? == 2 {
+        let checked = v2::inspect(manifest_path)?;
+        if mode == AtlasExportMode::Production {
+            v2::production_gate(store, &checked, site_url)?;
+        }
+        return v2::snapshot(store, &checked, mode, site_url);
+    }
     let checked = validate_manifest(manifest_path)?;
     let required = requirements(&checked);
     if mode == AtlasExportMode::Production {
         production_gate(store, &checked, &required, site_url)?;
     }
-    let snapshot = snapshot(store, &checked, &required, mode, site_url)?;
-    validate_value(&snapshot)?;
+    snapshot(store, &checked, &required, mode, site_url)
+}
+
+fn write_snapshot(snapshot: &Value, output_path: &Path) -> Result<(), AtlasError> {
+    validate_value(snapshot)?;
     let mut bytes = serde_json::to_vec_pretty(&snapshot)?;
     bytes.push(b'\n');
     let parent = output_path
@@ -1035,6 +1250,7 @@ fn snapshot(
     let geo = json!({"lat":38.8339, "lon":-104.8214, "label":"Approximate Colorado Springs map anchor; not an evidenced site location"});
     entities.push(json!({
         "id":jurisdiction_id, "type":"JURISDICTION", "name":m.jurisdiction.name,
+        "jurisdiction_ref":"us-co-place-0816000",
         "subtitle":"Colorado municipal jurisdiction", "status":j.1,
         "description":"Jurisdiction of the recorded City Council action",
         "geo":geo, "jurisdiction_ids":[], "aliases":[], "tags":["Colorado"],

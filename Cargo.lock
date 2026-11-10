@@ -1098,6 +1098,7 @@ dependencies = [
  "pnull-procurement",
  "pnull-publish",
  "pnull-x",
+ "scraper",
  "serde",
  "serde_json",
  "tempfile",
@@ -1203,6 +1204,7 @@ name = "pnull-publish"
 version = "0.0.4"
 dependencies = [
  "pnull-core",
+ "pnull-http",
  "pnull-procurement",
  "quick-xml",
  "regex",
@@ -1211,6 +1213,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "time",
  "url",
 ]
 

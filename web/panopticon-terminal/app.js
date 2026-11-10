@@ -1,4 +1,5 @@
 import { PanopticonClient } from "./api.js";
+import { installColoradoCoverage } from "./scripts/24-colorado-coverage.mjs";
 
 const templateParts = [
   "./templates/shell-00.html",
@@ -54,6 +55,10 @@ for (const src of classicScripts) {
     document.head.append(script);
   });
 }
+
+installColoradoCoverage({
+  getSnapshot: () => ({ mode: window.client?.mode, entities: window.client?.snapshot?.entities ?? [] }),
+});
 
 const params = new URLSearchParams(location.search);
 window.client = new PanopticonClient({ demo: params.get("demo") === "1", preview: params.get("preview") === "1" });

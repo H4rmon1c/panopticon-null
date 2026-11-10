@@ -15,7 +15,7 @@ Public availability does not automatically justify republication.
 
 The static site publishes selected citations, not complete extracted records. Meaningful diffs include only cited changed lines. Local evidence and SQLite directories are mode `0700` on Unix; record and database files are mode `0600` where set directly.
 
-Automated checks reject recognized plate labels, email addresses, common street-address forms, Social Security numbers, personal contact/location field labels, coordinates, and movement logs. On procurement pages the same backstop also runs over vendor names and raw money strings. Pattern matching cannot detect every sensitive value. The atlas checks source bytes, exact locators, vote facts, and the complete public text automatically; a human approves the case-level release, not every record. Initial X posts remain manually reviewed. If relevance is uncertain, do not publish.
+Automated checks reject recognized plate labels, email addresses, common street-address forms, Social Security numbers, personal contact/location field labels, coordinates, and movement logs. On procurement pages the same backstop also runs over vendor names and raw money strings. Pattern matching cannot detect every sensitive value. The atlas checks source bytes, exact locators, vote facts, and the complete public text automatically. The legacy Colorado Springs case has a human case-level approval; version 2 cases can release after current source-policy reviews and matching private archive receipts, subject to an explicit rejection or correction veto. Initial X posts remain manually reviewed. If relevance is uncertain, do not publish.
 
 ## Publication allowlists and the human review gate
 
@@ -26,7 +26,7 @@ Publication is governed by structured allowlists and an append-only human review
 - The atlas static release uses one human decision bound to the complete case manifest. Individual evidence is labeled `SOURCE_VERIFIED` after automated source and privacy checks. A changed case manifest invalidates its release decision; unsupported links remain `not_established`.
 - Image excerpts (for example, a rendered highlight of a quoted PDF region) need a separate, explicit review gate.
 - Free-text reviewer notes are never published automatically.
-- The legacy site, Atom feed, and X pipeline fail closed on pending, rejected, stale, or mismatched citation decisions. The atlas fails closed on a pending or stale case-level release.
+- The legacy site, Atom feed, and X pipeline fail closed on pending, rejected, stale, or mismatched citation decisions. The atlas fails closed on a pending or stale legacy case review, or missing, expired, changed, or unbound version 2 source provenance.
 
 The review queue is append-only: Pending, Approved, Rejected, NeedsContext, and Superseded states accumulate; a later decision supersedes an earlier one without deleting history.
 

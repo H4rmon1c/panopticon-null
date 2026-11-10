@@ -15,7 +15,7 @@ cargo run --locked -p pnull-cli -- atlas export --preview
 
 The preview has `preview:true`, `demo:false`, and `PENDING_RELEASE` evidence states. The atlas only reads it through its explicit `?preview=1` route. Keep `preview-snapshot.json` out of the public PR and public deployment. A synthetic manifest, if used in a preview, is marked `demo:true` and cannot pass production export.
 
-## Public release gate
+## Legacy Colorado Springs release gate
 
 Production export requires all of these, in order:
 
@@ -28,3 +28,11 @@ Production export requires all of these, in order:
 Set `PNUL_SITE_URL` to the actual deployment origin. The exporter verifies every preserved byte digest, JSON locator, vote, identity, and privacy rule automatically before atomically replacing the output. The public snapshot has `preview:false`, `demo:false`, `SOURCE_VERIFIED` evidence, case-level release metadata, and a shareable `decision.html?decision=co-colorado-springs-25-581-2025-11-25` link. `SOURCE_VERIFIED` does not claim a person approved each individual record.
 
 The staff cost presentation names Axon and Flock systems as context. Those records do not establish that this ordinance approved a named vendor contract, award, or payment. The static graph therefore has no contract-approval edge. It keeps technology context and an explicit unresolved question for later research.
+
+## Version 2 Colorado cases
+
+The source-verified manifests in `fixtures/atlas/cases/` cover Commerce City Ordinances 2755 and 2756, Castle Rock Resolution 2025-071, and Denver's **failed** Flock Resolution 25-0413. The Arapahoe County 24-633 manifest is pending under `fixtures/atlas/preview-cases/`; it records a consent-block approval without attributing the block's individual votes to that item. Repeat `--manifest` to combine them with the legacy Colorado Springs case in a preview snapshot. A preview validates all local source bytes, exact JSON/HTML locators, full direct roll calls or a distinct consent-block record, jurisdiction roster IDs, and cautious contract relationships, but it is never a public release.
+
+Version 2 production does not require a human decision on each case. It requires the global `atlas_release` allowlist, a current source-policy review for each cited endpoint, private HTTPS fetch receipts from the exact reviewed URL, and a raw blob whose SHA-256 and bytes match the case fixture. An explicit case rejection or correction vetoes automatic release. A changed source response also blocks the old case until its claims are checked again. Currently 17 cited endpoints need reviewed captures before the four new cases can publish. The fixed endpoints are listed in [the archive profiles](colorado-archive-profiles.md); their source reviews are separate from case review.
+
+`deploy/selfhost/publish.sh` takes the space-separated `PNUL_MANIFEST_PATHS` list, exports into a staging directory, generates a separate static decision page with case-specific social metadata, validates the release, and then switches the public symlink. A failed export leaves the previous release live. The public browser fetches only this static dataset and the locally bundled geography file.
