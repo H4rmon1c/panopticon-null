@@ -1,11 +1,11 @@
 name: Public terminal
 
 on:
-  # The Rust exporter and evidence model can change the released snapshot,
-  # so browser and staged-publication checks run for every pull request.
+  # The Rust exporter and evidence model can change the released snapshot.
+  # Run on branch pushes as well as PR events: API ref updates may not emit
+  # a pull_request synchronize event.
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read
