@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "calendar_geography": [
+    { "source_id": "colorado-springs-calendar", "jurisdiction_ref": "us-co-place-0816000" },
+    { "source_id": "commerce-city-calendar", "jurisdiction_ref": "us-co-place-0816495" },
+    { "source_id": "denver-calendar", "jurisdiction_ref": "us-co-place-0820000" },
+    { "source_id": "castle-rock-calendar", "jurisdiction_ref": "us-co-place-0812415" },
+    { "source_id": "arapahoe-county-calendar", "jurisdiction_ref": "us-co-county-08005" },
+    { "source_id": "douglas-county-calendar", "jurisdiction_ref": "us-co-county-08035" },
+    { "source_id": "littleton-calendar", "jurisdiction_ref": "us-co-place-0845255" }
+  ]
+}

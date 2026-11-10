@@ -345,6 +345,14 @@ enum SourceCommand {
     DiscoverCalendar {
         source_id: String,
     },
+    /// Archive one calendar-linked document through a reviewed path policy.
+    ArchiveCandidate {
+        calendar_source_id: String,
+        calendar_snapshot: String,
+        anchor_index: usize,
+        #[arg(long)]
+        source_id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -545,6 +553,22 @@ fn run(cli: Cli) -> Result<()> {
         Command::Source {
             command: SourceCommand::DiscoverCalendar { source_id },
         } => archive::discover_calendar(&cli.data_dir, &config, &source_id),
+        Command::Source {
+            command:
+                SourceCommand::ArchiveCandidate {
+                    calendar_source_id,
+                    calendar_snapshot,
+                    anchor_index,
+                    source_id,
+                },
+        } => archive::archive_candidate(
+            &cli.data_dir,
+            &config,
+            &calendar_source_id,
+            &calendar_snapshot,
+            anchor_index,
+            &source_id,
+        ),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
         Command::Scan => scan_all(&cli.data_dir, &cli.rules),
         Command::Diff {

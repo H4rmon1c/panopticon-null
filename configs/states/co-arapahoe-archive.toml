@@ -104,3 +104,75 @@ minimum_interval_seconds = 86400
 maximum_bytes = 2097152
 robots_status = "Capture current robots directives and review site/API terms before live archive."
 terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-24-633-matter-json"
+url = "https://webapi.legistar.com/v1/arapahoe/Matters/4198?MatterAttachments=1&MatterHistory=1"
+name = "Arapahoe Flock 24-633 matter JSON"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/v1/arapahoe/Matters/4198?MatterAttachments=1&MatterHistory=1"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-24-633-board-report"
+url = "https://arapahoe.legistar1.com/arapahoe/attachments/b41a182d-b444-4a35-8937-5193e3b184ca.pdf"
+name = "Arapahoe Flock 2025 staff report"
+source_type = "pdf"
+documented_at = "https://arapahoe.legistar1.com/arapahoe/attachments/b41a182d-b444-4a35-8937-5193e3b184ca.pdf"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-24-633-unsigned-agreement"
+url = "https://arapahoe.legistar1.com/arapahoe/attachments/aaf08286-9337-4628-829d-38698a0ecb8c.pdf"
+name = "Arapahoe proposed Flock agreement; signatures blank"
+source_type = "pdf"
+documented_at = "https://arapahoe.legistar1.com/arapahoe/attachments/aaf08286-9337-4628-829d-38698a0ecb8c.pdf"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-25-378-matter-json"
+url = "https://webapi.legistar.com/v1/arapahoe/Matters/4672?MatterAttachments=1&MatterHistory=1"
+name = "Arapahoe Flock 25-378 matter JSON"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/v1/arapahoe/Matters/4672?MatterAttachments=1&MatterHistory=1"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-25-378-board-report"
+url = "https://arapahoe.legistar1.com/arapahoe/attachments/b5c12320-4ae6-4a50-bd23-5fce48123cdd.pdf"
+name = "Arapahoe Flock expansion staff report"
+source_type = "pdf"
+documented_at = "https://arapahoe.legistar1.com/arapahoe/attachments/b5c12320-4ae6-4a50-bd23-5fce48123cdd.pdf"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "arapahoe-25-378-unsigned-expansion"
+url = "https://arapahoe.legistar1.com/arapahoe/attachments/826ed5c4-2ac3-4b2e-aad3-c3fdc031d1f4.pdf"
+name = "Arapahoe proposed Flock expansion; signatures blank"
+source_type = "pdf"
+documented_at = "https://arapahoe.legistar1.com/arapahoe/attachments/826ed5c4-2ac3-4b2e-aad3-c3fdc031d1f4.pdf"
+official_discovery_url = "https://arapahoe.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."

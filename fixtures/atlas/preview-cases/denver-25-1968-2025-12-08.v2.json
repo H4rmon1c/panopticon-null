@@ -1,0 +1,195 @@
+{
+  "schema_version": 2,
+  "case_id": "co-denver-25-1968-2025-12-08",
+  "synthetic": false,
+  "review_state": "pending",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-denver",
+    "jurisdiction_ref": "us-co-place-0820000",
+    "name": {
+      "value": "City and County of Denver",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemTitle",
+        "quote": "City and County of Denver"
+      }
+    },
+    "display_name": "City and County of Denver"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "25-1968",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemMatterFile",
+        "quote": "25-1968"
+      }
+    },
+    "event_item_id": {
+      "value": "199306",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemId",
+        "quote": "199306"
+      }
+    },
+    "title": {
+      "value": "A resolution approving a proposed Agreement between the City and County of Denver and Axon Enterprise, Inc. to provide body worn and interview room cameras, tasers, equipment, software and cloud data storage for use by the Denver Police, Sheriff and Fire Departments.\r\nApproves a Framework Agreement with Axon Enterprise, Inc. for $27,000,000.00 with an end date of 12-31-2030 to provide body worn and interview room cameras, tasers, equipment, software and cloud data storage for use by the Denver Police, Sheriff and Fire Departments, citywide (POLIC-202581688). The last regularly scheduled Council meeting within the 30-day review period is on 12-22-2025. The Committee approved filing this item at its meeting on 12-3-2025.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemTitle",
+        "quote": "A resolution approving a proposed Agreement between the City and County of Denver and Axon Enterprise, Inc. to provide body worn and interview room cameras, tasers, equipment, software and cloud data storage for use by the Denver Police, Sheriff and Fire Departments.\r\nApproves a Framework Agreement with Axon Enterprise, Inc. for $27,000,000.00 with an end date of 12-31-2030 to provide body worn and interview room cameras, tasers, equipment, software and cloud data storage for use by the Denver Police, Sheriff and Fire Departments, citywide (POLIC-202581688). The last regularly scheduled Council meeting within the 30-day review period is on 12-22-2025. The Committee approved filing this item at its meeting on 12-3-2025."
+      }
+    },
+    "short_label": {
+      "value": "Axon Enterprise, Inc.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemTitle",
+        "quote": "Axon Enterprise, Inc."
+      }
+    },
+    "display_title": "25-1968: Axon Enterprise, Inc.",
+    "date": {
+      "value": "2025-12-08",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventDate",
+        "quote": "2025-12-08T00:00:00"
+      }
+    },
+    "body": {
+      "value": "City Council",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventBodyName",
+        "quote": "City Council"
+      }
+    },
+    "action": {
+      "value": "adopted",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemActionName",
+        "quote": "adopted"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved"
+  },
+  "vote_record_state": "consent_block",
+  "votes": [],
+  "consent_context": {
+    "item_consent": {
+      "value": "1",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemConsent",
+        "quote": "1"
+      }
+    },
+    "block_item_id": {
+      "value": "199484",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemId",
+        "quote": "199484"
+      }
+    },
+    "block_title": {
+      "value": "Block Vote",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemTitle",
+        "quote": "Block Vote"
+      }
+    },
+    "block_action": {
+      "value": "A motion offered by Council member Lewis, duly seconded by Council member Hinds, to approve the following items en bloc, carried by the following vote:",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemActionText",
+        "quote": "A motion offered by Council member Lewis, duly seconded by Council member Hinds, to approve the following items en bloc, carried by the following vote:"
+      }
+    },
+    "block_outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "block_vote_source_id": "co-denver-2025-axon-block-votes"
+  },
+  "contract_link": {
+    "state": "not_established",
+    "detail": "Council approved a proposed Axon agreement as a consent item. City execution and payments are not established by the cited attachment."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "body worn and interview room cameras",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[133].EventItemTitle",
+          "quote": "body worn and interview room cameras"
+        }
+      }
+    },
+    {
+      "name": {
+        "value": "tasers",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[133].EventItemTitle",
+          "quote": "tasers"
+        }
+      }
+    },
+    {
+      "name": {
+        "value": "cloud data storage",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[133].EventItemTitle",
+          "quote": "cloud data storage"
+        }
+      }
+    }
+  ],
+  "agreement_context": {
+    "name": {
+      "value": "proposed Agreement between the City and County of Denver and Axon Enterprise, Inc.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemTitle",
+        "quote": "proposed Agreement between the City and County of Denver and Axon Enterprise, Inc."
+      }
+    },
+    "status": "proposal_approved",
+    "proposed_total": {
+      "value": "$27,000,000.00",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[133].EventItemTitle",
+        "quote": "$27,000,000.00"
+      }
+    }
+  },
+  "supporting_sources": [
+    "co-denver-2025-axon-block-votes",
+    "co-denver-2025-axon-framework-matter",
+    "co-denver-2025-axon-minutes",
+    "co-denver-2025-axon-framework"
+  ],
+  "unresolved_question": "Was the approved proposal fully executed by the City, and what payments followed?"
+}

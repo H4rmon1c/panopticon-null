@@ -43,6 +43,7 @@ jobs:
           /tmp/pnull-geography-venv/bin/python web/panopticon-terminal/scripts/build-colorado-geography.py --output /tmp/pnull-colorado-rebuilt.json
           cmp web/panopticon-terminal/geography/colorado-jurisdictions.json /tmp/pnull-colorado-rebuilt.json
           node web/panopticon-terminal/scripts/test-colorado-geography.mjs
+          python3 web/panopticon-terminal/scripts/build-colorado-worklist.py --output /tmp/pnull-colorado-worklist.csv
       - name: Test multi-jurisdiction collection schedule
         run: bash deploy/selfhost/test-collect.sh
       - name: Verify fixed official archive profiles

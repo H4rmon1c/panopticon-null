@@ -307,7 +307,9 @@
       "fixture": "fixtures/co-denver/matter-28523-axon-amendment.json",
       "sha256": "d829a67b97849d2fc9c415fdf58581b1d1046c9d94108ec6bafe953e92cd77f3",
       "title": "Denver Axon Resolution 25-1967 matter",
-      "format": "json"
+      "format": "json",
+      "acquisition_source_id": "denver-25-1967-matter-json",
+      "acquisition_config_digest": "693f355da12b9b593ee95c254687c4188c90ff9a85ec295dbdcf6c5b772fcbcc"
     },
     {
       "id": "co-denver-2025-axon-framework-matter",
@@ -316,7 +318,9 @@
       "fixture": "fixtures/co-denver/matter-28524-axon-framework.json",
       "sha256": "abccf1831b10318d1fb09f2b9acd1088d377f613e2a6230cab5a39fae2bec286",
       "title": "Denver Axon Resolution 25-1968 matter",
-      "format": "json"
+      "format": "json",
+      "acquisition_source_id": "denver-25-1968-matter-json",
+      "acquisition_config_digest": "6c9f2fb04bd7380f6798a9a2db9a7d0f1c78bcd047c9ba9ad8209e1643802397"
     },
     {
       "id": "co-denver-2025-axon-minutes",
@@ -336,7 +340,9 @@
       "fixture": "fixtures/co-denver/25-1967-vendor-signed-amendment.pdf",
       "sha256": "4d58fc24040afd4bed5b42e44881c60a5234be53e93a3ac28d04eb0f5e17e298",
       "title": "Denver Axon amendment attachment, City execution not shown",
-      "format": "pdf"
+      "format": "pdf",
+      "acquisition_source_id": "denver-25-1967-vendor-amendment",
+      "acquisition_config_digest": "f9ac877e8d217a4a0d90306c35a0a44bf301a940918d203eb1a4da8030f4d764"
     },
     {
       "id": "co-denver-2025-axon-framework",
@@ -378,7 +384,9 @@
       "fixture": "fixtures/co-arapahoe/matter-4198-24-633.json",
       "sha256": "89923f7c2727da0fd3360057bb9de2dd76d257740d58dcf91ecb7e15fa8c820a",
       "title": "Arapahoe County Matter, matter-4198-24-633.json",
-      "format": "json"
+      "format": "json",
+      "acquisition_source_id": "arapahoe-24-633-matter-json",
+      "acquisition_config_digest": "36dcdc607279bac04bebc150c494d751b01464400bc1a28afb272ddfcda3d61b"
     },
     {
       "id": "co-arapahoe-24-633-detail",
@@ -398,7 +406,9 @@
       "fixture": "fixtures/co-arapahoe/24-633-board-report.pdf",
       "sha256": "2f6376a306ed58653440781caf647067c1f6f1b3b60689a9e33194e046b29bcb",
       "title": "Arapahoe County Board summary, 24-633-board-report.pdf",
-      "format": "pdf"
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-24-633-board-report",
+      "acquisition_config_digest": "3d5478831cbc4b8f013fc66a041389131d1b04d43998f5fc190b0be029fc53f2"
     },
     {
       "id": "co-arapahoe-minutes-2024-11-26",
@@ -418,7 +428,9 @@
       "fixture": "fixtures/co-arapahoe/24-633-unsigned-agreement.pdf",
       "sha256": "3a7c5e780121ca6bde51f0cba1f46e4dae25f247b42f72b334eb61e78bdaa968",
       "title": "Arapahoe County Agreement attachment, 24-633-unsigned-agreement.pdf",
-      "format": "pdf"
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-24-633-unsigned-agreement",
+      "acquisition_config_digest": "92879d025c7723a359a7794ce4f1b5458e927c375bd4d44c4319b5c0b50f0460"
     },
     {
       "id": "co-arapahoe-event-2604-2025-07-22",
@@ -449,7 +461,9 @@
       "fixture": "fixtures/co-arapahoe/matter-4672-25-378.json",
       "sha256": "3f14c3beaea7eeef4d100f055e03689e5397ac679a446623e27b2f0879a7f406",
       "title": "Arapahoe County Matter, matter-4672-25-378.json",
-      "format": "json"
+      "format": "json",
+      "acquisition_source_id": "arapahoe-25-378-matter-json",
+      "acquisition_config_digest": "e879ee03fc6eecebb2bbf0a7527537375c79988379e05f2034d8a638929ddf0b"
     },
     {
       "id": "co-arapahoe-25-378-detail",
@@ -469,7 +483,9 @@
       "fixture": "fixtures/co-arapahoe/25-378-board-report.pdf",
       "sha256": "132f1c64b86323dabc4937678c517a561b5947d610f5c3bf5bdf1e84d5b9e2f8",
       "title": "Arapahoe County Board summary, 25-378-board-report.pdf",
-      "format": "pdf"
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-25-378-board-report",
+      "acquisition_config_digest": "97b4f348e6a1743ae6f830ffaf71fd3b52ab4f7cd0283638bf4f55e3484d753b"
     },
     {
       "id": "co-arapahoe-minutes-2025-07-22",
@@ -489,7 +505,9 @@
       "fixture": "fixtures/co-arapahoe/25-378-unsigned-expansion.pdf",
       "sha256": "09690cabdb7ebc481dca1e9a7309486b5313a03f98eeca5abd012c3aa78e7134",
       "title": "Arapahoe County Draft expansion order form, 25-378-unsigned-expansion.pdf",
-      "format": "pdf"
+      "format": "pdf",
+      "acquisition_source_id": "arapahoe-25-378-unsigned-expansion",
+      "acquisition_config_digest": "ba86024fe296693b105b04f7f99205217325015b1e42cd16e8443f813018550e"
     },
     {
       "id": "co-commerce-2026-detail",

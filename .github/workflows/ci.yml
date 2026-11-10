@@ -45,6 +45,9 @@ jobs:
             --manifest fixtures/atlas/cases/castle-rock-res-2025-071.v2.json \
             --manifest fixtures/atlas/cases/denver-25-0413-2025-05-05.v2.json \
             --manifest fixtures/atlas/preview-cases/arapahoe-county-24-633-2024-11-26.v2.json \
+            --manifest fixtures/atlas/preview-cases/arapahoe-county-25-378-2025-07-22.v2.json \
+            --manifest fixtures/atlas/preview-cases/denver-25-1967-2025-12-08.v2.json \
+            --manifest fixtures/atlas/preview-cases/denver-25-1968-2025-12-08.v2.json \
             --output /tmp/pnull-colorado-combined-preview.json
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
@@ -52,7 +55,11 @@ jobs:
           const snapshot = JSON.parse(readFileSync('/tmp/pnull-colorado-combined-preview.json', 'utf8'));
           validateSnapshot(snapshot, { preview: true });
           const decisions = snapshot.entities.filter((entity) => entity.type === 'DECISION');
-          if (decisions.length !== 6 || snapshot.case_releases.length !== 6) {
+          const consent = decisions.filter((entity) => entity.vote_record_state === 'consent_block');
+          const voters = snapshot.entities.filter((entity) => entity.type === 'RECORDED_VOTER');
+          if (decisions.length !== 9 || snapshot.case_releases.length !== 9 ||
+              consent.length !== 4 || consent.some((entity) => entity.votes.length) ||
+              voters.length !== 38) {
             throw new Error('Combined Colorado preview lost a decision or release binding');
           }
           NODE

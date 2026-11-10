@@ -31,3 +31,31 @@ minimum_interval_seconds = 86400
 maximum_bytes = 4194304
 robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
 terms_note = "Review the official HTML calendar and current terms before scheduled retrieval; candidates remain private until independently verified."
+
+# Reviewed path policy for one calendar candidate at a time. This source is
+# operator-triggered; do not schedule it before source-level policy review.
+[[sources]]
+id = "denver-meeting-documents"
+name = "Denver, Colorado meeting detail HTML candidate path"
+url = "https://denver.legistar.com/MeetingDetail.aspx"
+source_type = "candidate_meeting_html"
+documented_at = "https://denver.legistar.com/Calendar.aspx"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 60
+maximum_bytes = 4194304
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."
+
+# Reviewed path policy for one calendar candidate at a time. This source is
+# operator-triggered; do not schedule it before source-level policy review.
+[[sources]]
+id = "denver-pdf-documents"
+name = "Denver, Colorado agenda/packet/minutes PDF candidate path"
+url = "https://denver.legistar.com/View.ashx"
+source_type = "candidate_document_pdf"
+documented_at = "https://denver.legistar.com/Calendar.aspx"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."

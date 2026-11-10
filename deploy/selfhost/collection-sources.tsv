@@ -9,3 +9,5 @@ configs/states/co-denver.toml	denver-calendar	discover-calendar
 configs/states/co-commerce-city.toml	commerce-city-calendar	discover-calendar
 configs/states/co-castle-rock.toml	castle-rock-calendar	discover-calendar
 configs/states/co-arapahoe-county.toml	arapahoe-county-calendar	discover-calendar
+configs/states/co-douglas-county.toml	douglas-county-calendar	discover-calendar
+configs/states/co-littleton.toml	littleton-calendar	discover-calendar

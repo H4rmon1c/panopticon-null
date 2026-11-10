@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "case_id": "co-arapahoe-county-25-378-2025-07-22",
+  "synthetic": false,
+  "review_state": "pending",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-arapahoe-county",
+    "jurisdiction_ref": "us-co-county-08005",
+    "name": {
+      "value": "Arapahoe County",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[0].EventItemTitle",
+        "quote": "Arapahoe County"
+      }
+    },
+    "display_name": "Arapahoe County"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "25-378",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemMatterFile",
+        "quote": "25-378"
+      }
+    },
+    "event_item_id": {
+      "value": "40783",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemId",
+        "quote": "40783"
+      }
+    },
+    "title": {
+      "value": "FLOCK Camera Contract Coverage Expansion",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemTitle",
+        "quote": "FLOCK Camera Contract Coverage Expansion"
+      }
+    },
+    "date": {
+      "value": "2025-07-22",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventDate",
+        "quote": "2025-07-22T00:00:00"
+      }
+    },
+    "body": {
+      "value": "Board of County Commissioners Business Meeting",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventBodyName",
+        "quote": "Board of County Commissioners Business Meeting"
+      }
+    },
+    "action": {
+      "value": "approved",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemActionName",
+        "quote": "approved"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved",
+    "short_label": {
+      "value": "FLOCK Camera Contract Coverage Expansion",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemTitle",
+        "quote": "FLOCK Camera Contract Coverage Expansion"
+      }
+    },
+    "display_title": "25-378: FLOCK Camera Contract Coverage Expansion"
+  },
+  "vote_record_state": "consent_block",
+  "votes": [],
+  "consent_context": {
+    "item_consent": {
+      "value": "1",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[16].EventItemConsent",
+        "quote": "1"
+      }
+    },
+    "block_item_id": {
+      "value": "40833",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[13].EventItemId",
+        "quote": "40833"
+      }
+    },
+    "block_title": {
+      "value": "Approval of the Consent Agenda",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[13].EventItemTitle",
+        "quote": "Approval of the Consent Agenda"
+      }
+    },
+    "block_action": {
+      "value": "A motion was made by Commissioner Warren-Gully, seconded by Commissioner Campbell, to approve items on the Consent Agenda. The motion carried by the following vote:",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[13].EventItemActionText",
+        "quote": "A motion was made by Commissioner Warren-Gully, seconded by Commissioner Campbell, to approve items on the Consent Agenda. The motion carried by the following vote:"
+      }
+    },
+    "block_outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-arapahoe-event-2604-2025-07-22",
+        "locator": "$.EventItems[13].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "block_vote_source_id": "co-arapahoe-votes-40833-consent-2025-07-22"
+  },
+  "contract_link": {
+    "state": "not_established",
+    "detail": "The consent item approved a Flock coverage expansion; signed execution and actual payment are not established by the cited draft."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "FLOCK",
+        "proof": {
+          "source_id": "co-arapahoe-event-2604-2025-07-22",
+          "locator": "$.EventItems[16].EventItemTitle",
+          "quote": "FLOCK"
+        }
+      }
+    }
+  ],
+  "supporting_sources": [
+    "co-arapahoe-votes-40833-consent-2025-07-22",
+    "co-arapahoe-matter-4672-25-378",
+    "co-arapahoe-25-378-detail",
+    "co-arapahoe-25-378-board-report",
+    "co-arapahoe-minutes-2025-07-22",
+    "co-arapahoe-25-378-unsigned-expansion"
+  ],
+  "unresolved_question": "Was the expansion order signed, and what was finally paid?"
+}

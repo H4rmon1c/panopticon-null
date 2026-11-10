@@ -41,6 +41,9 @@ PROFILE_FIXTURES = {
         "denver-25-1967-1968-minutes": "fixtures/co-denver/minutes-2025-12-08.pdf",
         "denver-25-1968-framework": "fixtures/co-denver/25-1968-proposed-framework.pdf",
         "denver-25-0413-matter-json": "fixtures/co-denver/matter-27055-flock-failed.json",
+        "denver-25-1967-matter-json": "fixtures/co-denver/matter-28523-axon-amendment.json",
+        "denver-25-1968-matter-json": "fixtures/co-denver/matter-28524-axon-framework.json",
+        "denver-25-1967-vendor-amendment": "fixtures/co-denver/25-1967-vendor-signed-amendment.pdf",
     },
     "co-arapahoe-archive.toml": {
         "arapahoe-24-633-event-json": "fixtures/co-arapahoe/event-2335-2024-11-26.json",
@@ -51,6 +54,12 @@ PROFILE_FIXTURES = {
         "arapahoe-25-378-consent-votes-json": "fixtures/co-arapahoe/votes-40833-consent-2025-07-22.json",
         "arapahoe-25-378-detail": "fixtures/co-arapahoe/25-378-detail.html",
         "arapahoe-25-378-minutes": "fixtures/co-arapahoe/minutes-2025-07-22.pdf",
+        "arapahoe-24-633-matter-json": "fixtures/co-arapahoe/matter-4198-24-633.json",
+        "arapahoe-24-633-board-report": "fixtures/co-arapahoe/24-633-board-report.pdf",
+        "arapahoe-24-633-unsigned-agreement": "fixtures/co-arapahoe/24-633-unsigned-agreement.pdf",
+        "arapahoe-25-378-matter-json": "fixtures/co-arapahoe/matter-4672-25-378.json",
+        "arapahoe-25-378-board-report": "fixtures/co-arapahoe/25-378-board-report.pdf",
+        "arapahoe-25-378-unsigned-expansion": "fixtures/co-arapahoe/25-378-unsigned-expansion.pdf",
     },
 }
 EXPECTED_TYPES = {"json": "official_api", "html": "html_page", "pdf": "pdf"}

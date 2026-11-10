@@ -8,7 +8,7 @@ document, make a claim, or publish to the atlas.
 The Commerce City examples live in
 `configs/states/co-commerce-archive.toml`. Its seven fixed URLs include
 Ordinance 2755 and 2756 records, Council minutes, and the attached agreement.
-The Castle Rock, Denver, and Arapahoe County profiles add 23 more fixed URLs.
+The Castle Rock, Denver, and Arapahoe County profiles add 32 more fixed URLs.
 The archive command does not crawl links or search for other records. JSON
 event and vote URLs are included where the release pipeline needs a private
 fetch receipt independent of its bundled fixture digest.

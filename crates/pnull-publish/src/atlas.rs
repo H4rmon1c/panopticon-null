@@ -366,12 +366,19 @@ fn insert_consistent(
 
 fn merge_shared_entity(existing: &mut Value, next: &Value) -> Result<(), AtlasError> {
     let kind = existing["type"].as_str().unwrap_or("");
-    if !matches!(kind, "JURISDICTION" | "AGENCY")
+    let voter = kind == "RECORDED_VOTER";
+    if !matches!(kind, "JURISDICTION" | "AGENCY" | "RECORDED_VOTER")
         || next["type"] != kind
         || next["name"] != existing["name"]
         || next["jurisdiction_ref"] != existing["jurisdiction_ref"]
         || next["geo"] != existing["geo"]
         || next["status"] != existing["status"]
+        || (voter
+            && (next["identity_scope"] != existing["identity_scope"]
+                || next["official_person_id"] != existing["official_person_id"]
+                || next["jurisdiction_ids"] != existing["jurisdiction_ids"]
+                || next["description"] != existing["description"]
+                || next["subtitle"] != existing["subtitle"]))
     {
         return Err(AtlasError::Manifest(format!(
             "conflicting entity id in bundle: {}",
@@ -397,6 +404,28 @@ fn merge_shared_entity(existing: &mut Value, next: &Value) -> Result<(), AtlasEr
         }
     }
     existing["attributes"] = json!(attributes);
+    if voter {
+        let mut timeline = existing["timeline"].as_array().cloned().unwrap_or_default();
+        for event in next["timeline"].as_array().cloned().unwrap_or_default() {
+            if let Some(previous) = timeline.iter().find(|item| item["id"] == event["id"]) {
+                if previous != &event {
+                    return Err(AtlasError::Manifest(format!(
+                        "conflicting recorded voter timeline in bundle: {}",
+                        existing["id"]
+                    )));
+                }
+            } else {
+                timeline.push(event);
+            }
+        }
+        timeline.sort_by(|left, right| {
+            left["date"]
+                .as_str()
+                .cmp(&right["date"].as_str())
+                .then_with(|| left["id"].as_str().cmp(&right["id"].as_str()))
+        });
+        existing["timeline"] = json!(timeline);
+    }
     if next["updated_at"].as_str() > existing["updated_at"].as_str() {
         existing["updated_at"] = next["updated_at"].clone();
     }

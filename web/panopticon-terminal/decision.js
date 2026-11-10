@@ -90,7 +90,7 @@ export function buildDecisionModel(snapshot, requestedId) {
   const unknowns = (decision.not_established ?? decision.unknowns ?? [])
     .map((item) => typeof item === "string" ? item : item?.detail ?? item?.text ?? item?.description)
     .filter(Boolean);
-  if (!contracts.length && !unknowns.some((item) => /contract|award|vendor/i.test(item))) {
+  if (!contracts.length && !decision.consent_block && !unknowns.some((item) => /contract|award|vendor/i.test(item))) {
     unknowns.unshift("A specific vendor contract or award connected to this decision is not established in the source record.");
   }
   if (!votes.length && !unknowns.some((item) => /recorded vote|individual vote|signature/i.test(item))) {
@@ -152,7 +152,7 @@ function renderChain(model) {
   for (const item of model.contracts) addRelation(item);
   if (!model.contracts.length) {
     const item = node("li");
-    item.append(node("span", "kind", "Contract or award"), node("strong", "empty", "Not established"));
+    item.append(node("span", "kind", model.decision.consent_block ? "Executed agreement" : "Contract or award"), node("strong", "empty", "Not established"));
     list.append(item);
   }
   for (const item of model.links.filter((link) => !context.includes(link) && !model.contracts.includes(link) && String(link.target.type).toUpperCase() !== "TECHNOLOGY")) addRelation(item);
@@ -178,7 +178,9 @@ function renderTechnology(model) {
   const panel = section("Technology in the cited record");
   panel.append(node("p", "", model.contracts.length
     ? "An evidence-backed agreement link is shown for this decision. The source card states what that link establishes; execution, deployment, and payment require separate evidence."
-    : "These systems appear in the cited materials. Their mention alone does not establish a contract or award from this decision."));
+    : model.decision.consent_block
+      ? "The approved consent item names these systems. Signed execution, deployment, and payment require separate evidence."
+      : "These systems appear in the cited materials. Their mention alone does not establish a contract or award from this decision."));
   const list = node("ul", "source-list");
   for (const { name, context, evidence } of technologies) {
     const item = node("li");
@@ -201,7 +203,9 @@ function renderBrief(model, mode) {
     panel.append(node("p", "locator", `Proof: ${source?.title ?? first.source_id} · ${first.locator}`));
     if (source && mode !== "demo") panel.append(publicLink(source.canonical_url, "Read the source ↗"));
   }
-  if (!model.contracts.length) panel.append(node("p", "empty", "Specific contract or award: not established."));
+  if (!model.contracts.length) panel.append(node("p", "empty", model.decision.consent_block
+    ? "Signed execution and payment: not established by these records."
+    : "Specific contract or award: not established."));
   return panel;
 }
 

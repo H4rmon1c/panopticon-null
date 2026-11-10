@@ -135,6 +135,10 @@ struct AgreementContext {
     #[serde(default)]
     display_name: Option<String>,
     status: String,
+    #[serde(default)]
+    proposed_total: Option<Fact>,
+    #[serde(default)]
+    proposed_increase: Option<Fact>,
 }
 
 #[derive(Deserialize)]
@@ -646,6 +650,7 @@ fn verify_fact(key: &str, fact: &Fact, source: &VerifiedSource) -> Result<(), At
     let excerpt = key == "jurisdiction"
         || key == "decision_short_label"
         || key == "agreement"
+        || key.starts_with("agreement_proposed_")
         || key.starts_with("technology_");
     let quoted = if source.registered.format == "json" && excerpt {
         actual.contains(&fact.proof.quote)
@@ -720,6 +725,12 @@ fn collect_facts(manifest: &Manifest) -> Result<BTreeMap<String, Fact>, AtlasErr
     }
     if let Some(agreement) = &manifest.agreement_context {
         insert("agreement".to_owned(), &agreement.name);
+        if let Some(total) = &agreement.proposed_total {
+            insert("agreement_proposed_total".to_owned(), total);
+        }
+        if let Some(increase) = &agreement.proposed_increase {
+            insert("agreement_proposed_increase".to_owned(), increase);
+        }
     }
     if facts.len() > 512 {
         return Err(AtlasError::Manifest("too many case facts".to_owned()));
@@ -858,11 +869,12 @@ fn verify_relationships(
             || agreement.name.proof.locator != decision.title.proof.locator
             || !matches!(
                 agreement.status.as_str(),
-                "approved_format" | "award_authorized"
+                "approved_format" | "award_authorized" | "proposal_approved"
             )
             || !approval_phrase
             || (agreement.status == "approved_format" && !title.contains("format attached"))
             || (agreement.status == "award_authorized" && !title.contains("sole source"))
+            || (agreement.status == "proposal_approved" && !title.contains("proposed "))
         {
             return Err(AtlasError::Source(
                 "agreement context is not supported by an approved decision title".to_owned(),
@@ -874,6 +886,27 @@ fn verify_relationships(
             return Err(AtlasError::Manifest(
                 "agreement display name differs from source-backed name".to_owned(),
             ));
+        }
+        for (amount, required_phrases) in [
+            (&agreement.proposed_total, &["new total of ", "for "][..]),
+            (&agreement.proposed_increase, &["add "][..]),
+        ] {
+            if let Some(amount) = amount {
+                let value = amount.value.to_ascii_lowercase();
+                if agreement.status != "proposal_approved"
+                    || amount.proof.source_id != *event_source_id
+                    || amount.proof.locator != decision.title.proof.locator
+                    || !value.starts_with('$')
+                    || value.len() > 32
+                    || !required_phrases
+                        .iter()
+                        .any(|phrase| title.contains(&format!("{phrase}{value}")))
+                {
+                    return Err(AtlasError::Source(
+                        "proposed amount is not labeled in approved decision title".to_owned(),
+                    ));
+                }
+            }
         }
     }
     let event: Value = serde_json::from_slice(&event_source.bytes)?;
@@ -978,18 +1011,35 @@ fn verify_relationships(
         }
         let block = locate(&event, block_prefix)
             .ok_or_else(|| AtlasError::Source("consent motion disappeared".to_owned()))?;
-        if block["EventItemEventId"].as_u64() != Some(event_id)
-            || consent.block_item_id.value == decision.event_item_id.value
-            || consent.block_item_id.value.parse::<u64>().is_err()
-            || !consent
+        let arapahoe_consent = event_parts[1] == "arapahoe"
+            && consent
                 .block_title
                 .value
                 .eq_ignore_ascii_case("Approval of the Consent Agenda")
-            || !consent
+            && consent
                 .block_action
                 .value
                 .to_ascii_lowercase()
                 .contains("approve items on the consent agenda")
+            && block["EventItemActionName"].as_str().is_some_and(|name| {
+                name.to_ascii_lowercase()
+                    .starts_with("approved the consent agenda")
+            });
+        let denver_consent = event_parts[1] == "denver"
+            && consent.block_title.value.eq_ignore_ascii_case("Block Vote")
+            && consent
+                .block_action
+                .value
+                .to_ascii_lowercase()
+                .contains("approve the following items en bloc")
+            && block["EventItemActionName"] == "approved the Consent Agenda"
+            && item["EventItemActionText"]
+                .as_str()
+                .is_some_and(|action| action.to_ascii_lowercase().contains("adopted en bloc"));
+        if block["EventItemEventId"].as_u64() != Some(event_id)
+            || consent.block_item_id.value == decision.event_item_id.value
+            || consent.block_item_id.value.parse::<u64>().is_err()
+            || !(arapahoe_consent || denver_consent)
             || consent.block_outcome.value != "Pass"
             || decision.outcome_class != "approved"
         {
@@ -1495,6 +1545,12 @@ pub(super) fn snapshot(
                     "Public body authorized an agreement; execution not established",
                     "Authorized agreement; execution not established",
                 )
+            } else if agreement.status == "proposal_approved" {
+                (
+                    "APPROVED_PROPOSED_AGREEMENT",
+                    "Public body approved a proposed agreement; execution not established",
+                    "Approved proposal; execution not established",
+                )
             } else {
                 (
                     "APPROVED_AGREEMENT_FORMAT",
@@ -1513,6 +1569,32 @@ pub(super) fn snapshot(
                 json!([]),
             ),
         ));
+        let mut agreement_attributes = vec![
+            fact_item(
+                "agreement",
+                "Agreement named in decision",
+                &agreement.name.value,
+            ),
+            fact_item(
+                "decision_outcome",
+                "Recorded authorization outcome",
+                &manifest.decision.outcome.value,
+            ),
+        ];
+        if let Some(total) = &agreement.proposed_total {
+            agreement_attributes.push(fact_item(
+                "agreement_proposed_total",
+                "Proposed agreement total, not payment",
+                &total.value,
+            ));
+        }
+        if let Some(increase) = &agreement.proposed_increase {
+            agreement_attributes.push(fact_item(
+                "agreement_proposed_increase",
+                "Proposed increase, not payment",
+                &increase.value,
+            ));
+        }
         entities.push(json!({
             "id":agreement_id,"type":"AGREEMENT","name":agreement_name,
             "subtitle":agreement_subtitle,
@@ -1520,8 +1602,7 @@ pub(super) fn snapshot(
             "description":"The official decision title records agreement authorization; the cited records do not establish signed execution or payments.",
             "jurisdiction_ids":[jurisdiction_id],"aliases":[],"tags":["agreement context"],
             "updated_at":date,"source_count":1,"relation_count":0,
-            "attributes":[fact_item("agreement","Agreement named in decision",&agreement.name.value),
-                fact_item("decision_outcome","Recorded authorization outcome",&manifest.decision.outcome.value)],
+            "attributes":agreement_attributes,
             "relationships":[],"timeline":[],"source_ids":[agreement.name.proof.source_id],
             "unknowns":[{"kind":"contract_execution","state":"not_established"},
                 {"kind":"payment","state":"not_established"}],
@@ -1529,8 +1610,33 @@ pub(super) fn snapshot(
     }
     let mut votes = Vec::new();
     for (index, vote) in manifest.votes.iter().enumerate() {
-        let voter_id = format!("recorded_voter_{slug}_{}", vote.official_vote_id.value);
+        // A person name alone is not an identity key. The cited roll call
+        // supplies a Legistar person ID, scoped to this portal client and
+        // the verified jurisdiction. Distinct clients never share an entity.
+        let vote_source = &checked.sources[&vote.person_name.proof.source_id].registered;
+        let vote_url = Url::parse(&vote_source.url)
+            .map_err(|_| AtlasError::Source("invalid verified vote URL".to_owned()))?;
+        let client = vote_url
+            .path_segments()
+            .and_then(|mut segments| segments.nth(1).map(str::to_owned))
+            .ok_or_else(|| AtlasError::Source("verified vote lacks portal client".to_owned()))?;
+        if !client
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        {
+            return Err(AtlasError::Source(
+                "verified vote has unsafe portal client".to_owned(),
+            ));
+        }
+        let voter_id = format!(
+            "recorded_voter_{}_{}_{}",
+            manifest.jurisdiction.id.replace('-', "_"),
+            client.replace('-', "_"),
+            vote.official_person_id.value
+        );
         let key = format!("vote_{index}_vote");
+        let name_key = format!("vote_{index}_name");
+        let person_key = format!("vote_{index}_person_id");
         relationships.push(super::relationship(
             &format!("{slug}_vote_{}", vote.official_vote_id.value),
             "RECORDED_VOTE",
@@ -1550,13 +1656,23 @@ pub(super) fn snapshot(
         }));
         entities.push(json!({
             "id":voter_id,"type":"RECORDED_VOTER","name":vote.person_name.value,
-            "subtitle":format!("Recorded vote on {decision_name}; office role and term not established"),
+            "jurisdiction_ref":manifest.jurisdiction.jurisdiction_ref,
+            "identity_scope":format!("legistar:{client}"),
+            "official_person_id":vote.official_person_id.value,
+            "subtitle":"Recorded voter; office role and term not established",
             "status":review_state,
-            "description":format!("Official roll call records a {} vote.",vote.recorded_vote.value),
+            "description":"The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
             "jurisdiction_ids":[jurisdiction_id],"aliases":[],"tags":["public roll call"],
             "updated_at":date,"source_count":1,"relation_count":0,
-            "attributes":[fact_item(&key,"Recorded vote",&vote.recorded_vote.value)],
-            "relationships":[],"timeline":[],"source_ids":[vote.person_name.proof.source_id],
+            "attributes":[fact_item(&name_key,"Name in roll call",&vote.person_name.value),
+                fact_item(&person_key,"Official portal person ID",&vote.official_person_id.value),
+                fact_item(&key,&format!("Vote on {decision_name}"),&vote.recorded_vote.value)],
+            "relationships":[],
+            "timeline":[{"id":format!("{slug}_vote_{}",vote.official_vote_id.value),
+                "date":date,"type":"RECORDED_VOTE",
+                "title":format!("{} on {decision_name}",vote.recorded_vote.value),
+                "evidence_id":evidence_id(&key),"review_state":review_state,"corrections":[]}],
+            "source_ids":[vote.person_name.proof.source_id],
             "unknowns":[{"kind":"office_role","state":"not_established"},{"kind":"office_term","state":"not_established"}],
         }));
     }
@@ -2078,6 +2194,146 @@ mod tests {
     }
 
     #[test]
+    fn arapahoe_expansion_and_denver_axon_consent_items_keep_block_votes_separate() {
+        for (relative, matter, block_id, agreement_edge) in [
+            (
+                "preview-cases/arapahoe-county-25-378-2025-07-22.v2.json",
+                "25-378",
+                "40833",
+                false,
+            ),
+            (
+                "preview-cases/denver-25-1967-2025-12-08.v2.json",
+                "25-1967",
+                "199484",
+                true,
+            ),
+            (
+                "preview-cases/denver-25-1968-2025-12-08.v2.json",
+                "25-1968",
+                "199484",
+                true,
+            ),
+        ] {
+            let (dir, case) = copy_case_from(relative);
+            let checked = inspect(&case).expect("source-backed consent preview");
+            assert_eq!(checked.manifest.review_state, "pending");
+            assert_eq!(checked.manifest.decision.official_matter.value, matter);
+            assert!(checked.manifest.votes.is_empty());
+            let store = Store::open(dir.path().join("db")).expect("store");
+            let output = dir.path().join("preview.json");
+            super::super::export_atlas(&store, &case, &output, AtlasExportMode::Preview, None)
+                .expect("consent preview export");
+            let snapshot: Value =
+                serde_json::from_slice(&fs::read(&output).expect("preview bytes"))
+                    .expect("preview JSON");
+            let decision = snapshot["entities"]
+                .as_array()
+                .expect("entities")
+                .iter()
+                .find(|entity| entity["type"] == "DECISION")
+                .expect("decision");
+            assert_eq!(decision["vote_record_state"], "consent_block");
+            assert!(decision["votes"].as_array().expect("votes").is_empty());
+            assert_eq!(decision["consent_block"]["motion_item_id"], block_id);
+            assert!(
+                decision["unknowns"]
+                    .as_array()
+                    .expect("unknowns")
+                    .iter()
+                    .any(|gap| {
+                        gap["kind"] == "individual_item_votes" && gap["state"] == "not_established"
+                    })
+            );
+            let has_agreement = decision["relationships"]
+                .as_array()
+                .expect("relationships")
+                .iter()
+                .any(|relation| relation["type"] == "APPROVED_PROPOSED_AGREEMENT");
+            assert_eq!(has_agreement, agreement_edge);
+            if agreement_edge {
+                let agreement_id = decision["relationships"]
+                    .as_array()
+                    .expect("relationships")
+                    .iter()
+                    .find(|relation| relation["type"] == "APPROVED_PROPOSED_AGREEMENT")
+                    .expect("proposal edge")["target_entity_id"]
+                    .as_str()
+                    .expect("agreement ID");
+                let agreement = snapshot["entities"]
+                    .as_array()
+                    .expect("entities")
+                    .iter()
+                    .find(|entity| entity["id"] == agreement_id)
+                    .expect("agreement entity");
+                assert!(
+                    agreement["attributes"]
+                        .as_array()
+                        .expect("attributes")
+                        .iter()
+                        .any(|attribute| attribute["label"]
+                            == "Proposed agreement total, not payment")
+                );
+            }
+            assert!(matches!(
+                super::super::export_atlas(
+                    &store,
+                    &case,
+                    &dir.path().join("public.json"),
+                    AtlasExportMode::Production,
+                    Some("https://panopticon.fail")
+                ),
+                Err(AtlasError::Review(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn denver_consent_motion_action_and_proposal_status_are_bound() {
+        let (_amount_dir, amount_case) =
+            copy_case_from("preview-cases/denver-25-1967-2025-12-08.v2.json");
+        edit_json(&amount_case, |value| {
+            value["agreement_context"]["proposed_total"]["value"] = json!("$450,000.00");
+            value["agreement_context"]["proposed_total"]["proof"]["quote"] = json!("$450,000.00");
+        });
+        assert!(
+            inspect(&amount_case).is_err(),
+            "proposed increase was mislabeled as agreement total"
+        );
+        let (dir, case) = copy_case_from("preview-cases/denver-25-1968-2025-12-08.v2.json");
+        edit_json(&case, |value| {
+            value["agreement_context"]["status"] = json!("award_authorized");
+        });
+        assert!(
+            inspect(&case).is_err(),
+            "proposed agreement was promoted to award"
+        );
+        edit_json(&case, |value| {
+            value["agreement_context"]["status"] = json!("proposal_approved");
+        });
+        let event_path = dir
+            .path()
+            .join("fixtures/co-denver/event-9898-2025-12-08.json");
+        edit_json(&event_path, |event| {
+            event["EventItems"][68]["EventItemActionName"] = json!("rejected the Consent Agenda");
+        });
+        let changed_bytes = fs::read(&event_path).expect("changed event bytes");
+        edit_json(&dir.path().join(REGISTRY_PATH), |registry| {
+            let source = registry["sources"]
+                .as_array_mut()
+                .expect("sources")
+                .iter_mut()
+                .find(|item| item["id"] == "co-denver-2025-axon-event")
+                .expect("Axon event source");
+            source["sha256"] = json!(sha256_hex(&changed_bytes));
+        });
+        assert!(
+            inspect(&case).is_err(),
+            "unapproved block motion was accepted"
+        );
+    }
+
+    #[test]
     fn failed_denver_vote_and_castle_rock_meeting_extension_stay_distinct() {
         let denver = inspect(&manifest("denver-25-0413-2025-05-05.v2.json")).expect("Denver case");
         assert_eq!(denver.manifest.decision.outcome.value, "Fail");
@@ -2534,6 +2790,65 @@ mod tests {
             fs::read(&one).expect("untouched bundle"),
             fs::read(&two).expect("second bundle")
         );
+    }
+
+    #[test]
+    fn same_portal_person_id_links_two_decisions_without_name_only_merging() {
+        let cases = vec![
+            manifest("commerce-city-ord-2755-2026-04-06.v2.json"),
+            manifest("commerce-city-ord-2756-2026-04-06.v2.json"),
+        ];
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Store::open(dir.path().join("db")).expect("store");
+        let output = dir.path().join("preview.json");
+        super::super::export_atlas_bundle(&store, &cases, &output, AtlasExportMode::Preview, None)
+            .expect("two Commerce decisions");
+        let snapshot: Value =
+            serde_json::from_slice(&fs::read(output).expect("preview")).expect("snapshot JSON");
+        let entities = snapshot["entities"].as_array().expect("entities");
+        let voters = entities
+            .iter()
+            .filter(|entity| entity["type"] == "RECORDED_VOTER")
+            .collect::<Vec<_>>();
+        assert_eq!(voters.len(), 9);
+        let steven = voters
+            .iter()
+            .find(|entity| entity["name"] == "Steven J. Douglas")
+            .expect("same portal person record");
+        assert_eq!(steven["identity_scope"], "legistar:commerce");
+        assert_eq!(steven["official_person_id"], "210");
+        assert!(
+            steven["unknowns"]
+                .as_array()
+                .expect("unknowns")
+                .iter()
+                .any(|gap| gap["kind"] == "office_term")
+        );
+        assert_eq!(steven["timeline"].as_array().expect("timeline").len(), 2);
+        assert_eq!(steven["source_ids"].as_array().expect("sources").len(), 2);
+        assert!(
+            entities
+                .iter()
+                .filter(|entity| entity["type"] == "DECISION")
+                .all(|decision| decision["votes"]
+                    .as_array()
+                    .expect("votes")
+                    .iter()
+                    .any(|vote| vote["voter_entity_id"] == steven["id"]))
+        );
+        for (field, value) in [
+            ("identity_scope", json!("legistar:unrelated-client")),
+            ("name", json!("Different Person")),
+            ("jurisdiction_ref", json!("us-co-place-0000000")),
+        ] {
+            let mut forged = (**steven).clone();
+            forged[field] = value;
+            let mut original = (**steven).clone();
+            assert!(matches!(
+                super::super::merge_shared_entity(&mut original, &forged),
+                Err(AtlasError::Manifest(_))
+            ));
+        }
     }
 
     #[test]

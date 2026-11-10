@@ -116,3 +116,39 @@ minimum_interval_seconds = 86400
 maximum_bytes = 1048576
 robots_status = "Capture current robots directives and review site/API terms before live archive."
 terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "denver-25-1967-matter-json"
+url = "https://webapi.legistar.com/v1/denver/Matters/28523?MatterAttachments=1&MatterHistory=1"
+name = "Denver Axon 25-1967 matter JSON"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/v1/denver/Matters/28523?MatterAttachments=1&MatterHistory=1"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "denver-25-1968-matter-json"
+url = "https://webapi.legistar.com/v1/denver/Matters/28524?MatterAttachments=1&MatterHistory=1"
+name = "Denver Axon 25-1968 matter JSON"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/v1/denver/Matters/28524?MatterAttachments=1&MatterHistory=1"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "denver-25-1967-vendor-amendment"
+url = "https://denver.legistar1.com/denver/attachments/aa29683d-1010-4f4d-8e41-d3c182db110a.pdf"
+name = "Vendor-signed proposed Axon amendment; City signature not established"
+source_type = "pdf"
+documented_at = "https://denver.legistar1.com/denver/attachments/aa29683d-1010-4f4d-8e41-d3c182db110a.pdf"
+official_discovery_url = "https://denver.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."

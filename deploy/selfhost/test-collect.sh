@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+python3 "$(dirname "$0")/test-candidate-profiles.py"
+
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
+python3 "$repo/deploy/selfhost/test-calendar-profiles.py"
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/repo/configs/states" "$scratch/repo/deploy/selfhost" "$scratch/data"
@@ -28,6 +31,8 @@ if bash "$repo/deploy/selfhost/collect.sh"; then
 fi
 grep -q -- '--config configs/states/co-commerce-city.toml source discover-calendar commerce-city-calendar' "$PNUL_TEST_LOG"
 grep -q -- '--config configs/states/co-arapahoe-county.toml source discover-calendar arapahoe-county-calendar' "$PNUL_TEST_LOG"
+grep -q -- '--config configs/states/co-douglas-county.toml source discover-calendar douglas-county-calendar' "$PNUL_TEST_LOG"
+grep -q -- '--config configs/states/co-littleton.toml source discover-calendar littleton-calendar' "$PNUL_TEST_LOG"
 grep -q -- '--config configs/states/co-commerce-archive.toml source archive commerce-ord2755-detail' "$PNUL_TEST_LOG"
 grep -q -- '--config configs/states/co.toml procurement refresh colorado-springs-contract-awards --live' "$PNUL_TEST_LOG"
 if grep -q -- 'source discover-calendar denver-calendar' "$PNUL_TEST_LOG"; then

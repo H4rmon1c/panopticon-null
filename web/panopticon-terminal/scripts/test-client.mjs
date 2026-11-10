@@ -147,6 +147,7 @@ test("consent agenda context never becomes an item-specific voter list", async (
   const record = {
     id: "decision_consent_test", slug: "co-consent-test", type: "DECISION", name: "Consent item",
     votes: [], vote_record_state: "consent_block", source_ids: [sourceId],
+    unknowns: [{ kind: "contract_execution", detail: "Signed execution and payment are not established." }],
     consent_block: {
       motion_item_id: "38020", motion_title: "Approve consent agenda", motion_outcome: "Pass",
       block_vote_source_id: sourceId, motion_evidence_id: motionId,
@@ -163,6 +164,8 @@ test("consent agenda context never becomes an item-specific voter list", async (
   const model = buildDecisionModel(snapshot, record.slug);
   assert.equal(model.votes.length, 0);
   assert.ok(model.evidence.some((item) => item.id === outcomeId));
+  assert.ok(model.unknowns.some((item) => item.includes("Signed execution")));
+  assert.ok(!model.unknowns.some((item) => item.includes("specific vendor contract")));
   const forgedVotes = clone(snapshot);
   forgedVotes.entities.at(-1).votes.push({ name: "Council member", vote: "Aye", evidence_id: outcomeId });
   assert.throws(() => validateSnapshot(forgedVotes), /invalid consent-block record/);
