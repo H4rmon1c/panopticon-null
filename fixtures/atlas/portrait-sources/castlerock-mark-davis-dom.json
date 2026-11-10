@@ -1,0 +1,12 @@
+{
+  "capture_kind": "browser_dom_extract",
+  "source_url": "https://www.crgov.com/m/directory/employee?eid=278",
+  "retrieved_on": "2026-11-10",
+  "heading_selector": "h2.directory-page-title .fw-bold",
+  "heading_text": "Mark Davis",
+  "image_selector": ".directory-staff-container img[src*=\"ImageRepository/Document\"]",
+  "image_alt": "Headshot photo of District 4 Councilmember Mark Davis",
+  "image_src": "/ImageRepository/Document?documentId=47521",
+  "email_selector": ".directory-staff-container a[href^=\"mailto:\"]",
+  "email_href": "mailto:mdavis@CRgov.com"
+}

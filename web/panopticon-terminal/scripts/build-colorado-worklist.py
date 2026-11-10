@@ -8,13 +8,17 @@ whether a jurisdiction uses surveillance technology.
 import argparse
 import csv
 import json
+import re
+import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[3]
 GEOGRAPHY = ROOT / "web/panopticon-terminal/geography/colorado-jurisdictions.json"
 MAPPING = ROOT / "configs/states/co-calendar-geography.v1.json"
+INDEX_MAPPING = ROOT / "configs/states/co-document-index-geography.v1.json"
 MATRIX = ROOT / "deploy/selfhost/collection-sources.tsv"
 ATLAS = ROOT / "fixtures/atlas"
 PUBLIC = ROOT / "web/panopticon-terminal/public/public-snapshot.json"
@@ -37,6 +41,54 @@ def calendar_source_ids():
                 raise ValueError(f"duplicate calendar source: {parts[1]}")
             ids.add(parts[1])
     return ids
+
+
+def document_index_bindings(valid_refs):
+    mapping = read_json(INDEX_MAPPING)
+    if mapping.get("schema_version") != 1:
+        raise ValueError("unsupported document-index mapping")
+    scheduled = {line.split("\t")[1] for line in MATRIX.read_text().splitlines()
+                 if line and not line.startswith("#")}
+    indexes = defaultdict(list)
+    seen = set()
+    seen_pdf = set()
+    for item in mapping["document_index_geography"]:
+        source_id, ref, config_path = item["source_id"], item["jurisdiction_ref"], item["config_path"]
+        if (source_id in seen or source_id in scheduled or ref not in valid_refs
+                or valid_refs[ref]["kind"] != "municipality"
+                or not re.fullmatch(r"configs/states/co-[a-z0-9-]+\.toml", config_path)):
+            raise ValueError(f"invalid unscheduled town index binding: {item}")
+        seen.add(source_id)
+        config_file = ROOT / config_path
+        if config_file.is_symlink() or not config_file.is_file():
+            raise ValueError(f"missing or unsafe document index config: {config_path}")
+        config = tomllib.loads(config_file.read_text(encoding="utf-8"))
+        sources = [source for source in config["sources"] if source["id"] == source_id]
+        if len(sources) != 1 or sources[0]["source_type"] != "html_page":
+            raise ValueError(f"document index source is missing: {source_id}")
+        url = urlsplit(sources[0]["url"])
+        if (url.scheme != "https" or not url.hostname or url.port not in (None, 443)
+                or url.username or url.password or url.path not in ("/agendas-and-minutes/", "/documents")
+                or url.query or url.fragment
+                or sources[0]["minimum_interval_seconds"] < 3600
+                or not 0 < sources[0]["maximum_bytes"] <= 2_097_152):
+            raise ValueError(f"document index policy is outside its reviewed shape: {source_id}")
+        pdf_policies = [source for source in config["sources"]
+                        if source["source_type"] == "candidate_index_pdf"
+                        and source["official_discovery_url"] == sources[0]["url"]
+                        and source["documented_at"] == sources[0]["url"]]
+        if len(pdf_policies) != 1:
+            raise ValueError(f"document index needs exactly one PDF path policy: {source_id}")
+        pdf = pdf_policies[0]
+        pdf_url = urlsplit(pdf["url"])
+        if (pdf["id"] in seen_pdf or pdf["id"] in scheduled or pdf_url.scheme != "https"
+                or pdf_url.netloc != url.netloc or pdf_url.path not in ("/wp-content/uploads/", "/uploads/")
+                or pdf_url.query or pdf_url.fragment or pdf["minimum_interval_seconds"] < 120
+                or not 0 < pdf["maximum_bytes"] <= 20_971_520):
+            raise ValueError(f"document PDF policy is outside its reviewed shape: {source_id}")
+        seen_pdf.add(pdf["id"])
+        indexes[ref].append(source_id)
+    return indexes
 
 
 def case_inventory(valid_refs):
@@ -113,6 +165,7 @@ def build_rows():
         calendar_by_ref[ref].append(source_id)
     if mapped_ids != calendar_source_ids():
         raise ValueError("calendar mapping does not match scheduled discovery sources")
+    indexes = document_index_bindings(by_ref)
     cases = case_inventory(by_ref)
     published = published_inventory(records)
     rows = []
@@ -123,13 +176,14 @@ def build_rows():
         public = published[ref]
         stage = ("published_case" if public else "source_verified_manifest" if source_verified
                  else "pending_manifest" if pending else "calendar_configured" if calendar_by_ref[ref]
-                 else "not_started")
+                 else "document_index_configured" if indexes[ref] else "not_started")
         rows.append({
             "geography_id": ref,
             "kind": record["kind"],
             "name": record["name"],
             "stage": stage,
             "scheduled_calendar_ids": ";".join(sorted(calendar_by_ref[ref])),
+            "document_index_ids": ";".join(sorted(indexes[ref])),
             "source_verified_case_ids": ";".join(sorted(source_verified)),
             "pending_case_ids": ";".join(sorted(pending)),
             "published_case_ids": ";".join(sorted(public)),

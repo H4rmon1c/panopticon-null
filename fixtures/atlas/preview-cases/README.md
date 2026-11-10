@@ -3,7 +3,9 @@
 These manifests are **private previews**. The exporter checks exact source bytes,
 JSON locators, consent flags, motion fields, and the block roll-call ID. It
 publishes **no individual vote on an item** when the recorded roll call belongs
-to the consent block. The Rust production gate rejects all four pending cases.
+to the consent block. It may show every verified name and position on the
+separate block motion, labeled as context. The Rust production gate rejects
+all four pending cases.
 
 | Case | Recorded action | Limit of the evidence |
 | --- | --- | --- |

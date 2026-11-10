@@ -19,7 +19,7 @@ robots_status = "Not reviewed for scheduled retrieval; capture current directive
 terms_note = "Operator must review current Legistar API scope and terms before live retrieval; use one request at a time, caching, and backoff."
 
 # Official HTML calendar for document-first, private candidate discovery.
-# The API event feed above remains an optional fallback and is not scheduled.
+# The API event feed above runs only if this calendar fails and its own source review is current.
 [[sources]]
 id = "arapahoe-county-calendar"
 name = "Arapahoe County BOCC official meeting calendar"

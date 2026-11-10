@@ -345,6 +345,10 @@ enum SourceCommand {
     DiscoverCalendar {
         source_id: String,
     },
+    /// Archive an official town HTML document index and retain same-host PDF candidates privately.
+    DiscoverIndex {
+        source_id: String,
+    },
     /// Archive one calendar-linked document through a reviewed path policy.
     ArchiveCandidate {
         calendar_source_id: String,
@@ -553,6 +557,9 @@ fn run(cli: Cli) -> Result<()> {
         Command::Source {
             command: SourceCommand::DiscoverCalendar { source_id },
         } => archive::discover_calendar(&cli.data_dir, &config, &source_id),
+        Command::Source {
+            command: SourceCommand::DiscoverIndex { source_id },
+        } => archive::discover_index(&cli.data_dir, &config, &source_id),
         Command::Source {
             command:
                 SourceCommand::ArchiveCandidate {

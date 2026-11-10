@@ -1,6 +1,6 @@
 # Recorded-voter identity boundary
 
-The atlas groups direct roll calls across decisions only when the archived
+The atlas groups official roll-call voter identities across decisions only when the archived
 official vote rows supply the same `VotePersonId`, the same exact
 `VotePersonName`, the same Legistar client, and the same verified jurisdiction.
 The ID is scoped to that official portal; it is not a national person ID.
@@ -17,6 +17,12 @@ office, term dates, current office, or participation in a contract after the
 vote. Those fields remain `not_established` until independent official role
 and term evidence is archived and bound to exact claims.
 
-Consent-agenda block votes are excluded from this grouping as votes on an
-individual item. A consent item can show the block motion as context while
-leaving its item-specific voter list empty.
+Consent-agenda block rows can reuse the same scoped voter identity when the
+portal ID and exact name match. They remain votes on the **block motion**,
+never on an individual item. The item's own voter list stays empty, and a
+block row adds no vote-on-item relationship or timeline event to the person's
+record. The block source, row locator, digest, and motion ID are preserved.
+
+Official headshots use this same scoped voter identity. See [the portrait
+provenance method](official-portraits.md) for preserved image bytes, source
+pages, and unresolved image matches.

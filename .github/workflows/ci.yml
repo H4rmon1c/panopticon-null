@@ -52,15 +52,25 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
           import { validateSnapshot } from './web/panopticon-terminal/api.js';
+          import { portraitForRecordedVote } from './web/panopticon-terminal/portraits/portraits.js';
           const snapshot = JSON.parse(readFileSync('/tmp/pnull-colorado-combined-preview.json', 'utf8'));
           validateSnapshot(snapshot, { preview: true });
           const decisions = snapshot.entities.filter((entity) => entity.type === 'DECISION');
           const consent = decisions.filter((entity) => entity.vote_record_state === 'consent_block');
           const voters = snapshot.entities.filter((entity) => entity.type === 'RECORDED_VOTER');
+          const blockRows = consent.map((entity) => entity.consent_block?.roll_call?.length).sort((a, b) => a - b);
           if (decisions.length !== 9 || snapshot.case_releases.length !== 9 ||
               consent.length !== 4 || consent.some((entity) => entity.votes.length) ||
-              voters.length !== 38) {
+              voters.length !== 44 || JSON.stringify(blockRows) !== JSON.stringify([4, 5, 13, 13])) {
             throw new Error('Combined Colorado preview lost a decision or release binding');
+          }
+          const voterById = new Map(voters.map((voter) => [voter.id, voter]));
+          for (const decision of decisions.filter((entity) =>
+            entity.slug.includes('colorado-springs') || entity.slug.includes('commerce-city') || entity.slug.includes('castle-rock'))) {
+            if (!decision.votes.length || decision.votes.some((vote) =>
+              !portraitForRecordedVote(vote, voterById.get(vote.voter_entity_id)))) {
+              throw new Error(`Reviewed portrait association is missing from ${decision.slug}`);
+            }
           }
           NODE
       - name: Enable unprivileged user namespaces for bubblewrap

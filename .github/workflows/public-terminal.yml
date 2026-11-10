@@ -44,6 +44,7 @@ jobs:
           cmp web/panopticon-terminal/geography/colorado-jurisdictions.json /tmp/pnull-colorado-rebuilt.json
           node web/panopticon-terminal/scripts/test-colorado-geography.mjs
           python3 web/panopticon-terminal/scripts/build-colorado-worklist.py --output /tmp/pnull-colorado-worklist.csv
+          python3 deploy/selfhost/test-small-town-profile.py
       - name: Test multi-jurisdiction collection schedule
         run: bash deploy/selfhost/test-collect.sh
       - name: Verify fixed official archive profiles

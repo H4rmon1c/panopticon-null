@@ -1,5 +1,5 @@
 import { PanopticonClient } from "./api.js";
-import { votePortraits } from "./portraits/portraits.js";
+import { portraitForRecordedVote } from "./portraits/portraits.js";
 
 const params = new URLSearchParams(location.search);
 const casePath = /\/decisions\/([a-z0-9-]+)\.html$/.exec(location.pathname ?? "");
@@ -58,6 +58,8 @@ function evidenceIds(entity) {
     ...(entity.relationships ?? []).map((item) => item.evidence_id),
     ...(entity.timeline ?? []).map((item) => item.evidence_id),
     ...(entity.votes ?? []).map((item) => item.evidence_id),
+    ...(entity.consent_block?.roll_call ?? []).map((item) => item.evidence_id),
+    entity.vote_gap?.evidence_id,
     ...(entity.technology_context ?? []).map((item) => item.evidence_id),
     entity.consent_block?.motion_evidence_id,
     entity.consent_block?.motion_title_evidence_id,
@@ -109,9 +111,10 @@ export function buildDecisionModel(snapshot, requestedId) {
     ...(decision.attributes ?? []).flatMap((attribute) => (attribute.corrections ?? []).map((item) => ({ ...item, context: attribute.label ?? "Attribute" }))),
     ...(decision.relationships ?? []).flatMap((relation) => (relation.corrections ?? []).map((item) => ({ ...item, context: relation.label ?? relation.type }))),
     ...votes.flatMap((vote) => (vote.corrections ?? []).map((item) => ({ ...item, context: `${vote.name ?? vote.officeholder ?? "Vote"} vote` }))),
+    ...(decision.consent_block?.roll_call ?? []).flatMap((vote) => (vote.corrections ?? []).map((item) => ({ ...item, context: `${vote.name ?? "Voter"} consent motion vote` }))),
     ...(decision.technology_context ?? []).flatMap((item) => (item.corrections ?? []).map((correction) => ({ ...correction, context: item.name ?? "Technology context" }))),
   ];
-  return { decision, links, contracts, votes, technologies, unknowns, evidence: [...usedEvidence.values()], sources: [...usedSources.values()], sourceById: sources, corrections };
+  return { decision, links, contracts, votes, technologies, unknowns, evidence: [...usedEvidence.values()], sources: [...usedSources.values()], sourceById: sources, entityById: entities, corrections };
 }
 
 function addNotice(mode) {
@@ -213,39 +216,12 @@ function initials(name) {
   return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
-function renderVotes(model, mode) {
-  const consent = model.decision.consent_block;
-  const panel = section(consent ? "Consent agenda vote" : "Recorded votes on this decision");
-  if (consent) {
-    panel.append(node("p", "vote-note", `This item was included in consent motion ${consent.motion_item_id}, “${consent.motion_title}” (${consent.motion_outcome}). The roll call covers the block of items.`));
-    const links = node("p", "vote-links");
-    for (const [id, label] of [
-      [consent.item_consent_evidence_id, "Item's consent designation ↗"],
-      [consent.motion_evidence_id, "Motion item ID ↗"],
-      [consent.motion_title_evidence_id, "Motion title ↗"],
-      [consent.motion_action_evidence_id, "Motion action ↗"],
-      [consent.motion_outcome_evidence_id, "Motion outcome ↗"],
-    ]) {
-      const link = node("a", "", label);
-      link.href = `#evidence-${encodeURIComponent(id)}`;
-      links.append(link);
-    }
-    panel.append(links, node("p", "empty", "Individual votes on this item are not established."));
-    const blockSource = model.sourceById.get(consent.block_vote_source_id);
-    if (blockSource && mode !== "demo") panel.append(publicLink(blockSource.canonical_url, "Block roll call source (context) ↗"));
-    return panel;
-  }
-  if (!model.votes.length) {
-    panel.append(node("p", "empty", "Individual votes are not established in this dataset."));
-    return panel;
-  }
-  panel.append(node("p", "vote-note", "Recorded positions come from the cited roll call. Official portraits appear where a source is available."));
+function renderVoteCards(model, votes, mode) {
   const list = node("ul", "vote-list");
-  for (const vote of model.votes) {
+  for (const vote of votes) {
     const item = node("li", "vote-card");
     const name = vote.name ?? vote.officeholder ?? "Unnamed officeholder";
-    const candidate = mode === "demo" ? null : votePortraits[vote.voter_entity_id];
-    const portrait = candidate?.name === name ? candidate : null;
+    const portrait = mode === "demo" ? null : portraitForRecordedVote(vote, model.entityById.get(vote.voter_entity_id));
     const media = node("div", "vote-portrait");
     const fallback = node("span", "vote-initials", initials(name));
     media.append(fallback);
@@ -264,25 +240,76 @@ function renderVotes(model, mode) {
     const heading = node("div", "vote-card-heading");
     const voteValue = vote.vote ?? vote.position;
     const voteKey = String(voteValue ?? "").toLowerCase();
-    const voteClass = voteKey === "aye" ? "aye" : voteKey === "no" ? "no" : "";
+    const voteClass = ["aye", "yes"].includes(voteKey) ? "aye" : ["no", "nay"].includes(voteKey) ? "no" : "";
     heading.append(node("strong", "", name), node("span", `vote-position${voteClass ? ` ${voteClass}` : ""}`, voteValue ?? "Vote unknown"));
     text.append(heading);
     const role = vote.role ?? vote.office_role ?? "not established";
     const term = vote.term ?? vote.office_term ?? "not established";
     const roleTerm = role === "not_established" && term === "not_established" ? "Public role and term: not established" : `Public role: ${role}; term: ${term}`;
     text.append(node("p", "vote-detail", roleTerm));
+    if (portrait?.portrait_date === "not_established") text.append(node("p", "vote-detail", "Portrait date: not established"));
+    if (portrait?.source_conflict?.state === "UNRESOLVED") {
+      text.append(node("p", "vote-detail", portrait.source_conflict.public_note));
+    }
+    if (!portrait && mode !== "demo") text.append(node("p", "vote-detail", "Official portrait: not yet verified"));
     const links = node("div", "vote-links");
     if (vote.evidence_id) {
       const link = node("a", "", "Vote record ↗");
       link.href = `#evidence-${encodeURIComponent(vote.evidence_id)}`;
       links.append(link);
     }
-    if (portrait) links.append(publicLink(portrait.source_url, `Photo: ${portrait.credit ?? "official source"} ↗`));
+    if (portrait) {
+      links.append(publicLink(`${rootPrefix}${portrait.src.replace(/^\.\//, "")}`, "Open preserved image ↗"));
+      links.append(publicLink(portrait.source_url, `Photo source: ${portrait.credit ?? "official source"} ↗`));
+    }
     text.append(links);
     item.append(media, text);
     list.append(item);
   }
-  panel.append(list);
+  return list;
+}
+
+function renderVotes(model, mode) {
+  const consent = model.decision.consent_block;
+  const panel = section(consent ? "Consent agenda vote" : "Recorded votes on this decision");
+  if (consent) {
+    panel.append(node("p", "vote-note", `This item was included in consent motion ${consent.motion_item_id}, “${consent.motion_title}” (${consent.motion_outcome}). The roll call covers the block of items.`));
+    const links = node("p", "vote-links");
+    for (const [id, label] of [
+      [consent.item_consent_evidence_id, "Item's consent designation ↗"],
+      [consent.motion_evidence_id, "Motion item ID ↗"],
+      [consent.motion_title_evidence_id, "Motion title ↗"],
+      [consent.motion_action_evidence_id, "Motion action ↗"],
+      [consent.motion_outcome_evidence_id, "Motion outcome ↗"],
+    ]) {
+      const link = node("a", "", label);
+      link.href = `#evidence-${encodeURIComponent(id)}`;
+      links.append(link);
+    }
+    panel.append(links, node("p", "empty", "Individual votes on this item are not established."));
+    const rollCall = consent.roll_call ?? [];
+    if (rollCall.length) {
+      panel.append(node("h3", "", "Recorded vote on the consent motion (context)"));
+      panel.append(node("p", "vote-note", "These positions are on the block motion, not on this item alone."));
+      panel.append(renderVoteCards(model, rollCall, mode));
+    }
+    const blockSource = model.sourceById.get(consent.block_vote_source_id);
+    if (blockSource && mode !== "demo") panel.append(publicLink(blockSource.canonical_url, "Block roll call source (context) ↗"));
+    return panel;
+  }
+  if (!model.votes.length) {
+    panel.append(node("p", "empty", "Individual votes are not established in the checked records."));
+    if (model.decision.vote_gap?.evidence_id) {
+      const proof = node("a", "", "Empty vote response proof ↗");
+      proof.href = `#evidence-${encodeURIComponent(model.decision.vote_gap.evidence_id)}`;
+      panel.append(proof);
+    }
+    const gapSource = model.sourceById.get(model.decision.vote_gap?.checked_vote_source_id);
+    if (gapSource && mode !== "demo") panel.append(publicLink(gapSource.canonical_url, "Checked vote source ↗"));
+    return panel;
+  }
+  panel.append(node("p", "vote-note", "Recorded positions come from the cited roll call. Official portraits appear where a source is available."));
+  panel.append(renderVoteCards(model, model.votes, mode));
   return panel;
 }
 

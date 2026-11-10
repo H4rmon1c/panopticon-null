@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runInNewContext } from "node:vm";
 import { PanopticonClient, validateSnapshot } from "../api.js";
+import { portraitForRecordedVote, votePortraits } from "../portraits/portraits.js";
 import { buildDecisionPages } from "./build-decision-pages.mjs";
+import { selectPublishedPortraits } from "./filter-portraits.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const demo = JSON.parse(await readFile(join(root, "mock/public-snapshot.json"), "utf8"));
@@ -175,6 +177,176 @@ test("consent agenda context never becomes an item-specific voter list", async (
   const swappedOutcome = clone(snapshot);
   swappedOutcome.entities.at(-1).consent_block.motion_outcome_evidence_id = titleId;
   assert.throws(() => validateSnapshot(swappedOutcome), /invalid consent-block record/);
+});
+
+test("consent motion names require their own vote proof and cannot become item votes", () => {
+  const snapshot = publicFixture();
+  const sourceId = snapshot.sources[0].id;
+  const record = clone(snapshot.evidence[0]);
+  Object.assign(record, { id: "block_vote_1", source_id: sourceId, claim: "Aye", locator: "$[0].VoteValueName" });
+  snapshot.evidence.push(record);
+  snapshot.entities.push({ id: "recorded_voter_block_1", type: "RECORDED_VOTER", name: "Council member" });
+  snapshot.entities.push({
+    id: "decision_block", type: "DECISION", name: "Consent item", votes: [], vote_record_state: "consent_block",
+    consent_block: {
+      motion_item_id: "123", motion_title: "Consent agenda", motion_outcome: "Pass",
+      block_vote_source_id: sourceId,
+      motion_evidence_id: "motion_id", motion_title_evidence_id: "motion_title",
+      motion_action_evidence_id: "motion_action", motion_outcome_evidence_id: "motion_outcome",
+      item_consent_evidence_id: "item_flag",
+      roll_call: [{ name: "Council member", vote: "Aye", voter_entity_id: "recorded_voter_block_1",
+        scope: "consent_motion", evidence_id: "block_vote_1", review_state: "SOURCE_VERIFIED" }],
+    },
+  });
+  for (const [id, claim, locator] of [
+    ["motion_id", "123", "$.EventItems[0].EventItemId"],
+    ["motion_title", "Consent agenda", "$.EventItems[0].EventItemTitle"],
+    ["motion_action", "Approve", "$.EventItems[0].EventItemActionText"],
+    ["motion_outcome", "Pass", "$.EventItems[0].EventItemPassedFlagName"],
+    ["item_flag", "1", "$.EventItems[1].EventItemConsent"],
+  ]) snapshot.evidence.push({ ...clone(record), id, claim, locator });
+  assert.equal(validateSnapshot(snapshot), snapshot);
+  const itemVote = clone(snapshot);
+  itemVote.entities.at(-1).votes.push(itemVote.entities.at(-1).consent_block.roll_call[0]);
+  assert.throws(() => validateSnapshot(itemVote), /invalid consent-block record/);
+  const wrongScope = clone(snapshot);
+  wrongScope.entities.at(-1).consent_block.roll_call[0].scope = "item_vote";
+  assert.throws(() => validateSnapshot(wrongScope), /unsupported consent-motion roll call/);
+  const wrongPerson = clone(snapshot);
+  wrongPerson.entities.at(-1).consent_block.roll_call[0].voter_entity_id = "missing";
+  assert.throws(() => validateSnapshot(wrongPerson), /unsupported consent-motion roll call/);
+});
+
+test("missing individual votes require a cited empty official vote response", () => {
+  const snapshot = publicFixture();
+  const sourceId = snapshot.sources[0].id;
+  const proof = clone(snapshot.evidence[0]);
+  Object.assign(proof, { id: "empty_votes", source_id: sourceId, claim: "[]", locator: "$" });
+  snapshot.evidence.push(proof);
+  snapshot.entities.push({ id: "decision_gap", type: "DECISION", name: "Matter without roll call",
+    vote_record_state: "not_established", votes: [], consent_block: null,
+    vote_gap: { state: "not_established", checked_vote_source_id: sourceId, evidence_id: "empty_votes" },
+    unknowns: [{ kind: "individual_votes", state: "not_established" }] });
+  assert.equal(validateSnapshot(snapshot), snapshot);
+  const invented = clone(snapshot);
+  invented.entities.at(-1).votes = [{ name: "Someone", vote: "Aye", evidence_id: "empty_votes" }];
+  assert.throws(() => validateSnapshot(invented), /invalid vote gap/);
+  const wrongProof = clone(snapshot);
+  wrongProof.entities.at(-1).vote_gap.evidence_id = snapshot.evidence[0].id;
+  assert.throws(() => validateSnapshot(wrongProof), /invalid vote gap/);
+});
+
+test("official portraits join by the exact verified voter identity", () => {
+  const id = "recorded_voter_co_commerce_city_commerce_479";
+  const portrait = votePortraits[id];
+  const vote = { name: "Susan Noble", voter_entity_id: id };
+  const voter = { id, type: "RECORDED_VOTER", name: "Susan Noble", jurisdiction_ref: "us-co-place-0816495",
+    identity_scope: "legistar:commerce", official_person_id: "479" };
+  if (process.env.PNUL_VALIDATE_RELEASE === "1" && !portrait) {
+    assert.equal(portraitForRecordedVote(vote, voter), null);
+    return;
+  }
+  assert.ok(portrait);
+  assert.equal(portraitForRecordedVote(vote, voter), portrait);
+  assert.equal(portraitForRecordedVote({ ...vote, name: "Different person" }, voter), null);
+  assert.equal(portraitForRecordedVote(vote, { ...voter, identity_scope: "legistar:other" }), null);
+  assert.equal(portraitForRecordedVote(vote, { ...voter, official_person_id: "480" }), null);
+  assert.equal(portraitForRecordedVote(vote, { ...voter, jurisdiction_ref: "us-co-place-0820000" }), null);
+  assert.equal(portraitForRecordedVote(vote, null), null);
+});
+
+test("public portrait assets follow released decisions and admit future voters", () => {
+  for (const [personId, name, image] of [
+    ["479", "Susan Noble", "susan-noble-original.png"],
+    ["210", "Steven J. Douglas", "steve-douglas-original.png"],
+  ]) {
+    const id = `recorded_voter_co_commerce_city_commerce_${personId}`;
+    const portrait = { name, jurisdiction_ref: "us-co-place-0816495",
+      identity_scope: "legistar:commerce", official_person_id: personId,
+      src: `./portraits/${image}` };
+    const voter = { id, type: "RECORDED_VOTER", name,
+      jurisdiction_ref: portrait.jurisdiction_ref, identity_scope: portrait.identity_scope,
+      official_person_id: portrait.official_person_id };
+    const vote = { voter_entity_id: id, name, vote: "Aye" };
+    const snapshot = { schema_version: "pnull-public-snapshot-v1", demo: false, preview: false,
+      status: { state: "released" }, entities: [voter, { type: "DECISION", votes: [vote] }] };
+    assert.deepEqual(selectPublishedPortraits(snapshot, { [id]: portrait }), { [id]: portrait });
+    snapshot.entities[1].votes = [];
+    assert.deepEqual(selectPublishedPortraits(snapshot, { [id]: portrait }), {});
+    snapshot.preview = true;
+    assert.throws(() => selectPublishedPortraits(snapshot, { [id]: portrait }), /released public snapshot/);
+  }
+});
+
+test("Commerce City alias portraits still require the scoped roll-call identity", async () => {
+  const releaseMode = process.env.PNUL_VALIDATE_RELEASE === "1";
+  const released = releaseMode ? JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8")) : null;
+  const releasedIds = new Set(released?.entities.filter((entity) => entity.type === "DECISION")
+    .flatMap((decision) => [...(decision.votes ?? []), ...(decision.consent_block?.roll_call ?? [])])
+    .map((vote) => vote.voter_entity_id) ?? []);
+  for (const [personId, name, bridge] of [
+    ["210", "Steven J. Douglas", "official_email"],
+    ["403", "Jose Guardiola", "official_email"],
+    ["708", "Rocky Teter", "exact_name"],
+  ]) {
+    const id = `recorded_voter_co_commerce_city_commerce_${personId}`;
+    const voter = { id, type: "RECORDED_VOTER", name, jurisdiction_ref: "us-co-place-0816495",
+      identity_scope: "legistar:commerce", official_person_id: personId };
+    const vote = { name, voter_entity_id: id };
+    if (releaseMode && !releasedIds.has(id)) {
+      assert.equal(votePortraits[id], undefined);
+      assert.equal(portraitForRecordedVote(vote, voter), null);
+      continue;
+    }
+    assert.equal(votePortraits[id].identity_bridge, bridge);
+    assert.equal(portraitForRecordedVote(vote, voter), votePortraits[id]);
+    assert.equal(portraitForRecordedVote({ ...vote, name: votePortraits[id].source_page_name ?? "Rocky Teeter" }, voter), null);
+    assert.equal(portraitForRecordedVote(vote, { ...voter, official_person_id: "0" }), null);
+    assert.equal(portraitForRecordedVote(vote, { ...voter, jurisdiction_ref: "us-co-place-0000000" }), null);
+  }
+});
+
+test("Castle Rock voter portraits bind to the exact portal person and town", async () => {
+  const releaseMode = process.env.PNUL_VALIDATE_RELEASE === "1";
+  const released = releaseMode ? JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8")) : null;
+  const releasedIds = new Set(released?.entities.filter((entity) => entity.type === "DECISION")
+    .flatMap((decision) => [...(decision.votes ?? []), ...(decision.consent_block?.roll_call ?? [])])
+    .map((vote) => vote.voter_entity_id) ?? []);
+  for (const [personId, name] of [
+    ["419", "Jason Gray"], ["492", "Ryan Hollingshead"], ["420", "Kevin Bracken"],
+    ["626", "Mark Davis"], ["342", "Max Brooks"], ["494", "Tim Dietz"],
+    ["493", "Laura Cavey"],
+  ]) {
+    const id = `recorded_voter_co_castle_rock_castlerock_co_${personId}`;
+    const vote = { name, voter_entity_id: id };
+    const voter = { id, type: "RECORDED_VOTER", name, jurisdiction_ref: "us-co-place-0812415",
+      identity_scope: "legistar:castlerock-co", official_person_id: personId };
+    if (releaseMode && !releasedIds.has(id)) {
+      assert.equal(votePortraits[id], undefined);
+      assert.equal(portraitForRecordedVote(vote, voter), null);
+      continue;
+    }
+    assert.equal(votePortraits[id].source_capture_kind, "browser_dom_extract");
+    if (personId === "494") {
+      assert.equal(votePortraits[id].source_conflict.state, "UNRESOLVED");
+      assert.match(votePortraits[id].source_conflict.public_note, /portal's website field points to another council profile/);
+    }
+    assert.equal(portraitForRecordedVote(vote, voter), votePortraits[id]);
+    assert.equal(portraitForRecordedVote(vote, { ...voter, identity_scope: "legistar:commerce" }), null);
+    assert.equal(portraitForRecordedVote(vote, { ...voter, official_person_id: "0" }), null);
+    assert.equal(portraitForRecordedVote(vote, { ...voter, jurisdiction_ref: "us-co-place-0816495" }), null);
+  }
+});
+
+test("released Colorado Springs voter portraits still bind to their exact names", async () => {
+  const released = JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8"));
+  const voters = new Map(released.entities.filter((entity) => entity.type === "RECORDED_VOTER")
+    .map((entity) => [entity.id, entity]));
+  const decision = released.entities.find((entity) => entity.type === "DECISION");
+  assert.equal(decision.votes.length, 9);
+  for (const vote of decision.votes) {
+    assert.equal(portraitForRecordedVote(vote, voters.get(vote.voter_entity_id)), votePortraits[vote.voter_entity_id]);
+  }
 });
 
 test("case-specific static pages use their own metadata and escape source text", async () => {

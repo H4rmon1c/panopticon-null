@@ -4,6 +4,8 @@ The scheduled Colorado collectors now start from seven official Legistar **HTML 
 
 The command extracts same-host `MeetingDetail.aspx` links and `View.ashx` agenda, agenda-packet, and minutes links. It writes a private, digest-named candidate artifact at `discovery-candidates/<source-id>/<calendar-sha256>.json`. Each candidate records the link URL, kind, anchor position in the archived HTML, and source snapshot digest. Repeated captures of identical bytes produce the same artifact. A changed page gets a new artifact; a page with no eligible links fails instead of reporting a false empty calendar. The parser does not follow links, crawl arbitrary hosts, or create public facts.
 
+The collector has a [separate fallback matrix](../deploy/selfhost/collection-fallbacks.tsv) for five official Legistar event APIs. It tries an API only if that jurisdiction's HTML calendar review or fetch fails, and only after verifying a current review of the API source itself. The run still exits as degraded so monitoring does not hide the failed document path. API event discovery retains bounded raw responses in the private ledger; an exact individual vote still requires its own cited roll-call record. Douglas County and Littleton do not yet have verified API fallback profiles.
+
 ```sh
 pnull --config configs/states/co-commerce-city.toml \
   --data-dir /var/lib/panopticon source review verify commerce-city-calendar
@@ -12,6 +14,10 @@ pnull --config configs/states/co-commerce-city.toml \
 ```
 
 The first command will fail until a current review of that exact calendar endpoint is recorded. Do not enable unattended retrieval merely because the endpoint is public. The review is at the **source level**, not for every new record. The scheduled matrix checks the review before each fetch. The candidate artifact and the raw source archive stay outside the static web root.
+
+## Non-Legistar town index pilot
+
+[Silver Plume's official agenda and minutes index](silver-plume-discovery.md) is a separate small-town HTML/PDF source. `source discover-index` creates private same-host PDF candidates under an exact upload prefix. Its index and PDF path policies remain unscheduled until reviewed. An official API may supplement a missing named roll call if one is found and reviewed; the town profile does not assume one exists.
 
 ## Archive one discovered official document
 

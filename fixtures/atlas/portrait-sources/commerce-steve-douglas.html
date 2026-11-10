@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7" lang="en"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8" lang="en"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9" lang="en"> <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js" lang="en-US">
+<!--<![endif]-->
+<head>
+	<!-- Published by OpenCities, 1.38.0.1 -->
+
+    
+        
+    
+    
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="theme-color" content="#FFFFFF"/>
+    <title>Steve Douglas  | City of Commerce City, CO</title>
+	<meta name="generator" content="OpenCities - https://granicus.com/product/opencities" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Using mobile-web-app-capable for now to enable full-screen experience on supported platforms -->
+    <!-- Note: This tag works mainly on Android Chrome. It does NOT enable full-screen mode on iOS Safari. -->
+    <!-- For iOS, the correct tag is: <meta name="apple-mobile-web-app-capable" content="yes"> -->
+    <!-- TODO: Monitor for updated meta tag standards from Apple or other browser vendors -->
+    <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="description" content=" Term ends 2027 Board and Committee Appointments ADCOG Dinner Airport Coordinating Committee Council Orientation Committee E-470 Highway Authority Environmental Policy &amp; Innovation Committee Memorial Day Parade Advisory Committee Metro Mayors..." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas" />
+    <meta property="og:title" content="Steve Douglas" />
+    <meta property="og:description" content=" Term ends 2027 Board and Committee Appointments ADCOG Dinner Airport Coordinating Committee Council Orientation Committee E-470 Highway Authority Environmental Policy &amp; Innovation Committee Memorial Day Parade Advisory Committee Metro Mayors..." />
+    <meta property="og:image" content="https://www.c3gov.com/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?w=1200" />
+    <meta property="twitter:card" content="summary" />
+    <meta property="twitter:title" content="Steve Douglas" />
+    <meta property="twitter:description" content=" Term ends 2027 Board and Committee Appointments ADCOG Dinner Airport Coordinating Committee Council Orientation Committee E-470 Highway Authority Environmental Policy &amp; Innovation Committee Memorial Day Parade Advisory Committee Metro Mayors..." />
+    <meta property="twitter:image" content="https://www.c3gov.com/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?w=1080" />
+    <link rel="canonical" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas" />
+
+    
+    <link rel="icon" type="image/png" href="/files/ocfavicon/City/favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="/files/ocfavicon/City/favicon.svg" />
+<link rel="shortcut icon" href="/files/ocfavicon/City/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="/files/ocfavicon/City/apple-touch-icon.png" />
+<link rel="manifest" href="/files/ocfavicon/City/site.webmanifest" />
+    <script>
+        (function () {
+            if (window.__UNLOAD_LAZY_PATCH__) return;
+            window.__UNLOAD_LAZY_PATCH__ = true;
+
+            var supportsPageHide = ("onpagehide" in window);
+            var mappedType = supportsPageHide ? "pagehide" : "beforeunload";
+            var nativeAdd = window.addEventListener;
+            var nativeRemove = window.removeEventListener;
+            var unloadMap = null;
+            var patched = false;
+
+            function ensurePatched() {
+                if (patched) return;
+                unloadMap = new WeakMap();
+
+                window.addEventListener = function (type, listener, options) {
+                    if (type === "unload") {
+                        var wrapped = function (evt) {
+                            if (supportsPageHide && evt.persisted) return;
+                            listener.call(this, evt);
+                        };
+                        unloadMap.set(listener, wrapped);
+                        return nativeAdd.call(this, mappedType, wrapped, options);
+                    }
+                    return nativeAdd.call(this, type, listener, options);
+                };
+
+                window.removeEventListener = function (type, listener, options) {
+                    if (type === "unload") {
+                        var wrapped = unloadMap.get(listener);
+                        if (wrapped) {
+                            nativeRemove.call(this, mappedType, wrapped, options);
+                            unloadMap.delete(listener);
+                        }
+                        return;
+                    }
+                    return nativeRemove.call(this, type, listener, options);
+                };
+
+                var orig = null;
+                Object.defineProperty(window, "onunload", {
+                    configurable: true, enumerable: true,
+                    get: function () { return orig; },
+                    set: function (h) {
+                        orig = h;
+                        if (typeof h === "function") window.addEventListener("unload", h);
+                    }
+                });
+                patched = true;
+            }
+
+            window.addEventListener = function (type, listener, options) {
+                if (type === "unload") {
+                    ensurePatched();
+                    return window.addEventListener(type, listener, options);
+                }
+                return nativeAdd.call(this, type, listener, options);
+            };
+
+            window.removeEventListener = function (type, listener, options) {
+                if (type === "unload" && !patched) {
+                    return;
+                }
+                return nativeRemove.call(this, type, listener, options);
+            };
+
+            function patchTelerik() {
+                ensurePatched();
+                var ns = window.RadAjaxNamespace;
+                if (!ns || !ns.EventManager || !ns.EventManager.Add || ns.EventManager.__UnloadPatched) return;
+                var origAdd = ns.EventManager.Add;
+                ns.EventManager.Add = function (el, evtName, handler, clientId) {
+                    if (el === window && evtName === "unload") {
+                        return window.addEventListener("unload", handler);
+                    }
+                    return origAdd.call(this, el, evtName, handler, clientId);
+                };
+                ns.EventManager.__UnloadPatched = true;
+            }
+
+            if (window.RadAjaxNamespace)
+                patchTelerik();
+            else (window.requestIdleCallback || function (cb)
+            {
+                setTimeout(cb, 120);
+            })(patchTelerik);
+        })();
+    </script>
+    <!-- Preconnecting to Google Fonts servers -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- Defer Roboto font loading to avoid render-blocking -->
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const robotoLink = document.createElement('link');
+            robotoLink.rel = 'stylesheet';
+            robotoLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap';
+            document.head.appendChild(robotoLink);
+        });
+    </script>
+
+    <style>
+        .gm-style, .gm-style * {
+            font-family: 'Roboto', system-ui, -apple-system, "Segoe UI", Arial, sans-serif !important;
+        }
+    </style>
+
+    <script>
+        document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, "js");
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    
+        
+            <script type="text/javascript">
+                window.__oc_flags_ImprovedBreakpointEventHandling = true;
+            </script>
+            
+        
+    
+    
+    
+        <script type="text/javascript">
+            var __metaQueryBreakpoints = {
+                'sc-size-4': '(max-width: 480px)',
+                'sc-size-3': '(min-width: 480px) and (max-width: 768px)',
+                'sc-size-2': '(min-width: 768px) and (max-width: 992px)',
+                'sc-size-1': '(min-width: 992px)'
+            }
+
+            var __ocSizePoints = [
+                { min: 0, name: 'sc-size-4' },
+                { min: 480, name: 'sc-size-3' },
+                { min: 768, name: 'sc-size-2' },
+                { min: 992, name: 'sc-size-1' }
+            ];
+
+        </script>
+    
+
+    <!-- Framework Section -->
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="/files/templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/jquery-3.7.1.min.js?seamlessts=639263245317035916" ><\/script>')</script>
+
+    <!--Google Maps API Loader – Improved Version to avoid Warning
+    This script loads the Google Maps JavaScript API using a dynamic and async method.
+    It replaces the old static <script> tag to avoid performance warnings from Google.
+
+    Dynamically creates the <script> tag with loading = async for better performance
+    Builds the API URL with required libraries(places, geometry, marker, geocoding)
+    Uses a Promise and callback(google.maps.__ib__) to confirm when the script is ready
+
+    It Avoids Google’s warning about direct script loading
+    Improves page load speed by loading the API asynchronously-->
+
+    
+        <script>
+            (function (root) {
+                root.OpenCities = root.OpenCities || {};
+                if (!root.OpenCities.GoogleMapsLoader) {
+                    root.OpenCities.GoogleMapsLoader = {
+                        _cbs: [],
+                        _ready: false,
+                        onReady: function (cb) {
+                            if (this._ready) { try { cb(); } catch (e) { console.error(e); } }
+                            else if (typeof cb === 'function') this._cbs.push(cb);
+                        },
+                        _fire: function () {
+                            if (this._ready) return;
+                            this._ready = true;
+                            var q = this._cbs.splice(0);
+                            for (var i = 0; i < q.length; i++) {
+                                try { q[i](); } catch (e) { console.error(e); }
+                            }
+                        }
+                    };
+                }
+            })(window);
+
+            (g => {
+                var h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__",
+                    m = document, b = window;
+                b = b[c] || (b[c] = {});
+                var d = b.maps || (b.maps = {}), r = new Set, e = new URLSearchParams,
+                    u = () => h || (h = new Promise(async (resolve, reject) => {
+                        a = m.createElement("script");
+                        e.set("libraries", [...r] + "");
+                        for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]);
+                        e.set("callback", c + ".maps." + q);
+                        a.src = "https://maps." + c + "apis.com/maps/api/js?" + e.toString();
+                        a.loading = "async";
+                        a.async = true;
+                        a.defer = true;
+                        d[q] = resolve;
+                        a.onerror = () => reject(Error(p + " could not load."));
+                        a.nonce = m.querySelector("script[nonce]")?.nonce || "";
+                        m.head.append(a);
+                    }));
+                if (d[l]) {
+                    console.warn(p + " only loads once. Ignoring duplicate load.");
+                } else {
+                    d[l] = (f, ...n) => (r.add(f), u().then(() => d[l](f, ...n)));
+                }
+            })({
+                key: "AIzaSyA-UYJlT-SVu5Z1l89VvD9uqBlmPEQSsJs",
+                v: "3.65"
+            });
+
+            (async () => {
+                try {
+                    if (!google?.maps?.importLibrary) return;
+
+                    if (!window.OpenCities.__mapsLibsPromise) {
+                        window.OpenCities.__mapsLibsPromise = Promise.all([
+                            google.maps.importLibrary('maps'),
+                            google.maps.importLibrary('places'),
+                            google.maps.importLibrary('geocoding'),
+                            google.maps.importLibrary('marker'),
+                            google.maps.importLibrary('geometry')
+                        ]);
+                    }
+                    await window.OpenCities.__mapsLibsPromise;
+
+                    if (window.OpenCities?.GoogleMapsLoader) {
+                        window.OpenCities.GoogleMapsLoader._fire();
+                    }
+                } catch (err) {
+                    console.error('Google Maps failed to initialise', err);
+                }
+            })();
+        </script>
+    
+    <script src="/files/templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/modernizr.custom.710f3bf.js?seamlessts=639263245317035916" defer></script>
+    
+    <!--// End Framework Section -->
+    <!-- OpenCities Section -->
+    <script>
+        var OpenCities = OpenCities || {};
+        OpenCities.Paths = {
+            SiteTemplate: '/files/templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/',
+            ThemePath: '/files/templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/'
+        };
+    </script>
+    <script src='/ocapi/3f0b04d8-9c50-4288-a1f1-8c5d8477dc88/en-US/websitesettings.js'></script>
+    <script src="/files/templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/oc_head.js?applied=20250825062816"></script>
+    <!-- Script Combine. To enter debug mode for this browser session, enter OcScriptCombineDebug=true as a querystring -->
+<link href="/files/oc-templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/oc_grid.css~oc_style.css~oc_wizard_style.css~oc_main.css~oc_forms.css~oc_wizard.css~oc_wizard_menu.css~oc_main_s1.css~oc_wizard_s1.css~oc_wizard_menu_s1.css~oc_grid_s1.css~OcScriptCombine_Minify0?uniqueid=20250825062816" rel="stylesheet" type="text/css">
+    <!-- Script Combine. To enter debug mode for this browser session, enter OcScriptCombineDebug=true as a querystring -->
+<link href="/files/oc-templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/client_style.css~client.css~client_menu.css~client_s1.css~client_menu_s1.css~client_forms.css~OcScriptCombine_Minify0?uniqueid=20250825062816" rel="stylesheet" type="text/css">
+    <script>
+(function (BackgroundSettings, $, undefined) {
+    BackgroundSettings.initialise = function () {
+        this.Application = {"CSSSelector":".content-outer-container","EnableFade":false,"MediaType":"image"};
+    };
+} (OpenCities.BackgroundSettings = OpenCities.BackgroundSettings || {}, jQuery));
+OpenCities.BackgroundSettings.initialise();
+</script>
+    
+    <!-- Script Combine. To enter debug mode for this browser session, enter OcScriptCombineDebug=true as a querystring -->
+<link href="/files/oc-templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/oc_print.css~client_print.css~OcScriptCombine_Minify0?uniqueid=20250825062816" rel="stylesheet" type="text/css" media="print">
+    <!-- Script Combine. To enter debug mode for this browser session, enter OcScriptCombineDebug=true as a querystring -->
+<script src="/files/oc-templates/00000000-0000-0000-0000-000000000000/fba89441-ff3b-47d8-bd1e-36815ed3cf9e/v/164/external_plugins.js~oc_form_helper.js~oc_main.js~plugins.js~oc_main_init.js~OcScriptCombine_Minify0?uniqueid=20250825062816" defer="true"></script>
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-5BKBC6DD');</script>
+<!-- End Google Tag Manager -->
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5BKBC6DD"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+    
+
+                                <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="DYTCK-JM9C8-ED4EP-C3GGK-Z575H",function(){function e(){if(!r){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,o.appendChild(e),r=!0}}function t(e){r=!0;var n,t,a,i,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(o,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",i=(a.frameElement||a).style,i.width=0,i.height=0,i.border=0,i.display="none",o.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void 0;",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=14,window.BOOMR.url=n+"DYTCK-JM9C8-ED4EP-C3GGK-Z575H";var i=document.currentScript||document.getElementsByTagName("script")[0],o=i.parentNode,r=!1,d=document.createElement("link");if(d.relList&&"function"==typeof d.relList.supports&&d.relList.supports("preload")&&"as"in d)window.BOOMR.snippetMethod="p",d.href=window.BOOMR.url,d.rel="preload",d.as="script",d.addEventListener("load",e),d.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!r)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),o.appendChild(d);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="mjqwvmqxyj72o2xtrusq-f-aaa957723-clientnsv4-s.akamaihd.net",i="false"=="true"?2:1,o={"ak.v":"41","ak.cp":"1858296","ak.ai":parseInt("1075935",10),"ak.ol":"0","ak.cr":26,"ak.ipv":4,"ak.proto":"h2","ak.rid":"14e3c86e","ak.r":47319,"ak.a2":n,"ak.m":"dscb","ak.n":"essl","ak.cport":24827,"ak.gh":"23.202.99.199","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.0rtt.ed":"","ak.csrc":"-","ak.acc":"","ak.t":"1794346277","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==iUDRaoQK+OqaoyKV1ccasTxikmu+mUZdogQagPZjKlADoWCb0XTdDTr3zF6fRtZ77i5tvvFLjqNJ7ofuqwmN6jPM4gJtyc1HFF/QK6hOwex85NjqmGvXhPoBi7X+kTkvNIdohZ+I9JRNfp/t4Pb+bMX6+S1O/KVxJ1lkfozZcdAtUE+Ai1I6u7hfdbe8p18g/WRWtS7LCMlZD4RIAjKgb/CDzbL9bUKY7zqJ+nRems8yvkfoZ9+gqllauaUp9K9asXR6GkzKobJ4oNskwtXoOZO/NX/1byZS4A5NnKz8hfarcpS20HulzchcrIFXzA3sDkwQJk2O1Xq3+2PdAi+nT0WNh0MnmkD8LXEuKmmqNEqdCctDHZS5QbzKIrQjmyZ8k3N12vPV2C1O9ebSwhbVsS3eKhmcZmDMGIGwVC2Bv5U=","ak.pv":"363","ak.dpoabenc":"","ak.tf":i};if(""!==t)o["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))o["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(o)},rv:function(){var e=["ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.0rtt.ed","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:o,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body class="body layout-modern  site-search-always-visble  content-type-oc-elected-official content-template-oc-default group-template-oc-full-width-with-default-header page-name-steve-douglas page-sequence-1 page-depth-3 page-section-10 website-type-primary device-desktop " id="body-top">
+    <div id="skip-to-content-container">
+        <a href="#main-content" class="visuallyhidden focusable" id="skip-to-content-link">Skip to main content</a>
+    </div>
+    <script>
+        // OCNOW-11988 (Cursor): Proactively focus skip link when returning from browser chrome.
+        // Must run inline (not deferred oc_main.js) so focus is intercepted before NVDA speaks footer.
+        (function () {
+            var awaitingReentry = false;
+            var inertSupported = 'inert' in HTMLElement.prototype;
+
+            function isExplicitlyOutsideDocument(node) {
+                return node != null && !document.documentElement.contains(node);
+            }
+
+            function getSkipContainer() {
+                return document.getElementById('skip-to-content-container');
+            }
+
+            function getSkipLink() {
+                return document.getElementById('skip-to-content-link');
+            }
+
+            function applyGuard() {
+                awaitingReentry = true;
+                if (!inertSupported) {
+                    return;
+                }
+                var skipContainer = getSkipContainer();
+                var children = document.body.children;
+                for (var i = 0; i < children.length; i++) {
+                    if (children[i] !== skipContainer) {
+                        children[i].setAttribute('inert', '');
+                    }
+                }
+            }
+
+            function clearGuard() {
+                awaitingReentry = false;
+                if (!inertSupported) {
+                    return;
+                }
+                var children = document.body.children;
+                for (var i = 0; i < children.length; i++) {
+                    children[i].removeAttribute('inert');
+                }
+            }
+
+            function isSkipLinkElement(target) {
+                if (!target) {
+                    return false;
+                }
+                var skipContainer = getSkipContainer();
+                return target.id === 'skip-to-content-link' ||
+                    (skipContainer && skipContainer.contains(target));
+            }
+
+            function focusSkipLink() {
+                var skipLink = getSkipLink();
+                if (!skipLink) {
+                    return;
+                }
+                if (window.scrollY > 0) {
+                    window.scrollTo(0, 0);
+                }
+                skipLink.focus({ preventScroll: true });
+            }
+
+            function scheduleGuardIfDocumentLostFocus() {
+                window.setTimeout(function () {
+                    if (!document.hasFocus()) {
+                        applyGuard();
+                    }
+                }, 0);
+            }
+
+            document.addEventListener('focusout', function (e) {
+                if (isExplicitlyOutsideDocument(e.relatedTarget)) {
+                    applyGuard();
+                }
+            }, true);
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Tab') {
+                    scheduleGuardIfDocumentLostFocus();
+                } else if (e.key === 'F6' || (e.key === 'l' && e.ctrlKey)) {
+                    scheduleGuardIfDocumentLostFocus();
+                }
+            }, true);
+
+            window.addEventListener('focus', function () {
+                if (!awaitingReentry) {
+                    return;
+                }
+                applyGuard();
+                focusSkipLink();
+            }, true);
+
+            document.addEventListener('focusin', function (e) {
+                var reentryFromChrome = awaitingReentry || isExplicitlyOutsideDocument(e.relatedTarget);
+                if (!reentryFromChrome) {
+                    return;
+                }
+                if (isSkipLinkElement(e.target)) {
+                    clearGuard();
+                    return;
+                }
+                applyGuard();
+                focusSkipLink();
+                clearGuard();
+            }, true);
+        })();
+    </script>
+    <form name="mainForm" method="post" action="/Elected-officials/Current-Council-Members/Steve-Douglas" id="mainForm">
+<input type="hidden" name="ctl04_seamless_script_manager_TSM" id="ctl04_seamless_script_manager_TSM" value="" />
+<input type="hidden" name="__SEAMLESSVIEWSTATE" id="__SEAMLESSVIEWSTATE" value="H4sIAAAAAAAEAAADQPy/GTWoPHRZt8WomqbqoluMvmparmm/fZVrupdbTShlmZVIs/ceAWeJ/jDy28YvGMOdS3EDAlIrkh2060f3FX2eBFfRxiq+AJfufypvg6PF4v6zjABidykulRPwjcZ2jmjRz1VBKit18mj3BpPF+cOt3/ktHtqDOlNSwdReWNq0lgc9o/rORHWSjyaUeHWcgUcuYjcGBypug4iBsHElDLEaL0rdMUTB+wRqQC8rDmvXUsKC8nJ2Jg/JAWrahj+FuJJG34hVYgKb9wRcARgeOj080VZEPhzzIAe4mcxfjuLKxnBaQhWbN4XBicmnzzyHAQvrLYpKFybYfPVxsvk6H6iAo48FZltYR071ytMrN1bU4l7d3wbErWpOJyFKqeLFBGj7Ymn85YxH8fj/JC2iHv+aAl6fj9eyRxzEaENj0wtDlHVdiqH7FOpDnUxKXGe62u6STgcwhZGfaDoeZZxrQC7/qJfrTvUM1U/C959aBEogjvodAfwY6n9EbjX9eok7Fwe/FS+NMo/C+oSRbZ7UJ5IarAj0Q7ibyXMgERr7ElKPwmqhSis0ZnzSnguoWmwk6j2nOHP8M/mgNmR2aSdmu6X5W3iaDTpPSXzalFIb4BobneeLh627y9kq8dT5Z1JSrE8IkodRW7Ne+Qo9xsFp2L/LF8fqZ5A6fSV8ntUKLwHdgKbgKQFDSPKrIl1ku6Ck5RZA9KYZv3FZqwJQbbP57XDbscSZs3gjVleppRMe8h43Ig4ySuJL3XEBgquaN0jK+30UR4x8p7Ab5lnD8b62XX8oTFBhkoF1Dv7Bxd+BCigj23U6QfbizipfS+uKoGwfXRtY0PPaqWe91n1DzIQlF/PaBjrTKrRpFr0YMJiezN6S4RMv+2ZEvTgHkksmIucPtF9MJbJHO5lefeIz3On1vwASFanCNGOFBq4LmdxnoCasw+ZlR1yPCxCR4kHUQVcdtg+XA/cG0w/9rKcqecpoQfdUzsfCqBtakhKdKEGnEckhhW1Jav3vkhG0bRSfnBJevsSqyvLdnePVPERxlDcPOIHL2TfUaeHqjpHIQSm4aez82WFtYd5LzUyenEnocQ3nQujPt36hZP29ct/r4Noo2SQWlWWfYZouKh3hXnrPr6EDEH8cHqsTZRAeD+IDqV+V0Ic4edDsU31hhu3gScv0c4pS6bZhXkOIUioUVe522tlBHUrg4+rc0VA4ecCuMAbUZlrpgCQuHx/re63dy0RdV8MH3eHQcbmn6O23D8UnQmhZ6H3d4eM2brj8qxnMF0u0suzpJ4iWIPVBalZNRB0cFe6X3VvKlS1y9nzgQJM+PeMRyw4spObTkDxgxaUi0YHCJpK5j/Y3eQZI21+d2NQvk9xa+qA0wmf77XEtajtR4lArhO7H7aLoDI1YWYt9eSwhd8t4B9//ZGJW6bthsIQjgSSQqts+rPzAJDxQgQNzVDVDCTCdOV43WyBe1hWVLCidC8AknlaKngufUOQ34K98/cPHh7ROQXxzAaCYYommSydDcZt13Yl+9th3cXQAHchVIklXLBbYQ4qUjn5/7wkO22kTprnBNRBDirXYIOjevkvuEr/zqSlXxL/vKdvJsY6yRrl+maPIUWFTaDfgClRmB/C5ZlhkXW1uX1QDyjY3pK+ED1JhqfG89WDqCNsC9fC955o/cabsUT69y11chRlSlsk/UhZNzhHF8bZtVwqsKEKF5WcA5CfVuTJB0Ss9paV3+29Gxbq35nm12pFw62S5q8mA/EQDaZd7TOPM1kzdbcThgcrHlMuSzE1sV/DAhaaufG+GedgJKYeUWMzps9/sqzEgmBEDNMYDawSLvaqjDowNKapCwNPiYPKUJpdrClwl8abPT2EtNI0gJTcHisOtZG8ZOKTh4k+0dPtm1jv07P3jhqc6/U15ucWa3HoJjjOiD7BfWEa+C6819x7WXSII6at6DhYsUuwgx58TlOKZpcmat6+zLkhwCwJOVxVz5vZDlfMF8H0a5tkzDSR9ZeLSe6oByrCGaHf45SBOo2i3bcp6/GFbRZ9CrC3MDiEhGhYSHrBXOnM09rmvIgwDvrmjXBQ+2wqgdIOsBHGHlL4ZLsTWQL1P9gvUq/wL2EDbHxs02UoemELe7XQ7LQ22zsqPqbyDifwIFStTXNwTNaN7t3fFFjOyEiufz586+yTM8uNAv7TR7jczPkhYPv4BYOuZfLuxuS6MswJCclhL0HCXTcn7mK5oyJaIZA5j9Gu+9vG2a7duyIUQIswJobGCGM2dmJ5/wVoCJd5/1LyvZloGcgpswlVfFimOwmN5dKppPCguOSFYlR9BoyXnseND9pdos7Lj+csnpck6PrwgSYyj4xaYnm08YRT8PPYK/0F9PMGjC0OqmEyDOj1Jj6ZTiMt3aTHHmj2/v6i7ceZc6tkfz6qRrXFGVzDMWBFDGhVINqvugEDZvTB8Fjb7qFTqdT5U2oJYxL36dh4M/u+Np1YGHRgWmB8DjO91/PVZiUsLU7nupkxSIi9ecezbWKc45/SH7wJ6pHqGI5pKVo+hzKNznYAqIVHhVgtVJA76gEZ1VEiARvMxiv43TeW6qUQCrMkJMQceDDzh/AK1b2h/Y67VUvI55/OwDPF80ZYAvRLMgtDJEmavLScWYstiKEqBklb7b0UuzrFho4o0BkVC1Jv1brbhe3ZJMKrHzGpTltBkzNeT7mL/KbB8kxgtBBZoh6z7nU63MMaVbeK3SPaiEqyycVX6bgpqDeIaXq6N0GYXcF0ye74kZv+d59PSPdipyHEMH9DtTpqtdm/B9JP4vtdzl2zJXU8I7EKW+YiFx1mFvu+oP2YTOvnyE2tDuMR++Yezx0hGcGhTFQYFIt7nRdQtXCiNrxL8vqnxXKHV0HFWkIUDT+ZzBL9N/MQP7vRLGwBxTJqWTqw2/DznlM38kM94mHLZ3fjpYpL4BPcrc0Joclon9gBpw6+fL3aNekgAynFLo9/SHXDjVAeBJJgnhyGhj2gQfQ9t17zRZ4Y2gotGYx9buG8D8J870lbzDQSzdlZmYllCVNmUEdC9eDTNyPh/49xzhxZ6O+8MKjfFXNwTpn7Ix+7FlyDB640USVIB9T1XKnigZ9yJlY5lwTAjk/nNSIeEZ10il84NAJOGB9D3aNZQtaNQtEtDIrh7NWw2Uq/sB56pD0lUSp13aE+gwPxWAx2IGDtDI1hrfp/d1PevFOACqlz3CVnO6sp0mV4SBz2xpg1nOAqNTCq0st+Xba68Frubq6x4Y2aRP9lH4y4UVpXx9Vf3SsNB9L3K5guXXUim1s75Q+0ole0wVL97uxCLwHVxOfDCCKIC7lE/yt95yZQy/Jd413ifhJaLG+adVNgRH5Owvmy65Y9EGRBiMTkr91vfenynBbWpIjV1XPB1z0oSN0L8WL6aE8SNP0tW4RE1e/0fbmnmpLQ0YaS1iEuFyogN7cfGUQOfORDcRRYgm8RfYt9pufYR0NuypPS2SEmdt30rLTVP/8Fr6qKVl7fcYZphTavBIgBSTQhs18Co6r6+2HUulYpk7CI45vaTQA+7nplBQ53vjFNT/NDo09Woi9KyHUj4tIYa0WzCrvlkVzyp+aVVe5eHnfAnEFmSFlG/Aii9IoTQXGf+A4UJqPYAC/lHfi/bOFz01ZgAHU3pYm6bXeW9Na13SOIvnMIAXwJnxxo3Fz+JX1ZSwo3b24cbBz/rxjqtXxy6P25ujkMaYqUGFqg2cbjRNr3M4HPjwWblXWkjuKHoZQfUtI/uMNd65JxN8/QLq2nQItTfQ1g3gMti2VveLt7ENvwUb/lhr3pxjwbuqpwhxa6ZBLSQS2kdbNy9sM8Z2imrDmYAsccS1bzgVoB5fD6XWC3JsZHE+1w9n8K9WR7hwdEEeGH2rJp0VWg8ulOv835Bel/6Hs7R1KRTtvUc83t4nm1Wdy5LbgHZZBZGgQ0hlJploExZ8GLUQAY8pvZKsVYdpNyC7WFR1o5V6pKyGCcxRilUtD5L0Gnxw8Z2do9j2nduWKzcCWa6EGXcrbEUpXIkeEweiddMECZ1PjJQFAFYgbAPe2BdBJqfusfJ+5p9R8EdgSexCxkL3mk7/+etWtNpnvkY0/OmrLd23q/gJXctgO4bPCCOicp0EVt5fUgU4lppzN9BuX0NxKXzOF+/FCGjTerNYR6k/C0Ak9gKAABbQLY3H8t86kf3G9+GbNnJLLoNAYAteo3luvBvpIjG0jyrkBEq1X5AkQx5RBOJ3XrQlP4VncByNup4ouKyM9L4d8Wvo0DEjDWk5h7mkLjoXF9WJHfsnQ1tymH93VzoLbDZwB2FvSxPS1MQQq2LTsA2iyZeaoSus1jsoimRDW9OrvhSUWexsp4eWmRCJzF/scF8kmLjFzGyzL2k25zBFzUIxDTueIimAS/HJaGg0wBDSwtAvmpouk6VpKjRXYR2iSO79Mn+qeAW4fRycKTQLOFfSe0p7FSQaXUHtQRQ5I8gEoMXIGuTVShiQLUDm8MBeFWyF5dvNqsGx7WMwnAqC1lzWW7SxmNL0NNfd/5RcKvpc5lm0dZHJbdvWzA3T0c/+CamlhOZMKVDuHyxGW+1VqZWR2EUw2yROqMMht1JGMWoE39VSs2hJ8CTWjdqvlenLyDiz3PzAaQdFaVQB4yZoDc6tSr+ZSzjLvo56QVIQ4lEl8UH6lHw4RCoHnDh8BtH6BShyLJ6dt8JXfncVVWe89VKbp87NC8Fv3NA5lC5Uyi8+TqjT+POC1Lpx0fxvRzabp2xoIbMqdVMyyZnIDXvW8j1AIJuMgwP+mAMtNtP+gZBNV4ScVbU8MyotodK3O+911MOKl/ys7ujfmlFzNrIbe6f+l9cm6ILkWe1fkzVREejb5QRePougI2wuKEF0UcCWDb+Jjwpj5ZFCliYCIu8envfq6WgzwVOrshJs/YG66xuejWCTDV7b3CtCASeXKd9gdMXz4GA3zaNLjDrHfYO1ZzANxtAiC6/qrsSP35ERS7u7po4NTvuQs+d4YlGLmxp6YflbcqPhU8SWVWBqcM41D9VNSnW0IXsdiRvi0wfeB2dcSkeBAvwn79LpOXEKnnIELp40aic9SrBJ0GBNiP8/CORhKKR4em0lEpSNprJLkEwaNADgEqR1QCl7Yz40cq5MdWeKXym89UKyEi9ts4SgD3NyKjnhdd7lTEx6O2Csq9/GHrt8RDX8cP8pN7RLsil/kcz8Q7TddYcray1yEDB0GEoFfyDl1lbPF19J577ZDO2BUY+CHua2j6lwTmpS4YQXUPUl54BboIrlrgYyKzoEzfGiRcfPX+gQWP6VBbIQ85OOm8CH90JG9DX+IwsSSt8ETAOKL6B/jr5UoJsXRObgze15svX0gcdAUNV6t3t8F0QPtRCzh2M3Rct94Xfyg/l5vm/pdyA8GRnMYS4TevnWYTuG2pj8dgr9jpku0cle+/HOB7gKyJEdPZkP6cRmkKi3A+rTahaFVyY17ucHwiwECURk+KeK70IC0ZEQpQ8WsGe6bMYI7I1eL6xz3CdzA6c+TV4qvoTLOPQj9r7kGXNi5SgtqeuWI/c5avVyzhZL4fGoewy+lsr2csN+SrlUUy/zrBbG7XPVg5nBRX8in8NLF4EOSchXLhTHue5Y07Ha2zztLPxeLy4RngdTbZH9D+etMnzGx6du74hEGB+yhoTB9g9lak2NdjvAy2+SxQhWGc2ck9BUSl3fxXydFhUaJpPU4fHQD7GluHEXlgn45+5riK9KOWrZW7KSUjLPN1Gqk2UlxJfrQZMkGQWbhXusPPcVcEGSvuT50jHusMWU1OkTiaSYrPlcQ6fG5h6v5G6mwZpgXyz+W81KkE8W3Q0SvLsH0UxGLR6V0baORoDhcDvG80OwKGcMwOA1h38PALbUPLK1LKEKlkE0LSPnSeBtKOd8qfOnhBmu16IlN7P8Cd4fXkJAcGgQruguUcjMB+oVGjh0F7DUehKVmv1Ed2SDlUPbDFDD1iNb0YOvwC5qeMsCI2Vzan3rVJcG1EgZuesl2LcIAxjI8ZgzeOBqmG9qdBetbtXFByk3JDLwYAy9cN+QRPiBOMFKNUxHbnCwL73UZSPGZg3JMOry1ikvYRylfmfPvbJzl3azHGSW1vSWL08JZmeBLprZsH7lFJJUiRxGnPrgRGgVbHdkKEP3PCQprmlu6YQr5QnvT3MskVt27L3f/fKjueeFiOR0TMGFFwoopfFSZT+0wRX6UwAQTnOzHhZfqgWIfGpPDrGFEEhXYTcGjE4lc0Dtt1oMS4c4xyX4BQ4pTL88mOtNH77e0jVJVj6IJlBeNvIIiB/7u+DU/nRPR91gj62aimU407BVruCIrIA0GLaF2P5NobG+Rtr0E+AH9bzjNMI2byJxgX2lWiQDtSv8BPbn8SLYkTeFHohe1ay2bXM9UPW952T6aOeZsD0r41TQnUJkNQubI+u6tQF3NVXiLy7lhMT1YcvMkTlaF0lJQO1wqgmZ76j0hA9//H5xFCnLf/x3QNBEQu7aySTDBeznBYEAhA/YZ4S4pqjHgjMaq91z0w5dGXHlBVKE1MZUujXUSUyjUMeCQYwAPyf34bSP8bbo1oncy4tlgUyKZlmxmtJyG274FQqBalrqmsAZVcpkRavB8kLT9Byfrqc5fPqvFhXTEEl7FyDSETx1JwL9bvVw2XHl6rJdVcMJkEZ4hqaZ/kLHpYrTsQJl3QU95GcxN3wlHM60mxYmhS9N4swblmDcc8Vq+03WCP7kgfHRuebQYpwJaL7UlyBP/ul0r1BlKtjUfa+FyytihdubCiROgngGcPxx4VyaNbdAp+thMOp3QJOHuaaEbYVCEJ7/L6UpgEkFvFRvwPVKRXT82rJpPlt5bRg+Vc2L20hrky4224u9soFZogJAoDfesYcyudMLGNa6XtviA18MnOQiGI5WQJ8MCltBSHjpoIyf1Qz1M85Wt3Rkdez7/C9ZAchwgKUihrkar+6FF5q9dyhugAk1wF9npYaRZL1UzTTyK9th3HXFp6ZYln2kfW9iuW83yxcXBXAtlXQm5616DKB6WGNbo6cfDKk450bB8ltq9ZX6gMiGvmhe4B9mgr7ZhOZr+nxEeUSFFFZEG/NdqpTLD2r4oHgILfzCPMzJ1AYBKdcJ4LR/iWUnDy480elh71E0ZSyXGAas2rEZtkqeSw8xG1ce4LEm2kRAf4Z2FPpffrjDMHHmqwEZZwbCXXnqDE51oE1n8k9kCM4n9Sf1K3WIJ4nJGJ/FTTOxYUoZbkPk9u3qoXAPZJWe0G/kv0gSdWGoaKjx6hK9tzY+W32Z8daN7Tp5G9F6TnKce6XAPa/r4LZvmGLHqrXtl1XIiqs4ucVdBjhXPea6CpRhAx4orMqt/T36vHMRimTKIBXKPCGWX/R9CrDlS3Yicwu5nAyHKBaANI+OusTuv3Jrm1BffXS+uYbKymgV8i3w89n2L64q349W5i1U3YySto25k7er3JMleaPmgd+h+frZsE+G/U3HVrkUCBJsMrwIMfik5pYYYxnfWtNDFcVYXnbUSkwA0rY8VDNQOFONEY8iKUUIglMJys45Pw7flqIwR7qogJw4eAqrgev2MyE1NC3rcb2WGO75bcud/xsPX/qrHNuh0k/OsICsiKgKLRmGGmbh5Ji9crOp9IVsTolbREl6SGDuL3k1GKurapmikSN0esxlUccAhSGAe/2N5wtS6M/DbH76b1kWl93imWZ/u+SAPvjnRhQxVJMH198+t+Wut+3+0rrt6Jt5vUrUiC9HN0j3/sNPhWWTgJ1GExsW6MnHPmajJpthXbaYLwDa4HyjVT92Wql/BpRtYFpi6ltvsW0Sf8BYl8xgpavj+FMSrU1dFeQo60Ol8qQYI5blQF87kqdvuuW27S+hagBKgs79HXFw0cP5BNyis3ZxfFJRfW3hBTR9wHWKqftGeZc5c9DPb8gWaYHfcMlRYIrzWp8vQ5YVTC+IgiobiF5h/RUxNxy+Ey4ocKJkMMXPitcOqgcLmlUXl/ZkbQjPx5CVNZ57LGs00wtgEJIJSLV5bfx9PmLG5ybmYwcujAKSS3ZwTcpg7PfkIC5GwqbN+dtpsSnA3JtQGfZnl8yp81Rf3GgAcdWVewClbsBan0FzlWMcxVZI2pdKLi129u44V86yIY1ZB4jwOgPjQRytaJI8gQYJyCGjoxsbTTjS9u47I40HeHnoZalVWW5lFNq0CSXX+jd2Ka7EyCF9RxW74k4rpzshnXaGsTNmJMB95D0Wrsn1aPt5GbCqxfAIgBJLUuZJqWvEdZTMlnaBlKr8wOzV2Qt2fGKZIZKM3KnNxVKScZOCn2/juOG6jB66l4YEeagxB1gH4HWgCZVifFjAkfkFtfkzgvOxsJdoy/UlGixxXigyh1/T49MMfbi2opeaRk39VjCmPtgwsi0Axtb+HV64E7ifKmOdshoTJ/900/qIAfHrBfZ3sT5JmXcbmQ30JLlSPu14GjvnhYLlm8pvjeUGSPOpgV+Lvp6gKgv8LnQUgnUZxDAoEXrWalu4RZgSPM3Ce6wO9XpB1Ri72nTjlmy6gtSgSmhxk4OIIHILUruXCHFAu8IaOh4V3cpmJZUEV9LjV6mPQnO5Mql1cp2DLbPzGyXjVOUc5OrHOtJ+yIkw7CCZCfu/YCu5nN0xICTmNmBPfi3PHGtuEAevYzKjd93c9FXxNx9+oW2HMDHXlEKhbUWRjVFnSaJvkg1850gAcxB6LO/8WlVni1kY1t54Ih7y+d/mDy2JBhv9HXOk/lqv5+ZEiTDixe28GUSlvSbLmAHdnpCd76WK437ismk1ZMPtpqcr3bv4VOUpt6J1jJd4RmrvZekTLb7VQv+r5CRHHvs156cZ2TYpvDUYgzShAJzu2rm1KcbE9czN3ct4pqPKiIW+HWMGgH5NK1IRNpSV3DuDSNLoTJeA2573u7Nse5GiA8n+MYYJ8wLZFkqf73QlMBRb3kC/u4dzfHk3hnqr4dgQbtZI760IjgbC+kZUP6oLsKrrhPRkOMIcm3u6BltWwtf7vn2K9nFNd3J4+ek1AjW6aeFKRirSeaZEPtzo7QRIIGEJ/wDtjLf50v83KYy4QF3x/EKAXpho/zffD+HRsvpLQSVQPBYi9fLbqjFk1pUQP7eQRiWK/zm/Po0iwduBbwvrW52aXYDrsuPaL3yqFPTZiD9FlLfwsq4GKuxXEFuNNxcNGazg6dilP1PLYMbV085Mw0r5qYSdT6Z0PCN/zE6VKcYN2qooCxxBOqSXa6nNoaijlTKhSKp2CEocAoDOk5WFd/59IQ9EJdX7yVok8X/In+q7JuSWBa4LlZUUzfl0zRo0aCPWvTPhXpLAcTGv08vstaxfRv/384yDBjlJtunej2JRkj72b0iiOdB7Y0yoHd9yIarLetLa6PWSDvcwUu1W5ij/PJhQGLdqLFrGLdFYy6CDwOnj+9icSgAE5hOpUF94WCy+j6S/+DChQfmLLXCZSEB5Of0cfERlz3kFv4UWHb6AV22Crc3BoxwgU0+cC4hEpMoOJaeLcMlzDo46M5GWY376ChMJPfpEYNsw9bznsPd7MxL6CdGOHg8tyV/ztMwDs4vLpl3RNNSUwwrI8ekB/ErMa6xVvsIizNwntJduIpF7glDtH/BcbU7mO93m3K2CER4+B5SZfEbBor6OQmkZLvK8HcjobXMtDRk6r3hBKtMO8+0ctssNgNzHTo8QxgyA4znEi85JH8jitjyyAQpY2GIyRAS4wm1IBGjyf0PmwMqBEf6wPGmeyd1FW5zW1vTyavpVo3AEeO5xjEZWqS0f6DiXQ7ylte1Lb2gAc6RSrQ3D30bEDKRYdhC5uQKrh5n0hgR8T6GZqwzo/vXHCa0QfO5q9slIECGwdFGRSiFd/fvYj+ognbvKMTXljHobCV+vZbwOCnWBfGc1QXjXWs8CYMwo5NDtIfiH/TlSF6hgvZvsQ85nrEwzA7r6Al0rWcOTuXn2vEZdkm+RlbGb+u4LVpc/DmalBvza2RPq6+IILuPtgMtoZ8J0JOrQwPVRqkLfQIBPN+1dj4/U4WLS6XakOaT6TDov4R6C9OhlJ/lGAuKetKF2JBLKRCMOC3ZWqhvKH6c2XlKX5gwNtMJ52dwJDEgGOUntMWos9pLxUMuRp2JdE4ew8GOHPPRGMf2gEmV5C2V46z9vr61XGP8itbWs099UldlscqtkxLKtt1pl/o3AWm4mX3IS1k9UgHwjtGpRj7KRNPPlFQA3XI2RszsXopbJgr+Ml1zL2mTliwr7a2y4adsUVzHAWSSPTm0IQSFjcy80SmPoDezRc/5b2Kzxmz+8phCt0q47lio+Yn+5hiL2p8Rpo/WoeVGOh3GuzLILMZl3v8u4EQp6+XUnHo2bM8+a8pAf+NTJEu+sA8ZvFeJN+sBdPeR0UJ4Z3pP2BpYrCHl0RyBWieqtqVI6ZYDsb3QPA5xrhI7GBqnMBWikJcVGo/+KzrzOf0Tgz85/jdWFeNJiNbqmZ9u9xt95ioMEnbwZCJs8r5cHB5rFif4IL68gNFX3DYXinXICX6pe5xhRHHAgpOurOy5UpuwMN+RmdFk9TMhiVuBkMkvetYiWIeZD82C3Hwotd9BZV/fx2QbPuO7pH3ROrdQZ8INULR4YkTTyGM6hDno3NpkoonehyKjQ/+0LotoXlFNmLi7luOQojmL6pdyBvhcHjErBwW9efyaGlx/oWMXkrOaBWSYoUucogDEeQrpILSCfr1af7xwb4dbNleq4UTWVwBM7QUilnfa5UgNnoRm+ML2LWl0tjLhnTI8BpMrasF1HJlSdnPGFSi1sr2q1JezwQ1WjUVnlqi399obPX2xKF9pKK/1bgmoTOInXdsOS7rOB76r9wo58BqSA+Yc8KRo1zJQedS8U60sIzblE1zRRo4d5PzC0/DvkbapCmAxz38fMmBf2L0CFw4t4+ys6zrvN+QNu7XwFgSFXjsRBAGvgwwHpLn1Ue2uMiiNeLeYEKFpsv+OvGB9RYD/QflFLK1TdhcN1MUMlYDRGDhwWjkTPMGZQfa8pMBB83IVxzzBKzXuJD8M6Iu8/aQ316A+KQ6LScyTschEfjj0+d1tfVllfsAjCv075ygYqMl3Mo8aCuxFIVn78JRjzQr+IU9iHwkyQ8fs19Mc4CssgxGvXqFzQQF2vW7mfrt3ggzsn1Zm2BoiOMvIjoPo/Up9xsfevFnNQR5NhhgFXM2vbr8WIMXHanSxzrAcM/jxKYGg+Vr1PYwLApOOqfihulRutB5dFPKoet57aSq0SyG3SyMTqPxjUIAGow0r7ZJeI2bSKFj5goVjlX521kvQGPebtDEinbz51mJgcylDKvTkpqA/iPewrITd3oNGJvNX+e90gGQrgv3opUOLTk+yNHhz4w6bKn2XYW2ImHk+Kj3Ij8fQqHAgZf884LFVrfDPbZ3VdCAKyUCwWRptYTbxJj8d9RPoFQ1P8iLy8bSvrkPEB1DvceN46csl5FWJ2rnVELb6AyU6+7dmi2zSQS1tTO5pBtKkLUBMI4Jr3St1bFQ4cYGtGRGAfDtgQnT1K82HRdO6tpw1tc4G1DJJtJaRZffUMyionj6b0tbgJNRIrhyXnQrX7ReSQsuHmRYvTL4xZnJ34me+uu7CCu+cjF+p/g8RCMnDIvMdrn/xue0DM+hvFROnLuWRKH8QXL/VqoGUaN4dlSF/gg8bxs1306pAwNo66bDiV3ayNjuPsuo07Zab8KFQ9TOEwvL1RVJmlB6FIoNSSNCjYuv/DSCryz/d7z66VCHhSqOYIHKoh9Cc934ivz9z/1e5y0rztH8FQ15+BTzS6kav8Eq+VVHGgaHILPxPo9K055A76OT/ZO9d1jn2Y7RPk0nnhx6qeGtNYdOKf+7xW0uPg/KwgZn4CfSn7i48txHGZ+OI0kx3MExXk0Q+FLmjCQV+razDrRGoMXEa3CNidL17O7OV2JYMrA4KuJj579UKFIrZQSKUHsrVfGB51zYxsWEvcb0q4vAQofWLKnwxv90zU2ccd9Ljg7e9XETfVwbxklsGH49re3lQRiFtLES3+RLaTaUr1uaph8QwF+OIYYN5py8qoZTKz1TeWwmaMkb6mFk6ruP9KFV8mepdspcB6SCJN8JheKPlhfDOuU9GHOBORRUddwGJLxWM1V9w2C3OPG/DicIO9TO6vE1/+px2uJ6jkR8jyRM10oOeIKb1PNzPbHjVhG6Z3hQzR5FeqxjR8VEsvnLcdiLytqT2eO/0y42Vt5LQtKtoTKJbX4aD1gC/gXthkKN0rSrsxTjwXNNpxMPKF1FNN4viuS8kas3RNH+Qs2dhxF+K+PvJ13bbKQfxu63eo7/7uKaHU1/WnkM0Bjyu0Org7aQyhcWE7n7PSrZGDXzC4Q2fiJb4ZRSBOuOFDTCFm4qv3TsLVlGK4v1JMpZh6Jy6HBPxB+igqoGP/HbvIXts778FlQspEWezYCDkuNETESSmPzNOm/lHUBjeVYyAOamImA5oAKCAfgXTLUZO4v9phyjHKcBnnYOQ1lABTpB0YKLuhuVvWRFfEeEaG+QRN4r0SQ542SQgb8+dyn51uLhL0sAoGZjSaH0OAwXrzO6Vy00Frh0vk852nFzvOZDIb4aIbnf9udWM4fUcNflIEVS6lGuRMV8LF3YCVw+rJU/dnICBt4pj6C+BEoir276mQDT1EczXjo5RWynP0kotiV3g2/FGM7Wq+W1f8olGsLCsN7IxWfWTs7a3oBNup9GKXjFy/2dH06ikKPOBObQA3ebVrL4K0wYYp+636X7hoRS/OllJLmNblO/MwAeDQfBtzZfOX4m6P9ck+wl+yzcACDrfz3zCMJlbgOidr471TFUsQV4DTL63Wk1I3VZOOLecLnqLHyKrqwvrmuewnIJl6oMq66wQmVnsnXVngyBCuBsSNBYY7Lj4MMx4XimvDFT7cbWqJdkKmiO8cy1OWX7ZIHh8JzRwgTbNbYAcBFKF+/tYlJ8ATi+K/x4bZcvPwiaNxbhI2UPUUWaLf0vaRhgSdluDcaugHxTMw8Mudx6HSYDBOCdVttPhXrfGUpCS/dpzaWwPHs6j7Cce8Sk2XxTKZkfLHnNYfcVfogkitpQ84r9xMrjnj/++xKc0ickd62W9FaPMjuDgDMaZODuKGGGUxefzfvVtvZpFKU/mmH5PH+lvSs4MoLI70Ayg0ZUiJjPrI/PviD2ERThmH6QU8CHcBJLkMVc0YUX7Zk6L5LrsVK1Dq/jzdyDtWsQj14ffZ7SLeHT8HlUtwBkBnUk4MSAeH7guoh1rhgqiXq0ex4DLDTKtnn5uH5zsMtOzgbq9yCYQp1VAx7pp6wF2XCtkWWRzlhPp2gJEKjJDWjuGG8Rkvgf5Z0cMpK4cqKItiRewMbUnCfBJWB8G1XbK/UpRe3QZq79hBYpo/jpU+pcW7bTC83C3pPwFaLpsMyF8pX1z47v1dvQO/hDMO25Ip3oFbGcBBq4fTQJh1ApPqcCqnD6ch/XKOCHbojbxs81xdqU9A/FXIckwOBv+/PeWs4p9fiOjd3gxKaBrtq61/QUrYdTdtjfibFHhs7A3PUyFWVd1LYM1VvMuQo3CuzLuxpI7J6jdTS/uxY/yoqwB1BB1431qPrblLllc4a4Lr3d1pAglfo2fdZB9zmBxXjHPEmSfFk48vngP+pRcE/GBNgIlgPNsTt28Z03fITskvDmkYpcoGDJo5mgY8MOcsIT+lRZP/OWS4Tx8RifnE2k7tYJDYs0Scz+JsAqNB4lEiJR4y2cEnEuoXg/l7LzCjbHlQ6mFdfCzmlpKryEPyb/Qo63Q3xtfqVFdaVVdNFgJMrh6NxQOxDmnXnXyiTGAC/zsS9mAh6PKchxG+NTgkKV9aMHVxVPg4rZQkT+J5mC+k6Ht8RcZBAO1ZuqrfKiouKRLIeS8LUP/5czxyX386ULkKIHK5iiNJiugtSkGx0yx4XIfZHkLkZODHB51UEu+6jcTrLJHU0UzKOxyz0XIHH3e65eCGZ+rQhJg5KB+YBPbOkOtqM03VZDyx3G1P+N7itEiBUApHTB5mPppu8+mcHehAfbXJOpudc4mTZN4oAIx/rbdY+QloNFVMDL7ClyLlTpmUOT4VCXBpP3HNNIGpzCjOROBfttgevqp4rRQfPLVvCfiZKqxcSPPyKNaTXvUygrZ4eXjKPhPMt2mrrdZNRALJfUYgX7xZN7ehdDbXFztoTm8HZHyG8HK5RtXsSaU4DVjEExcJsFQw6u5LncG7Dr8dVYdSWzPqwMEI4AAgVTQRBVw202VXIIX0EZrwPw/sfRe6kO5t2Y3Ky3JOVxvivhuNBTMTs50fo8cSCsNClA+pjkez4vFzrOEJWrrDo1oCBwFhqPQh1O1fachJoAF0AZMK/UgJVWvMCndfTTF/AkOCQtphEes8+Xo+ianEhY/svXoR3J6P1navPocGV2lS43PUMNYDHjxRVvQV7QJ6uPEbbKQLYr/7N7gm9abgTKHWJlJuU0lTe8lWQIcF2182wdWE3tcmVnGFUZ5rMcHmrz/GhQ9sZzplmsFd6kMYPzfsMDyMjKCKc3SmdvKFDH/gv00LQgZkBBerTE/GVhaxDxFUwZhb5a026G8xEzkoulSjf4fLY685ZD2oiWP3nqQc6mZq68TiWxyi1tgOHgU/7EK9fIlT3EvInFGyYh597RNUioSATisYTivx4kkOe9tEQUmLXBu5t4Yuo1160WWpJe4mrwL/R3UqmTXLpWpN31eeylXQp3ZP89+Z3Yfc4KMbU9pjHDkUAd7BpmzNAX1RtjHvqvZNrJzcH1bFp8/Q0qTQg2MQw5U6QQLauflNQVHUaTpcfd7GS4g/26So82Ikq4Lwi3QU56+Dh9fy4JSbUW/CwB52985zrUqITJbwqHWTMDGoCAz2OLUYQbUSsI0IBOPkfTauvH1KnSTw6vdnl8GfApKifqn9dpwzVLZH0KLR84DZWH5X9nAoWRXABhYzLppRMq3U74LOd2oNVeKrVqvoE5xEflMSgPu1zYaBMSWr6dgq0Te6EIZqPIW9O2SkiiIeucYsTIskryj61xYXFWiEQqsGkLT5l/H8cnKIMFN73YttTEVUyMAf5QUO8dHmVdCvy9in+FgOTg4CVqeZJdp3qb8tytYbZlq/fFevn0Akz/JcOtlHXifEY+6oDynvP4OtoF4Rxqi5Ls6s5O0bJJxlJEODMYggi06qlgN01QetA5OVchYiUFVzVTtcFF6aBTIXTVLyjhiTjEHnRIQjzKuZc0FV2/NNhLsBJ3OH3DcqAXlgjCS+/PYiyTO2bKudtR6VgjfScxl8934GYC1ncrgB+xjDBb8Ci/2bgXaQTUMWA78TpPrlWu9Dy24xJLcOJsvEAdgZVsBuAYHszKXGJIUasnyycPKLBKGxIAp5j/OKEXQDFWG/beB80/EbTiWKqiPZlLkIgEKgwCz/XdsO2knyoJdDzguDJKpoOitdJ7Vqm4FfaykJKqpjeNaKVy9DX1EHP9HJMjkV9UFuVvdsfkux9X+18OUMxpdQRCcjfR7UdxaPAoeJ4DHMb6oBc3RQPiO3sFE0Md6jHU7vBA7lqKJQJ9pH5Lc/C8kk3ZLxhVxZsIHlykTYABgG2iH/0eE8sG8XXgntFJVXfEllt+Ss4DK/t1TVsYB2TjSGO9/m6+C4fj0sAkfLKW6iiH563qHuBQcxkgT6e3Kv6H7Wxr+6222nKuRs2N4rzSsip64/l/NVjTx0IfEH7wBhSEwFQ7hcFM4KS0DljC1QcpfEZ0/hCtwD7k7r3AO0w4xAzZaLU2BOnMSjgQ5HoCB2ligSvKxjVvZ6CICoLtauAzFdvayEP5ZLAhIvLj009FCco8UXkYH+UQoP/LsExrnqm+43R/y7oX91+Xk8C8SfhEwUUw6r5hCpxyAWkXkdvKmW7FcV7xz6r+efj8za91o0MhMsCp0fQFllfOYicKE9enX25nIQXCImydZc4s9WzwlNous/8lrFps6AEsdrAWfryij6RyENS3dK/QvwqReqjXnYOU90nCvYe2GY0ngfgTlFBmFjccHlg8JnpLsp7yjeyWy2xWnOCL7wi0anw1ibk/zhniwwnZ01HJeEFseYOuiYp9U8xiPKi2EW/FsbtW0NJxIyegwqkW055U8C6qaIVOWvJatqmBuHJvmOK355OBaytf/R3BLcQUo3VBgxvewnHCreMmf5mhW+2smm7QodB/k5d4AYljiMFO/UehdN2zkhSZz4+NmJSito/Cn8VYGw9DBmFZcKYWOI1i2SElgwPrCQEvPUhoKepz7K7zdRFww5JnyuwS9I9RW99hiVOYWkKDItttotEzdpuKgfj1Wtjd885KHtQmhAuijMG8AhK5ib9j/WiNjQc/VuG6W42cdEf88XMziYJ+P2CC+3u8RebPY/OkCebooM70jI7j79e36JFHKrYqBPXPBOWz84+97FoxUU/t5qyi5ONJBQgJF4nWOwJOE7GiTSqkWFU4CygY4N6Km0Hlc/v3h0n8Z7hWmgQ/vHwO8pIVPyR8zDdeYAVVe+pxJ/DGGQfH4RTGMlA9LJaDbfFq0ifYwgywTSBQyKPhM21F9qa4KUazU5fbo49R4EPD6OAC0QLWL6Pk12Ow3jzcEhH8b+Qn78sxi6hjIo24ig/Gthv93cKUA+yJBLJ30wOwSfpilVc/X6HYKeEK90mMpaTTwoNBHPNGuvFMqgs99gMTDrVj/DR0Bpxq8hEtTkWQb+wuYYrypvXiQWw3ZRahxIWC2VvXih5qJu3BdTMNgIzbiS5kdyWsjOEER52gBRBGV5WHRU0fzvXI1phUepwXFraiKHHizxGAphJOfoE8ridTL6m/eQRouSL4ahlzUfENf49D++iufzzUB9fNXJlgu4XT41hs88VR2KPiAA72XMV80LwVofXak6Hs86HQXRPWS3lplOyYpkEr3u4RrKznsr5a17/sjyw/2QDzuGVAtaf7fNXzwQ0Sp17/4eJoGAsfqlvENYmjB6qEbgM6akb8R0P3P4Yc3xhFZf6CUmHzFDPBzrLIPdkLiiy2r7tcceFbGkMT4c1SpH1x0pbAPFyg0OiJT4CCqeoYApnv5d6SFbdX5F/MU0v8zkqFkkw3MswxCrFxQ7laX4p04NkmxSZ46LDoMJ3tUbCu/7pBoDQt32Wqase6ArpmGnrmWePAd/9o8paj2NUwjBmdXx2SdJPgBKf5rDr1flk+cZO0x8eWZoc9dVFGe8yMnxnf0cHT7eAnKbds4Ibh+bFBOgXb5V6QC1K7UIcLf+DFvU0pqiZW9ugSrVOcOrs4REUtiKVQQNueC0gnb34Yt6Aay75m02UQuLzUbiYKnRCaPcFllqFi23zZgHa0sMSes3ctyiyAwWqVv0DxqclxmPyfF1i2gSOIKFLZW49+m3I7YFrAfLxRY1ehJHNp5VIfMLlrqB4ZYDLocsYpuMNuYewOILazAPipeA5JHvGpIfsi2wruAcDOA3loFX2orL3vKe5HF5kq5NtzPWTL4jdCSSZruSgCFC/+kS32KRkYpKRWYTObVUodPRwWqYDqcnlaZ88FISesYSv3CtwhwLxqdELcm/7LN/RkYif5SAa6tkw8miUXpbSoXuLdoi6yGnjYPjD1KM5OxewT8yreEIMpDu8Zo7urvKbHnUxN4LHEZAFOSTAdjAseyNdfyjY8YlNq56GOPgbjiGJy4OzgvWpY0ZVZRH1G0dW4PjyuF2dCOIUgRfD+euJAfqVt2Xvy+ix4+kY3K/myvbPDgAIfzpSwTQjMOKXpyHFYpK7ejSd/Wm54/ki/e9uty6eb+Nc9WrGrIiJhy1MFhgMi/S9abxjAzutLzXJkAZ5hFj06+f1dlEcVM9hH7SkzozQWwE50v/3sErCNZLpDPgJXbKdo470vP7WXX0yl9jDbr029ZKNh4ZZ0scObnBPscLo3XHEEiz8sNACz4+jazWcKNeC3IazvQjXHdSxKppc2YPMi8SmZbTYlza7jK/y7xOquLcYcgG6gDnGrEJnwOpooBb7qenG3r6lHubMcVH9sdDfxot3HfI1Iq03MhDpIRBkxyuTHijJge+SjGTE36M0KHxl2fOKXSS68dFIHBdzJg/mB0TsrQyx108gekdmWvznhkR0ml+ewvyeYKGOo0qUpZkLT8K503BGDDgptgcRoi8UoWEgTjl74c/b/GeuizOmoTn8B+FhfkH2W4qbq07txWAn69uW3yYrTe8cMiT+LfX5r2JF3wybG1ZRJegfa+zkFatm0iGsiQ27f6HNLbG1qsSeM5RsekSVUrMAp3Evq94G1jJ5Bzd+86Uc5AO1A2zbIzfKqhr7Rl8dOvDLdvxlYKdQJTM2V3OLJ436NXGHuapuUaUpbVh4j5NoA8klEwXhB72AAlroL9EMZj/3DyF4rHRSXov6TsmgO4bw4D7ARtqP2P8PHJidbYp5OdJ/mVevS9vdQCsYEgAOwG/5DnAkkZYuK6nxeMLNSc7IyvGvMti7fN1gvWlsBvebbMU7Y/vXY+P/wzpb9clQnJQgrDZMyeHxr3OSQdltBXW3IP9gKoz8+7ixONm1CBbUD8sEaJrn1mpbWKcuaLyVuXrcho6LHWayDnj9nvGVlQDADb2en5L5Iz/nUrKOHCSWNYJIByazIMyD2OmM9BX5b2dmb4stX/iEShaUcH1c9kSujXgSMwUK1uUkaKj5erBn5gIjxvNb/l9JA9X4otcYuO/d9H/EpNuFZxo2VyJYHeLYco4bZCmXDKMedSj4aWHpMiVhUUUdSw8ZFW5KkOSp3gwK2sU0qQsQ4OiQH7t1251zIglXyuPXocCZARqCG43haBgV2nzgHeOVPeZKXjMoAvnpESD6074Dhg4gRvReC21aWu/HhcOystSwDwnzAQdDUfp9lvLdQQQiSHj/oz6adBhDYXzIbR/gHHgEjzY+13UoIKwOdX4bhr8YzE+7ctywSntjHZ+8Tdn/FAA8Q1BlwxvCECNjcU6mQVqpy4duSvRc70OmawbO6oluAuHuKnhnBnz7o3X5krLaiDduSlknncQaizqkko5yYl+iLC5WdyA7iUcRVaH29AItBKZ6d9oBrVcSG03i6baDBr+q+bbHdsnw3DF95c1rqmnsbW6JV9ruvY7vreRhxGgwRskLcAr99nWRTkX61xMJ7CRPC+ol35FvnN3o3LIJQemPtw+vIUhBV1Hd/xAi6fTacZt9Tn0IMB3k1jNEpP50PZx27PDm/47jL3fadiU464+Y9jQvSf2YXzElGSUoyDEIylGPvcWeG+N7nsxJnGm89jEPj2l3OTwmY5sSykKtS/qEnR0h6PKtRySOvJpFMZdDdzBagxuXHV+jGN4gJfihWe/V+BxrS3NB92+G/bcJGtO/lMDz0oQ1Vj8CqegThH+UyptkeVVRhURyV5+w/pILmOI3VYoV02OB3GbyK9lcaDr+oI3XbigTNcSgwrc/ekk2fhVYRIp5qHAPt4snV2q4ZZGPFUnm5t+07lyQko67ipejsT7OhoSD6DiaEFAyhBSs3dUMbgpvd1pp+5SuGnBhasbjhiO6D0HSCt7ORY6v8l/WZzKdOudQDwstl6Pu/lcTFAd6GkEoPn394Qdp1lZohkHgOyNQ0XzzUiNNxzm5E+SRol3iljlKIulXQrldgTDy1ph9e6094GQfeSKFk4wNbWaIqPusHRsD48tNOqG/0JmaZNMsmxkqzvVOClUBsuftVorzIZSdyrWf87Tlt+mMQcQzazba4QN7IsDW6TBKIdaudQePvY2eXg7vGK7sbdorIBXn13SOvImo8j6rzou0gGz5MaR3cUYw2DmX/OKPtXTnGVBKU9IxHzBos1rLRMLkjFl9fiOExhjFsOBsvgZlkwgWOoj0B2GCO3hy3m5na0HsphKR+MzSncKy+JwnBCcnwSlRNRBDHZ/hXinw8mLcq8yeu05pSdU2teevHY3p0f/+9isO4ZPNYZKhsk5GjuImHSQH9wU7jUHnsV41X73kkD6B7UMVz6RuyfTKe8gyqmqyeeyEm6rx7jybSqEioWkdp5wL8Ut3K4NoTn4j1J7EhkAYQIoQxrZ17LGJuI2yJ467QocKkz/K3ad3KpFzSWkoYuezH3SEZOeJXhebtyfgV0odox8aXomgx1Y2Go7a6ZjS1NQuRwS71u17WpNK+OPKUJf8p24J2ED930hDqKtA5nMLVkE2VgatiFZOinjTAFZ79gH25M4ddcM39f+ZrRsGgdGiEtuP+nraOU9yc8oxPiSoOJ7+eqSr5dqKUBmFF1Y7oG2tEGS2cLXU2dqqG1GQ6oeY8R4EIqka6eLgl27qwMH5kOQSzkySv3+Xs3/z4PYdHzZ7wrUUkaejmOw9jIngJyWUZtaNGNlWuZolmEruEvhTke5jOL8QyL1pFe/X/05eSANRuNa1vR8GIWOt4WzIDA3VpTOHazzUjxreDomsW2F8Sqpg6eTF7qT33m1UnCzGrzA6topB3hpPhEOcjPgRgkIwumseDZyp5GuARkk9kKqOooolRjfMggeZT+XWRp5gnu+A7jVQ2RnQPO9XAAEcrXrine9o3Z/3hVrAdv6ppwI8Cpust1m4/ewdoE53Gx//Q7arYh6VTUBqrAbKaXf8stt1aT3n8HjQ5j2YQ4NI0N/zPZ3eVchcJLDi4x2UO0WfGQUKClYc7drh0WBIYEJqNWiHqVghiXRXCy3TealsSwiuA2Wd23TfqRWDR+6LIB4UjGbHe5FwLjJA9wA4D5VRWlvlp7CgsHxPP+YxENETF4Q/ncNC9oZpne/xDpeyEjbHDfhKrG4U0KTKDlJAqx1qhJe6MFfrQV45HABmk6/fv4zZLF/3NuvaswsxU5Z4unHiILx/vYUmZU1FurWhIVqVLSVHPbciKXVVcIHlXZNYocVjIf2096S8B3tT0Ckr/PRDAPp8lxklzoKBZU1KVnEc6ZrTWBf76M5NcLn6Y9xX9Uv5Sebp25N/2YPEty/DgJExp8DOpa++uQiKVhHZzus5kOjdF1nOvcb1H8uC6fwEnmDZamVAcShYNxexdypWrm1t8k0W3iupmQv9wYTI85zlZEE83H7mm1+gA+5sKhigyoy2jRCfjxINXike7TxHJoNZqMsRQH54lGty34qWEeenmVEIrsuG8LkL8Gn9/o/65R1SLbZrqJn8hKyy6UB1RI1Xx/Vkv9rKzqdagc6K7EfRSAnSjOKTsP7U+T5aRd+Rt7O89YfAWDDTvGbv2SwxTX/T/y5dGOxQkHmvfi1wbCv99a0p8QLX4gexs4UUidm+goXUvGO//WFwBAVuUQ+Ui70IpX/YHfwA2r4KbS+gxn132OvulXVMy3hoVU0a1yyQfRItM8xSb+nNHtjChmJgU2v5k295hgm6G4H85Mj4iCfT00fptFgQ1Oq6QOeD08tLUwTvcNOUyDi3fj5cZSJaX/o3Pf4awBEYcJi3HaZbxLamZWr8mCwK2AuG2eTmE/HG1s269dDF3SCjFhlYiHA/z397eC0fhUkNATWc2wxkQo+aHHmAdMFBxGAaX98LtsseBNIpHY7bbIfvaxFfHeyyGLMpYi8DlAgsd1yc3BqSch3vkycqHAN/EL97iEpBcprCr5fwu41DB3DsEREeHgVZl6R4ELeishNgcZNVL8j1wGovaFLiXFSzGc/aXhGpu5cDcOxhU9V56VVoQn1faEL3olgeSNYDt6eUBODYlVfn9jUmeXSsjiWI8XP7OrRJAEV0CN2s/u4RZjuBKvfbwwvVTWU4NALxn5si6x00lyoOrkltMvecBPyFeNlGshOSJmkIR9VSHRjstLgr4/lzbT6WiCpPXXC03g/1n5wtFMCKAsphXZCFSv7hPqB9QfftxYWZyFX3VxBTOOJET4Rf/Uc5q5epm6hFqex/yZEiOT1ADpD6lAwcC1inIjPpOIOQo1m41YVUQ+Hkxt5sUou9T/0QHNCjL1ulS9tGFGAYJuXi3v2urbxHwx7oVJyZxEO7QhoVU0PSftHwbOS5yQkvlSe+bqEDr4IkvnLnvMHDHl2CvHWjcuqFjFzS3a4hS8ZVFNOmR5IaIiizMIjMC+4bSirva6GorR5czhqleuQOapS7zFkVqHtTfIMa0wIbIeqFsw1UqRRHDXWF/A+v4EzoZR3LX6ZTVMYuYtLu5ngneOC2g4G9ldnlwtYtjDa2NbS0rhDkU8xe9b9dXZP7eQZVKSCQGvno9otwyOm7UeZwMnPDH+XZWOZ2DeuDBbJS6nrx52WN/wz0Qh0ffDUW0H7D8aJYg8Mi5EHVI7WcNlu7OgklxwamgzSzL6HzfEQZThtC8vRVG5aKDmqSbWKwYAX1mrGwsH+i8a2d2f+FIdhep3/beljh+Ucd/T38tMZUYvqsmi4tXQuNdPQzGmO9SQ3d84Pyl1ycoupQTd1Uadv7w1j0ApRJ+qEIN6KKNIZ++XvaAjr08vsX7JRG6TDSAN0ys5xjsLDxxAS+H4XffBCmEYMtWlYxITTRqA6PBoWSySP7c3gD032d8g8DfA7mmlE8OAPe0ZPDWS/p7J2JTzCtmyfsJaYVKGbJGAc/dozNdXYmIIjfmPApcAx82lyctnSB88SaS3OcDeOcXbNtkLRD5sXpPJFtoUzfvXpR1kRG1Q1oHK5o4N9Ju5/kCHKmB1qXfFyoR4EaSKjFaQ0ehXzWWGlnqoJkNuB11r7RTPrT06zKNktMrCsaVw4vG1GXVBOhXlFO2GE+dWnSF2AE+2E/kU6TVKa2sJypzLtuD4VvSWWnTyM8u38EmIowYLal9oHLZPNSgehx5sirHlnfkVbmPIT/3rrly3hndYtw6siXozrs21muNfVXQPBThQk8PVcw+oBmtsWrsgQDptNN+BgS/yREetg10CNoLGpQBetqd7ShjiV6zmXdipwOqolVPCi4zSDmFaP9BV3ZSnd53CIsIDy7LdjUBkNSt2oRTN2SPI2bsC57rFmaleB1LERZh4VjhpKFVqdi2sesfNnotE/EmR40nxq/YQ1DTvRdlIIcM7B9/Yc7IwDVTG7UtEQEVCy8VdJT/JWGczl9Wg1Nd80BDgwA3ffifHE+daI2FXBfOucnNxK7KKHLgl6qxJsYfsJ/+jIXfILdo4Jl+wDw0SdW5ICidRdSljI2/cYkPS780cvzV2G2SuI015D5nOEqihH1tOvG/cK8TwIZVOW4Mi2Nx2HL4B7xs564By3jp62RPrcLIbNubxED41c9BK+PoLLuEaI6kzVmUPtsz2yqBMKktVPew69bgU0PHJIYTl32u/tG8isb9qzOMOyOpkiEf7LOOg75+bPlJTAR5eBd1ofrgLjU+C9OrFS9Ry+3EuyHd046r4cplcFoZ8fu/T7juEhZOC8WFWti47fQLT+9unlGvt4SWFWPkV1ydyISXhNkg+cWFqc0jW/zGeGJ7hbRtBmFX5M0EENuTw3PJ40jh2oVms8Z9xPFcRC+c59hb28nFuGjV6iDz1CM52JDGmOSgVF1WGK1rclM82FiZlbF97fybFdboxscmitOxv2QjrVdIcVTdHoLORiEfbDKaSvZTDbQ1/JxtwJj5xp3lDPktq3y0LsXi7sbeHPdI8PbUaSjKi8/BdPnAiZj1rHAuJzhAarnZFa9LbROVUDkoT/NziGikPo6Z+NaDFl5mjbqNIhcSCPUAGbhgtLtoAE8TH8co0DB9mIculo9V0FLCYy7EQJReZJ2tLPSYLQo0eKL5L6moc5JY8eTVoHlNl3m/5P6WFTbOrzGbqVN2jlK9raCEzrP3Ig4n3OdV5bw6+riBZ9X84rc38YJ32Y0ptEuU6PMPee9a8sPvBLWDA+UXylm0GACWJc9ei+Zl3zDbG+MEZvTwjRE/ruqPFHVoGi7G5s2qTBhoGF1duCtQGauSm4HgzUz8qzm5LOS1EqORWuqyyHlU0ZtNy8aOplPz89yqWhrH1XRlsIljxgmND9MyuzQshGXXLKdQ90jgVzDjDEVN9tc4cGhoHCop4oDqbRfPrfYWryR5UF9Yj2pAQW/Bgv2jCSHNb2YgSzDaZ3PYnPbSHVpTuy4zsmbmeX5EblKimJEaA1oMS5oKDdgtcq1Yt/JTQVDDVBBzdf19k8TBb77Q5id40LO79+x+XydovrlmR+nzqXUpNahcg5M+5mnryQqw+t55ykcIoIpEXPnVnE6J3SyRHwNQTB+4S87sTA/iIRosKf6UgRY1lr5MOXfe03MnGNYCPbemO6LZ8m1WZdwlXWirJn8Pgcli9J7qn478gFmbN0Kr5i6cTKQrSpUawWKFOSR3crehoo8CzudwKvLX3yDNEpfwx7dbjaEqebDWAupS9GDkmzZfS27q5YLmWPgqm2tDs9xaJ80NzKO5h6t7FsEY7JC390kVCQoY+iVHupE5C/A2HmQtyhsTO7PjKvSEWb6zFGK9DIkSbpRQjzLWhYfDSckRsDuzMIXThEjw40NJG8RAtviVjVqwQlgRIJAnFrmB5jZn9YW+CrVUXZWLPAKOUKPQRf5tDLtRp4ydHXh8rs9AqaWpYxLJqq6DvfA8iME5XH0pM1ECLvX2lph2B4VQ0SZz4zQ8jSpj3nqwoDnQgDXVLC/t/8sB+vonQVDAXrPzATGlHlcNM1Irb5oGodxk54PpYrrhznXVzcFze82jHN0rxfA7Qb0P/rWmEUZVzlYps3xIhUUHaWBWCo6L7LzBuxWXBX65y6P2WinmPAw74QD2qFzglm2OOBHJvBFevkL78XLM2q5dLRk5NuguK2T91y5oZhgUx06oUEssf9XyTs4EfAipKeDipA/9OjoeLvI0+PkKA3QC9YHBvtU03zupboWVH3L+AZ8Gs6+6mfp4UyO9mPjfQQAJbIYPoHMiITTknxoqtXt/IDWw6o93EPh8G6lKptdDFHDbSfCM3Fxb0Oz6Hq6waM76k36F4SIm0f21l74UmBAhqYNjXeiARCche4dmulgCRfqxKJsXPt1P15OG7QYrJZbhhzrN8jWJcNnqhUeXXzTy8lDpYL/fKppzztrUvxS78uaYwoK8J85SitKaEnD1RSus8e4x/8pAhhLgaH2CiuBaFCaDYl5w0QaQMqUCSP1zKwCM6BE0VoOcspWlYPqj3npuC4xM3Xk/Lzy7CGjoL7f232cClnlNONkOTwIlxgJ/2juPiusx5CT+Gsj/GK7IKX0S2SHfMC0L/8vV14rXSkqGkV8sbEu3vv1GAzVWApJXsOb/QRQLs9RqlBHgC6l/g8uu1kLYUO9pBjSiJE7EOSrLxhtVbyYT/az9CFmqBuwDRCU5+zgYEmrFgbGF6KmMzSIyP142RWgyPzKTdeGxzRfmKRsU82UQ4Oodty+x20LTb5EymWZtIBxlz5HnDXF44at/kpcCw89+4RGGrUZAymxUcM0j2LkjwNpvOu4tgg2u30aHp0auFsHZankeKD77TuEqCuPCr2YUSHiR/lWtFfHDPsPY3V+dObL7B3+mvx93fVJv32BDtEgfAKRwUzP8qJvB9AQ68VE78u1Rz3NI6D44heP4y6W3pNxHU05bDrXnueueZzWdHT7/ng6r1wgFomzGnCjn3eAqossnXfCth+9qYRyKbiRuyiCp+GnfyB7vMDrTgBDTYhFm8rHBoHhfILuuxgIRp07wtcemaNNQmsYwOf61uzmO969YiXiCDZY2XXXj30EoAAA==" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="" />
+
+
+<script src="/Telerik.Web.UI.WebResource.axd?_TSM_HiddenField_=ctl04_seamless_script_manager_TSM&amp;compress=1&amp;_TSM_CombinedScripts_=%3b%3bSystem.Web.Extensions%2c+Version%3d4.0.0.0%2c+Culture%3dneutral%2c+PublicKeyToken%3d31bf3856ad364e35%3aen-GB%3add3ac3d5-1e29-4112-8fed-529caffa8f24%3aea597d4b%3bOpenCities.CustomControls%3aen-GB%3a7197b077-b068-4a69-9481-a6cf2e7718f9%3a8e1d32bf" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=EYVjNsQ7oYmzBqCI0dkEyYe0LYmPcVFL4WPcQCXhKfQwUqkAT7lLra0za-OLMuUUcCyPINdTVMHIWti96-8R_oN-trjXUUZnJRzckxTjid4ecctwwEJyNI-05jZYvXHBRiEKL0MUQMEyEJ2FXanyE1uBk88RxZ1wVK6AUn9D4v8rW-LNx2OOtB8vE3hC8P0jk4XZt7GAPiCeYQolxUlwFZA8cuOfgd4u08OASxFdh8mChz3A0YHhuwRrXGVlulfs9SJVkAvulhjdHYIIp1SRohDxt9acTwxUQrOlxuxC847b00zOOWg9SlpwD_iBuQQ1rOK9WH9O_wN9c2TXm4GeXaQHHT4yQ9IlzZXw6th8ch3f-k_n1yYeeurDMbwChXW1Vh_7rpu00kgmegsg9w2J3ququXIPfy2Gq8IscVTmtwouupfmUzAOicU_yESgQ-dG0" type="text/javascript"></script>
+    
+<script type="text/javascript">
+    try{
+        function SeamlessEndRequestHandler(sender, args) {
+            try {
+                var dataItems = args.get_dataItems();
+                if(dataItems.ctl04_seamless_script_manager)
+                    document.getElementById('__SEAMLESSVIEWSTATE').value = dataItems.ctl04_seamless_script_manager;
+            }
+            catch (e) { }
+        }
+
+        Sys.WebForms.PageRequestManager.getInstance().add_endRequest(SeamlessEndRequestHandler);
+    }
+    catch (e) { }
+</script>
+
+    <div class="unsupported-browser-warning js-element"></div>
+    
+    <div hidden>
+        <span id="new-window-0">opens in new tab or window </span>
+    </div>
+    <div class="overlay-container"></div>
+    
+    <div class="background-container">
+        <div class="page-container">
+            <!-- OC Layout Element GROUP TEMPLATE -->
+            <!--groupTemplateStart--><header>
+            <div class="toolbar-outer-container">
+  <div class="toolbar-inner-container clearfix">
+    <div class="toolbar-item toolbar-quicklinks toolbar-display-dropdown">
+	<button type="button" aria-controls="toolbar-quicklinks-drop-down" aria-expanded="false" class="toolbar-button toolbar-button-quicklinks js-element"><span>Quick Links</span><i aria-hidden="true"></i></button>	
+	<div id="toolbar-quicklinks-drop-down" class="toolbar-drop-down toolbar-quicklinks-drop-down clearfix">
+		<ul>
+		  <li><a href="https://www.facebook.com/CommerceCity/" class="oc-icon-b oc-i-facebook link-type-external link-hide-text" target="_blank"><span>Facebook</span></a></li><li><a href="https://www.instagram.com/commercecitycolorado/" class="oc-icon-b oc-i-instagram link-type-external link-hide-text" target="_blank"><span>Instagram</span></a></li><li><a href="https://www.youtube.com/user/CityOfCommerceCity" class="oc-icon-b oc-i-youtube link-type-external link-hide-text" target="_blank"><span>YouTube</span></a></li><li><a href="https://www.linkedin.com/company/city-of-commerce-city/" class="oc-icon-b oc-i-linkedin link-type-external link-hide-text" target="_blank"><span>LinkedIn</span></a></li><li><a href="https://x.com/commercecityCO" class="oc-icon-b oc-i-x link-type-external link-hide-text" target="_blank"><span>X</span></a></li><li><a href="https://www.threads.com/@commercecitycolorado" class="oc-icon-b oc-i-threads link-type-external link-hide-text" target="_blank"><span>Threads</span></a></li><li><a href="https://www.c3gov.com/Government/Media-News/Get-City-Alerts" class="oc-icon-b oc-i--none link-type-internal"><span>City Alerts</span></a></li><li><a href="https://www.c3gov.com/Jobs" class="oc-icon-b oc-i--none link-type-internal"><span>Jobs</span></a></li>
+		</ul>
+	</div>
+</div><div class="toolbar-item toolbar-language notranslate toolbar-display-dropdown"><div class="no-js-element">
+		  <ul>
+		    <li id="toolbar-language-option-en-us-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=en-US" class="lang-item lang-en-us" data-translate-to="en-us" lang="en-US">English<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-es-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=es" class="lang-item lang-es" data-translate-to="es" lang="en">Spanish<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-af-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=af" class="lang-item lang-af" data-translate-to="af" lang="en">Afrikaans<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-ar-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ar" class="lang-item lang-ar" data-translate-to="ar" lang="en">Arabic<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-zh-cn-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=zh-CN" class="lang-item lang-zh-cn" data-translate-to="zh-cn" lang="en">Chinese<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-de-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=de" class="lang-item lang-de" data-translate-to="de" lang="en">German<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-fa-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=fa" class="lang-item lang-fa" data-translate-to="fa" lang="en">Persian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-fr-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=fr" class="lang-item lang-fr" data-translate-to="fr" lang="en">French<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-hi-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=hi" class="lang-item lang-hi" data-translate-to="hi" lang="en">Hindi<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-id-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=id" class="lang-item lang-id" data-translate-to="id" lang="en">Indonesian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-iw-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=iw" class="lang-item lang-iw" data-translate-to="iw" lang="en">Hebrew<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-it-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=it" class="lang-item lang-it" data-translate-to="it" lang="en">Italian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-ja-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ja" class="lang-item lang-ja" data-translate-to="ja" lang="en">Japanese<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-ko-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ko" class="lang-item lang-ko" data-translate-to="ko" lang="en">Korean<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-nl-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=nl" class="lang-item lang-nl" data-translate-to="nl" lang="en">Dutch<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-ru-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ru" class="lang-item lang-ru" data-translate-to="ru" lang="en">Russian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-so-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=so" class="lang-item lang-so" data-translate-to="so" lang="en">Somali<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-th-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=th" class="lang-item lang-th" data-translate-to="th" lang="en">Thai<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-tr-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=tr" class="lang-item lang-tr" data-translate-to="tr" lang="en">Turkish<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-uk-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=uk" class="lang-item lang-uk" data-translate-to="uk" lang="en">Ukrainian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li id="toolbar-language-option-vi-noscript"><a href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=vi" class="lang-item lang-vi" data-translate-to="vi" lang="en">Vietnamese<span class="visuallyhidden"> Select this as your preferred language</span></a></li>
+          </ul>
+		</div>
+	<button type="button" role="combobox" aria-controls="toolbar-language-drop-down" aria-expanded="false" aria-haspopup="listbox" aria-autocomplete="none" aria-labelledby="toolbar-language-label" class="toolbar-button toolbar-button-language js-element">  
+        <span class="toolbar-language-globe-icon" aria-hidden="true"></span>
+        <span id="toolbar-language-label" class="current-language">
+            Select a language to translate to
+		</span>
+		<i aria-hidden="true"></i>
+	</button>
+	<div id="toolbar-language-drop-down" role="listbox" aria-label="Available languages" class="toolbar-drop-down toolbar-language-drop-down js-element clearfix">
+		<ul role="group">
+		    <li role="presentation"><a id="toolbar-language-option-en-us" role="option" aria-selected="true" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=en-US" class="lang-item lang-en-us" data-translate-to="en-us" lang="en-US">English<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-es" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=es" class="lang-item lang-es" data-translate-to="es" lang="en">Spanish<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-af" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=af" class="lang-item lang-af" data-translate-to="af" lang="en">Afrikaans<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-ar" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ar" class="lang-item lang-ar" data-translate-to="ar" lang="en">Arabic<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-zh-cn" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=zh-CN" class="lang-item lang-zh-cn" data-translate-to="zh-cn" lang="en">Chinese<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-de" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=de" class="lang-item lang-de" data-translate-to="de" lang="en">German<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-fa" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=fa" class="lang-item lang-fa" data-translate-to="fa" lang="en">Persian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-fr" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=fr" class="lang-item lang-fr" data-translate-to="fr" lang="en">French<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-hi" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=hi" class="lang-item lang-hi" data-translate-to="hi" lang="en">Hindi<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-id" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=id" class="lang-item lang-id" data-translate-to="id" lang="en">Indonesian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-iw" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=iw" class="lang-item lang-iw" data-translate-to="iw" lang="en">Hebrew<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-it" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=it" class="lang-item lang-it" data-translate-to="it" lang="en">Italian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-ja" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ja" class="lang-item lang-ja" data-translate-to="ja" lang="en">Japanese<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-ko" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ko" class="lang-item lang-ko" data-translate-to="ko" lang="en">Korean<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-nl" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=nl" class="lang-item lang-nl" data-translate-to="nl" lang="en">Dutch<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-ru" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=ru" class="lang-item lang-ru" data-translate-to="ru" lang="en">Russian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-so" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=so" class="lang-item lang-so" data-translate-to="so" lang="en">Somali<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-th" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=th" class="lang-item lang-th" data-translate-to="th" lang="en">Thai<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-tr" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=tr" class="lang-item lang-tr" data-translate-to="tr" lang="en">Turkish<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-uk" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=uk" class="lang-item lang-uk" data-translate-to="uk" lang="en">Ukrainian<span class="visuallyhidden"> Select this as your preferred language</span></a></li><li role="presentation"><a id="toolbar-language-option-vi" role="option" aria-selected="false" href="https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas?oc_lang=vi" class="lang-item lang-vi" data-translate-to="vi" lang="en">Vietnamese<span class="visuallyhidden"> Select this as your preferred language</span></a></li>
+        </ul>
+	</div></div>
+  </div>
+</div>
+            <div class="header-outer-container">
+    <div class="header-container header-layout-2  clearfix">
+			<div class="header-site-logo">
+				<a href="https://www.c3gov.com/Home" lang="en-US" aria-label="City of Commerce City, CO - Home - Logo">
+				</a>
+			</div>
+		    <div class="header-website-settings">
+                <button id="btn-mob-nav" type="button" aria-expanded="false" aria-controls="nav">
+                    <i aria-hidden="true"></i><span class="side-menu-btn-text">Menu</span>
+                </button>
+        	</div>
+			
+			<div class="header-search-control-container" id="header-search">
+				<div class="search-inner-container">
+					<div class="sc-search-panel">
+	<label for="ctl07_txtSearch" id="ctl07_lblSearch" class="sc-search-label">Search</label><input name="ctl07$txtSearch" type="text" id="ctl07_txtSearch" class="sc-search-text" placeholder="What are you looking for?" /><input type="submit" name="ctl07$btnSearch" value="Search" id="ctl07_btnSearch" class="sc-search-button" />
+</div>
+					<div role="status" id="predictiveResults"></div>
+				</div>
+			</div>
+    </div>
+</div>
+<div class="navigation-outer-container">
+	<div id="nav" role="navigation" class="navigation-container navigation-container-option-1" data-menu-type="horizontal" aria-label="primary">
+        <div class="grid">
+            <div class="col-xs-12">                
+                <ul class="sf-menu mega-menu" id="sc-main-menu"><li class="nav-section-quarters-1   first-item nav-item-seq-1">
+<a href="https://www.c3gov.com/Residents" class="nav-level-1 nav-has-children"  target="">
+	<i class="item-icon" aria-hidden="true"></i><span class="item-text">Residents</span>
+</a>
+<button aria-label="Expand" aria-controls="sc-menu-second-level-nav-item-seq-1" aria-haspopup="true" class="mobnav-subarrow" ><i aria-hidden="true"></i></button>
+<ul id="sc-menu-second-level-nav-item-seq-1" class="second-level-container ch-8">
+
+          
+            <li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City" class="nav-has-children"  target="">Living In Commerce City</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-1-nav-item-seq-1" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-1-nav-item-seq-1" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Report-a-Concern-Access-C3"  target="">Report a Concern / Access C3</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/MyC3"  target="">MyC3</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Home-and-Property"  target="">Home and Property</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Trash-Recycling"  target="_self">Trash & Recycling</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Streets-and-Parks-Maintenance"  target="">Streets and Parks Maintenance</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Traffic-Calming-Program"  target="_blank">Traffic Calming Program</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/About-Commerce-City"  target="">About Commerce City</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Getting-Around"  target="">Getting Around</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/History"  target="">History</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources" class="nav-has-children"  target="">Resident Programs and Resources</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-1-nav-item-seq-2" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-1-nav-item-seq-2" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Advancing-Commerce-City-Together-ACT"  target="">Advancing Commerce City Together (ACT)</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Community-Well-Being"  target="_self">Community Well-Being</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Community-Development-Block-Grant-CDBG"  target="">Community Development Block Grant (CDBG)</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Mobile-Service-Unit"  target="">Mobile Service Unit</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Safe-Streets-Initiative"  target="">Safe Streets Initiative (SSI)</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Schools-Education"  target="">Schools & Education</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Senior-Resources"  target="">Senior Resources</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Resident-Programs-and-Resources/Veterans-Programs"  target="">Veterans Programs</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars" class="nav-has-children"  target="">Events, Meetings & Calendars</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-1-nav-item-seq-3" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-1-nav-item-seq-3" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars/City-Calendar"  target="">City Calendar</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars/Winter-Wonderland-Ice-Rink"  target="">Winter Wonderland Ice Rink</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars/Holiday-Tree-Lighting"  target="">Holiday Tree Lighting</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars/Run-with-the-Buffalo"  target="">Run with the Buffalo</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Events-Meetings-Calendars/Most-Wonderful-Time-of-the-Beer"  target="">Most Wonderful Time of the Beer</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/SpeakUp" class=""  target="_blank">SpeakUp Commerce City</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Maps-Data-GIS" class=""  target="">Maps, Data & GIS</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Energy-Equity-and-the-Environment-E3" class=""  target="_self">Energy, Equity, and the Environment (E3)</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Arts-and-Culture" class="nav-has-children"  target="">Arts and Culture</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-1-nav-item-seq-7" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-1-nav-item-seq-7" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Residents/Arts-and-Culture/Art-Exhibition-Program"  target="">Art Exhibition Program</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Residents/Taxes-Fees" class=""  target="_self">Taxes & Fees</a></li></ul></li>
+          
+            <li class="nav-section-quarters-1   nav-item-seq-2">
+<a href="https://www.c3gov.com/Parks-Recreation-Golf" class="nav-level-1 nav-has-children"  target="">Parks, Recreation & Golf</a>
+<button aria-label="Expand" aria-controls="sc-menu-second-level-nav-item-seq-2" aria-haspopup="true" class="mobnav-subarrow" ><i aria-hidden="true"></i></button>
+<ul id="sc-menu-second-level-nav-item-seq-2" class="second-level-container ch-12">
+
+          
+            <li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services" class="nav-has-children"  target="">Programs, Classes & Services</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-1" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-1" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Scholarships"  target="">Scholarships</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Fitness"  target="">Fitness</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Aquatics"  target="">Aquatics</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Drop-In-Activities"  target="">Drop-In Activities</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Youth-Services"  target="">Youth Services</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/Leagues"  target="">Leagues</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Programs-Classes-Services/SOAR"  target="">SOAR</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Recreation-Centers" class="nav-has-children"  target="">Recreation Centers</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-2" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-2" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Recreation-Centers/Eagle-Pointe-Recreation-Center"  target="">Eagle Pointe Recreation Center</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Recreation-Centers/Bison-Ridge-Recreation-Center"  target="">Bison Ridge Recreation Center</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Recreation-Centers/Active-Adult-Centers"  target="">Active Adult Centers</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Pools" class="nav-has-children"  target="">Pools</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-3" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-3" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Pools/Eagle-Pointe-Indoor-Pool"  target="">Eagle Pointe Indoor Pool</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Pools/Bison-Ridge-Indoor-Pool"  target="">Bison Ridge Indoor Pool</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Pools/Paradice-Island-Pool-at-Pioneer-Park"  target="">Paradice Island Pool at Pioneer Park</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Special-Events" class=""  target="_self">Special Events</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Buffalo-Run-Golf-Course-Bison-Grill-Restaurant" class=""  target="_blank">Buffalo Run Golf Course & Bison Grill Restaurant</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Hours-Fees" class="nav-has-children"  target="">Hours & Fees</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-6" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-6" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Hours-Fees/Jobs-in-Parks-Recreation-Golf"  target="">Jobs in Parks, Recreation & Golf</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Trails-Open-Spaces" class="nav-has-children"  target="">Parks, Trails & Open Spaces</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-7" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-7" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Trails-Open-Spaces/Park-Property-Rules"  target="">Park Property Ordinances, Rules and Regulations</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Trails-Open-Spaces/Park-Rangers"  target="">Park Rangers</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Trails-Open-Spaces/Pioneer-Park-Batting-Cages"  target="">Pioneer Park Batting Cages</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Trails-Open-Spaces/Parks-Recreation-Capital-Improvement-Projects"  target="_self">Parks & Recreation Capital Improvement Projects</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space" class="nav-has-children"  target="">Rent/Reserve a Space</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-2-nav-item-seq-8" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-2-nav-item-seq-8" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space/Rooms-Pools"  target="">Rooms & Pools</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space/Athletic-Field-Rentals"  target="">Athletic Field Rentals</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space/Park-Shelter-Trail-Rentals"  target="">Park Shelter & Trail Rentals</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space/Organized-Events"  target="_self">Organized Events</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/RentReserve-a-Space/Memorial-Programs"  target="">Memorial Programs</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/About-Us" class=""  target="">About Us</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/PRG-Master-Plan" class=""  target="_self">PRG Master Plan</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Recreation-Projects" class=""  target="_self">Parks & Recreation Projects</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Parks-Recreation-Golf/Parks-Recreation-and-Golf-News" class=""  target="">Parks, Recreation and Golf News</a></li></ul></li>
+          
+            <li class="nav-section-quarters-2   nav-item-seq-3">
+<a href="https://www.c3gov.com/Business-Development" class="nav-level-1 nav-has-children"  target="">Business & Development</a>
+<button aria-label="Expand" aria-controls="sc-menu-second-level-nav-item-seq-3" aria-haspopup="true" class="mobnav-subarrow" ><i aria-hidden="true"></i></button>
+<ul id="sc-menu-second-level-nav-item-seq-3" class="second-level-container ch-8">
+
+          
+            <li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Economic-Development" class=""  target="_self">Economic Development</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Development-Projects-Map" class=""  target="">What's New C3 Development Map</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/eTRAKiT-Portal" class="nav-has-children"  target="">eTRAKiT Portal</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-3-nav-item-seq-3" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-3-nav-item-seq-3" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/eTRAKiT-Portal/eTRAKiT-Tutorials"  target="">eTRAKiT Tutorials</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Bid-Postings-and-Procurement" class=""  target="">Bid Postings and Procurement</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Business-Licenses" class="nav-has-children"  target="">Business Licenses</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-3-nav-item-seq-5" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-3-nav-item-seq-5" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Business-Licenses/Marijuana-Licensing"  target="">Marijuana Licensing</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Business-Licenses/Mobile-Food-Vendors"  target="">Mobile Food Vendors</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Business-Licenses/Liquor-Licensing"  target="">Liquor Licensing</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Business-Licenses/Outdoor-Service-Area-Permit"  target="">Outdoor Service Area Permit</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/File-Pay-Taxes" class=""  target="_self">File & Pay Taxes</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City" class="nav-has-children"  target="">Developing in Commerce City</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-3-nav-item-seq-7" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-3-nav-item-seq-7" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Pre-Application-Meetings"  target="">Pre-Application Meetings</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Land-Use-Approvals"  target="">Land Use Approvals</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Land-Use-Standards"  target="">Land Use Standards</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Development-FeesImpact-Fees"  target="">Development Fees/Impact Fees</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Special-Districts"  target="">Special Districts</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Civil-Plan-ApprovalPermits"  target="">Civil Plan Approval/Permits</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Developing-in-Commerce-City/Private-Activity-Bonds"  target="">Private Activity Bonds</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Business-Development/Building-Permits-Inspections" class="nav-has-children"  target="">Building Permits & Inspections</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-3-nav-item-seq-8" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-3-nav-item-seq-8" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Building-Permits-Inspections/Step-1-Project-Design"  target="">Step 1: Project Design</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Building-Permits-Inspections/Step-2-Permit-Application-Contractor-Licensing-Reviews"  target="">Step 2: Permit Application, Contractor Licensing & Reviews</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Building-Permits-Inspections/Step-3-Construction-Inspection"  target="">Step 3: Construction & Inspection</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Business-Development/Building-Permits-Inspections/Step-4-Occupancy-Maintenance"  target="">Step 4: Occupancy & Maintenance</a></li></ul></li></ul></li>
+          
+            <li class="nav-section-quarters-2   nav-item-seq-4">
+<a href="https://www.c3gov.com/Public-Safety" class="nav-level-1 nav-has-children"  target="">Public Safety</a>
+<button aria-label="Expand" aria-controls="sc-menu-second-level-nav-item-seq-4" aria-haspopup="true" class="mobnav-subarrow" ><i aria-hidden="true"></i></button>
+<ul id="sc-menu-second-level-nav-item-seq-4" class="second-level-container ch-4">
+
+          
+            <li class="second-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department" class="nav-has-children"  target="">Police Department</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-4-nav-item-seq-1" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-4-nav-item-seq-1" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Contact-CCPD-Report-a-Crime"  target="">Contact CCPD - Report a Crime</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Police-Programs-and-Initiatives"  target="">Police Programs and Initiatives</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Records-and-Crime-Statistics"  target="">Records and Crime Statistics</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Crime-Prevention-and-Safety"  target="">Crime Prevention and Safety</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Victim-Services"  target="">Victim Services</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/CCPD-in-the-Community"  target="">CCPD in the Community</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Join-our-Police-Team"  target="">Join our Police Team</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Police-Press-Releases-and-News"  target="">Police Press Releases and News</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Volunteer-Opportunities-with-CCPD"  target="">Volunteer Opportunities with CCPD</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Encampment-Policy-and-Cleanups"  target="">Encampment Policy and Cleanups</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Police-Department/Co-Responder-Unit"  target="">Co-Responder Unit</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Public-Safety/Emergency-Preparedness-and-Management" class="nav-has-children"  target="">Emergency Preparedness and Management</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-4-nav-item-seq-2" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-4-nav-item-seq-2" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Emergency-Preparedness-and-Management/Emergency-Notifications"  target="">Emergency Notifications</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Public-Safety/Emergency-Preparedness-and-Management/Weather"  target="">Weather</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Public-Safety/South-Adams-County-Fire-Department" class=""  target="_self">South Adams County Fire Department</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Public-Safety/Adams-County-Health-Department" class=""  target="_self">Adams County Health Department</a></li></ul></li>
+          
+            <li class="nav-section-quarters-3   nav-item-seq-5">
+<a href="https://www.c3gov.com/Government" class="nav-level-1 nav-has-children"  target="">Government</a>
+<button aria-label="Expand" aria-controls="sc-menu-second-level-nav-item-seq-5" aria-haspopup="true" class="mobnav-subarrow" ><i aria-hidden="true"></i></button>
+<ul id="sc-menu-second-level-nav-item-seq-5" class="second-level-container ch-12">
+
+          
+            <li class="second-level-item  "><a href="https://www.c3gov.com/Government/City-Council" class="nav-has-children"  target="">City Council</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-1" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-1" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Council/Meetings"  target="">Meetings</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Council/Council-Voting-Records"  target="">Council Voting Records</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Council/Proclamations"  target="">Proclamations</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Elections" class=""  target="_self">Elections</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Administration-Structure" class="nav-has-children"  target="">Administration & Structure</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-3" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-3" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Administration-Structure/Budget-Financial-Reports"  target="_self">Budget & Financial Reports</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Administration-Structure/City-Manager-Week-in-Review-Report"  target="">City Manager Week in Review Report</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Municipal-Court" class=""  target="_self">Municipal Court</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Boards-Commissions" class="nav-has-children"  target="">Boards & Commissions</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-5" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-5" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Boards-Commissions/WFAC"  target="">Workforce Advisory Committee (WFAC)</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Boards-Commissions/Non-Profit-Engagement-Advisory-Commission-NPEAC"  target="">Non-Profit Engagement Advisory Commission (NPEAC)</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Departments-Divisions" class=""  target="">Departments & Divisions</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/City-Charter-Master-Plans" class="nav-has-children"  target="">City Charter & Master Plans</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-7" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-7" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Charter-Master-Plans/Comprehensive-Plan"  target="">Comprehensive Plan</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Charter-Master-Plans/Transportation-and-Safety-Action-Plans"  target="">Transportation and Safety Action Plans</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Charter-Master-Plans/Housing-Needs-Assessment"  target="">Housing Needs Assessment</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/City-Codes" class="nav-has-children"  target="">City Codes</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-8" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-8" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Codes/Land-Development-Code"  target="">Land Development Code</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/City-Codes/Municipal-Code"  target="_blank">Municipal Code</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Clerk-Records" class=""  target="_self">Clerk & Records</a></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects" class="nav-has-children"  target="">Capital Projects</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-10" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-10" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/CIP-Map-and-Dashboard"  target="">CIP Map and Dashboard</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/PD-Substation"  target="">North Range Police Substation</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/Parks-Recreation-Projects"  target="">Parks & Recreation Projects</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/Road-Projects"  target="">Road Projects</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/Building-a-Quality-Community"  target="">Building a Quality Community</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Capital-Projects/Buffalo-Run-Golf-Course-Clubhouse-Expansion"  target="">Buffalo Run Golf Course Clubhouse Expansion</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Media-News" class="nav-has-children"  target="">Media & News</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-11" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-11" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Media-News/Get-City-Alerts"  target="_blank">Get City Alerts</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Media-News/Video-Center"  target="">Video Center</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Media-News/News-Announcements"  target="">News and Announcements</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Media-News/Publications-Newsletters"  target="">Publications & Newsletters</a></li></ul></li><li class="second-level-item  "><a href="https://www.c3gov.com/Government/Urban-Renewal" class="nav-has-children"  target="">Urban Renewal</a><button aria-label="Expand" aria-controls="sc-menu-third-level-nav-item-seq-5-nav-item-seq-12" class="mobnav-subarrow-child"><i aria-hidden="true"></i>
+              </button>
+<ul  id="sc-menu-third-level-nav-item-seq-5-nav-item-seq-12" class="third-level-container">
+          
+            <li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Urban-Renewal/Derby-Downtown-District"  target="">Derby Downtown District</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Urban-Renewal/Victory-Crossing"  target="">Victory Crossing</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Urban-Renewal/Mile-High-Greyhound-Park"  target="">Mile High Greyhound Park</a></li><li  class="third-level-item  "><a href="https://www.c3gov.com/Government/Urban-Renewal/Sand-Creek-Business-Area"  target="">Sand Creek Business Area</a></li></ul></li></ul></li>
+          
+            </ul>
+            </div>
+        </div>
+    </div>
+</div>
+            </header>
+            <div class="content-outer-container">
+                <div id="main" role="main" class="main-outer-container clearfix">
+                        
+                        <div class="content-main-container">
+                            <div class="grid">
+					            <div class="col-xs-12">
+						            <nav id="breadcrumbs-container" aria-label="You Are Here :">
+							            <span role="list">
+<span role="listitem">
+	<a href="https://www.c3gov.com/Home"  lang="en-US">Home</a>
+	<span class="nav-separator" aria-hidden="true" role="presentation">/</span>
+</span>
+          <span class="current-page" role="listitem" aria-current="page" >Steve Douglas</span></span>
+						            </nav>
+					            </div>
+                      
+					            <div class="col-xs-12">
+						            <div class="main-inner-container">
+							            <div id="main-content" class="main-container clearfix">
+							              
+                            <!-- OC Layout Element Conent Template -->
+							              <!--normalTemplateStart--><div class="grid elected-official">
+    <div class="col-xs-12 col-lg-8">
+        <h1 class='oc-page-title '>Steve Douglas</h1>
+        <p class="position-title">Mayor</p>
+        
+        
+            <ul class="content-details-stack elected-official-details-stack clearfix">
+                <li class="contact-phone"><span class="field-label">Telephone</span><span class="field-value">(720) 379-6919</span></li>
+                
+                
+                <li class="contact-email"><span class="field-label">Email</span><span class="field-value">
+<a href="mailto:sdouglas@c3gov.com" title="Compose an email to sdouglas@c3gov.com">sdouglas@c3gov.com</a>
+</span></li>
+                <li class="contact-social"></li>
+            </ul>
+        
+        
+       <picture>
+  <source media="(min-width: 992px)" srcset="/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?dimension=pageimage&w=480">
+  <source media="(min-width: 768px)" srcset="/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?dimension=pageimage&w=480">
+  <source srcset="/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?dimension=pageimage&w=480">
+  <img class="main-page-image" src="/files/assets/city/v/1/clerks/images/city-council/douglas-smaller_1.png?dimension=pageimage&w=480" alt="Douglas headshot" />
+</picture> 
+      
+        <div class="wysiwyg-content body-content" ><p>Term ends 2027</p>
+<p><span style="font-size: 2em; font-weight: bold; font-family: Poppins, sans-serif; color: inherit;">Board and Committee Appointments</span></p>
+<ul>
+<li>ADCOG Dinner</li>
+<li>Airport Coordinating Committee</li>
+<li>Council Orientation Committee</li>
+<li>E-470 Highway Authority</li>
+<li>Environmental Policy &amp; Innovation Committee</li>
+<li>Memorial Day Parade Advisory Committee</li>
+<li>Metro Mayors Caucus</li>
+<li>Northern Area Transportation Alliance</li>
+<li>Northeast Transportation Connection</li>
+<li>Police Pension Board</li>
+<li>Water Commission<br /></li>
+</ul>
+<h2>Voting Record</h2>
+<p>&nbsp;<iframe title="COUNCIL VOTES DASHBOARD" width="100%" height="455" src="https://app.powerbigov.us/view?r=eyJrIjoiNTRjYWExNzEtMWRkZi00ZmRhLTk1Y2MtNGU2ZTBiMmY1Yjk2IiwidCI6Ijk1ZTFkYzU2LTM2YmMtNDIzOC1iNmYwLThmMzcxYzA3OWJjMCJ9&amp;pageName=ReportSection0af1b285d4812055934d" frameborder="0" allowfullscreen="true"></iframe></p>
+
+</div>
+        
+    </div>
+    <div class="col-xs-12 col-lg-4">
+        
+        
+    </div>
+    
+</div><!--normalTemplateEnd-->
+                            
+                            
+                            
+							            </div>
+						            </div>
+					            </div>
+                        
+                            </div>
+                        </div>
+                        <div class="back-to-top-container text-center">
+                            <a href="#body-top" id="back-to-top"><i aria-hidden="true"></i><span class="js-visuallyhidden">Back to top</span></a>
+                        </div>
+                </div>
+            </div><!--groupTemplateEnd-->
+            <footer>
+                
+                    <div class="footer-outer-container footer-first-row">
+                        <div class="footer-container clearfix">
+                            <div class="grid grid-pad">
+                                <div class="col-xs-12 col-s-6 col-m-4 col-lg-4 contact-us-widget" >
+	
+			<h2 class="visuallyhidden">Site Footer</h2>
+			<h3 class="footer-title">Contact Us</h3>
+			
+	<p>7887 E. 60th Ave.</p>
+<p>Commerce City, CO 80022</p>
+<p><a href="https://maps.app.goo.gl/GDM9bbUbJLgtZBrY7" target="_blank">View on Map</a></p>
+<p><span style="font-size: 1em;">&nbsp;</span></p>
+<p><a href="tel:303-289-3600">303.289.3600</a></p>
+
+
+	<ul class="footer-links without-icons ">   </ul>
+	
+</div><div class="col-xs-12 col-s-6 col-m-4 col-lg-4 share-connect-widget" >
+	
+			<h2 class="visuallyhidden">Site Footer</h2>
+			<h3 class="footer-title">Share &amp; Connect</h3>
+			
+	
+	<ul class="footer-links with-icons social-media-links">  <li class="footer-link-facebook">
+	<a href="https://www.facebook.com/" target="_blank"  >
+<i aria-hidden="true"></i>Like us on Facebook
+</a>
+</li>
+          <li class="footer-link-twitter">
+	<a href="https://www.x.com/" target="_blank"  >
+<i aria-hidden="true"></i>Follow us on X
+</a>
+</li>
+          <li class="footer-link-instagram">
+	<a href="https://www.instagram.com/" target="_blank"  >
+<i aria-hidden="true"></i>Follow us on Instagram
+</a>
+</li>
+          <li class="footer-link-youtube">
+	<a href="https://www.youtube.com/" target="_blank"  >
+<i aria-hidden="true"></i>Follow us on YouTube
+</a>
+</li>
+          <li class="footer-link-linkedin">
+	<a href="https://www.linkedin.com/" target="_blank"  >
+<i aria-hidden="true"></i>Follow us on LinkedIn
+</a>
+</li>
+           </ul>
+	
+</div><div class="col-xs-12 col-s-6 col-m-4 col-lg-4 quick-links-widget" >
+	
+			<h2 class="visuallyhidden">Site Footer</h2>
+			<h3 class="footer-title">Quick Links</h3>
+			
+	
+	<ul class="footer-links without-icons ">  <li>
+<a href="https://www.c3gov.com/Government/Media-News/Disclaimers-Web-Accessibility" target="_self"  >Accessibility</a>
+</li>
+          <li>
+<a href="https://www.c3gov.com/Residents/Living-In-Commerce-City/Report-a-Concern-Access-C3" target="_self"  >Report a Concern/Access C3</a>
+</li>
+          <li>
+<a href="https://www.c3gov.com/Business-Development/eTRAKiT-Portal" target="_self"  >eTRAKiT Portal</a>
+</li>
+          <li>
+<a href="https://commerce.legistar.com/Calendar.aspx" target="_self"  >Meeting Agendas and Schedules</a>
+</li>
+          <li>
+<a href="https://www.c3gov.com/Government/Departments-Divisions/City-Clerks-Office/Public-Records" target="_self"  >Public Records</a>
+</li>
+          <li>
+<a href="https://www.c3gov.com/Jobs" target="_self"  >Jobs</a>
+</li>
+           </ul>
+	
+</div>
+                            </div>
+                        </div>
+                    </div>
+                
+                <div class="footer-outer-container footer-second-row">
+                    <div class="footer-container clearfix">
+                        <div class="grid grid-pad footer-secondary-links">
+                            <div class="col-xs-12 col-m-7">
+                                
+                                    <div><a href="https://www.c3gov.com/Government/Media-News/Disclaimers-Web-Accessibility" target="_self"  >Disclaimers & Web Accessibility</a>&nbsp;| <a href="https://www.c3gov.com/Site-Footer/Sub-Footer-Links/Sitemap/Sitemap" target="_self"  >Sitemap</a></div>
+                                
+                            </div>
+                            <div class="col-xs-12 col-m-5 powered-by">
+                                <div class="right">
+                                    &copy; 2026 City of Commerce City, CO&nbsp;|&nbsp;<span class="powered-by">Powered by <a href="https://granicus.com/solution/govaccess/opencities/" target="_blank">Granicus</a></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script src="/files/oc-resources/083fcfc1-dafe-48a4-9b01-083b56bf1fc7/JsTextSnippets.js?ocsvclang=en-US" type="text/javascript"></script><script></script>
+    
+    
+    
+    
+    
+
+<script type="text/javascript">
+//<![CDATA[
+window.__TsmHiddenField = $get('ctl04_seamless_script_manager_TSM');//]]>
+</script>
+</form>
+</body>
+</html>

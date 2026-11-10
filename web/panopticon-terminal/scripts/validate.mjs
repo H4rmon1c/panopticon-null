@@ -1,11 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(process.env.PNUL_PORTRAIT_PROOF_ROOT ?? join(root, "..", ".."));
 const templates = ["templates/shell-00.html", "templates/shell-01.html", "templates/shell-02.html", "templates/shell-03.html"];
 const scripts = [
   "scripts/00-core.js", "scripts/12-helpers.js", "scripts/01-boot.js",
@@ -24,7 +25,7 @@ const styles = [
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -144,25 +145,198 @@ try {
   const published = validateSnapshot(JSON.parse(contents.get("public/public-snapshot.json") ?? ""));
   const decisions = published.entities.filter((entity) => entity.type === "DECISION");
   const decision = decisions.find((entity) => entity.slug === "co-colorado-springs-25-581-2025-11-25");
-  const voters = new Map((decision?.votes ?? []).map((vote) => [vote.voter_entity_id, vote.name]));
-  for (const [id, name] of voters) {
-    const portrait = votePortraits[id];
-    if (!portrait) { failures.push(`portrait: no image for ${name} (${id})`); continue; }
-    if (portrait.name !== name) failures.push(`portrait: name mismatch for ${id}`);
+  const voters = new Map(published.entities.filter((entity) => entity.type === "RECORDED_VOTER").map((entity) => [entity.id, entity]));
+  if (process.env.PNUL_VALIDATE_RELEASE === "1") {
+    const releasedVoterIds = new Set(decisions.flatMap((item) => [
+      ...(item.votes ?? []), ...(item.consent_block?.roll_call ?? []),
+    ]).map((vote) => vote.voter_entity_id));
+    for (const id of Object.keys(votePortraits)) {
+      if (!releasedVoterIds.has(id)) failures.push(`portrait: unreleased voter in public registry ${id}`);
+    }
+  }
+  for (const vote of decision?.votes ?? []) {
+    if (!votePortraits[vote.voter_entity_id]) failures.push(`portrait: no image for ${vote.name} (${vote.voter_entity_id})`);
+  }
+  const registry = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/sources.co.v1.json"), "utf8"));
+  const sourceById = new Map(registry.sources.map((source) => [source.id, source]));
+  for (const folder of ["cases", "preview-cases"]) {
+    const directory = join(repositoryRoot, "fixtures/atlas", folder);
+    for (const file of await readdir(directory)) {
+      if (!file.endsWith(".v2.json")) continue;
+      const manifest = JSON.parse(await readFile(join(directory, file), "utf8"));
+      for (const vote of manifest.votes ?? []) {
+        const source = sourceById.get(vote.person_name.proof.source_id);
+        const client = source && new URL(source.url).pathname.split("/")[2];
+        const personId = vote.official_person_id.value;
+        if (!client || !/^[a-z0-9-]+$/.test(client) || !/^\d+$/.test(personId)) {
+          failures.push(`portrait: invalid official voter identity in ${file}`);
+          continue;
+        }
+        const id = `recorded_voter_${manifest.jurisdiction.id.replaceAll("-", "_")}_${client.replaceAll("-", "_")}_${personId}`;
+        const expected = { id, type: "RECORDED_VOTER", name: vote.person_name.value,
+          jurisdiction_ref: manifest.jurisdiction.jurisdiction_ref, identity_scope: `legistar:${client}`,
+          official_person_id: personId };
+        const previous = voters.get(id);
+        if (previous && ["name", "jurisdiction_ref", "identity_scope", "official_person_id"].some((key) => previous[key] !== expected[key])) {
+          failures.push(`portrait: conflicting official voter identity ${id}`);
+        } else voters.set(id, expected);
+      }
+    }
   }
   for (const [id, portrait] of Object.entries(votePortraits)) {
-    if (!voters.has(id)) failures.push(`portrait: unrecognized voter ${id}`);
+    const voter = voters.get(id);
+    if (!voter || voter.name !== portrait.name) failures.push(`portrait: unrecognized or mismatched voter ${id}`);
+    for (const field of ["jurisdiction_ref", "identity_scope", "official_person_id"]) {
+      if (voter?.[field] !== undefined && String(voter[field]) !== String(portrait[field])) failures.push(`portrait: ${field} mismatch for ${id}`);
+    }
     if (!/^\.\/portraits\/[a-z0-9-]+\.(jpe?g|png|webp)$/.test(portrait.src)) failures.push(`portrait: unsafe image path for ${id}`);
-    if (!/^https:\/\/(?:www\.)?coloradosprings\.gov\//.test(portrait.source_url)) failures.push(`portrait: non-city source for ${id}`);
-    if (!/^https:\/\/(?:www\.)?coloradosprings\.gov\//.test(portrait.image_url)) failures.push(`portrait: non-city image for ${id}`);
-    if (portrait.credit !== "City of Colorado Springs") failures.push(`portrait: missing city credit for ${id}`);
+    try {
+      const pageUrl = new URL(portrait.source_url);
+      const imageUrl = new URL(portrait.image_url);
+      if (pageUrl.protocol !== "https:" || imageUrl.protocol !== "https:" ||
+          pageUrl.hostname.replace(/^www\./, "") !== imageUrl.hostname.replace(/^www\./, "") ||
+          pageUrl.username || pageUrl.password ||
+          imageUrl.username || imageUrl.password || !portrait.credit) {
+        failures.push(`portrait: unsafe official source for ${id}`);
+      }
+    } catch { failures.push(`portrait: invalid official URL for ${id}`); }
     if (!/^[a-f0-9]{64}$/.test(portrait.sha256)) failures.push(`portrait: invalid digest for ${id}`);
     if (/^\.\/portraits\/[a-z0-9-]+\.(jpe?g|png|webp)$/.test(portrait.src)) {
       try {
-        const bytes = await readFile(join(root, portrait.src));
+        const path = join(root, portrait.src);
+        const meta = await lstat(path);
+        if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 5_000_000) throw new Error("not a bounded regular image");
+        const bytes = await readFile(path);
+        const isPng = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+        const isWebp = bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+        const extension = portrait.src.split(".").at(-1).toLowerCase();
+        if (!((extension === "png" && isPng) || (["jpg", "jpeg"].includes(extension) && isJpeg) ||
+            (extension === "webp" && isWebp))) failures.push(`portrait: image bytes do not match file type for ${id}`);
         const digest = createHash("sha256").update(bytes).digest("hex");
         if (digest !== portrait.sha256) failures.push(`portrait: digest mismatch for ${id}`);
       } catch (error) { failures.push(`portrait: cannot read ${portrait.src} (${error.message})`); }
+    }
+    if (voter?.identity_scope) {
+      const captureKind = portrait.source_capture_kind ?? "raw_html";
+      const expectedExtension = captureKind === "browser_dom_extract" ? "json" : "html";
+      if (!["browser_dom_extract", "raw_html"].includes(captureKind) ||
+          !new RegExp(`^fixtures/atlas/portrait-sources/[a-z0-9-]+\\.${expectedExtension}$`).test(portrait.source_page_fixture ?? "") ||
+          !/^[a-f0-9]{64}$/.test(portrait.source_page_sha256 ?? "") ||
+          portrait.verification_state !== "SOURCE_BYTES_VERIFIED" ||
+          portrait.portrait_date !== "not_established" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(portrait.retrieved_on ?? "")) {
+        failures.push(`portrait: incomplete v2 provenance for ${id}`);
+        continue;
+      }
+      try {
+        const pagePath = join(repositoryRoot, portrait.source_page_fixture);
+        const meta = await lstat(pagePath);
+        if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 2_000_000) throw new Error("not a bounded regular source page");
+        const bytes = await readFile(pagePath);
+        if (createHash("sha256").update(bytes).digest("hex") !== portrait.source_page_sha256) failures.push(`portrait: source page digest mismatch for ${id}`);
+        let profileEmails = [];
+        if (captureKind === "browser_dom_extract") {
+          const capture = JSON.parse(bytes.toString("utf8"));
+          const headingSelector = "h2.directory-page-title .fw-bold";
+          const imageSelector = '.directory-staff-container img[src*="ImageRepository/Document"]';
+          const emailSelector = '.directory-staff-container a[href^="mailto:"]';
+          const observedImage = new URL(capture.image_src ?? "", portrait.source_url);
+          if (observedImage.protocol === "http:") observedImage.protocol = "https:";
+          const locator = `${headingSelector}; ${imageSelector}; ${emailSelector}`;
+          if (capture.capture_kind !== captureKind || capture.source_url !== portrait.source_url ||
+              capture.retrieved_on !== portrait.retrieved_on ||
+              capture.heading_selector !== headingSelector || capture.image_selector !== imageSelector ||
+              capture.email_selector !== emailSelector || capture.heading_text !== portrait.name ||
+              capture.image_alt !== portrait.source_image_alt ||
+              observedImage.href !== portrait.image_url || portrait.display_image_url !== portrait.image_url ||
+              portrait.source_page_locator !== locator) {
+            failures.push(`portrait: browser capture does not bind name and image for ${id}`);
+          }
+          if (typeof capture.email_href === "string" && capture.email_href.toLowerCase().startsWith("mailto:")) {
+            profileEmails = [capture.email_href.slice(7).toLowerCase()];
+          }
+        } else {
+          const html = bytes.toString("utf8");
+          const heading = /<h1\b[^>]*class=['"][^'"]*\boc-page-title\b[^'"]*['"][^>]*>([^<]+)<\/h1>/i.exec(html)?.[1]?.trim();
+          const pageName = portrait.source_page_name ?? portrait.name;
+          const imageAlt = portrait.source_image_alt ?? `${portrait.name} headshot`;
+          const imageTag = [...html.matchAll(/<img\b[^>]*>/gi)].map((match) => match[0])
+            .find((tag) => /\bclass="[^"]*\bmain-page-image\b[^"]*"/i.test(tag) &&
+              /\balt="([^"]+)"/i.exec(tag)?.[1] === imageAlt);
+          const imagePath = imageTag && /\bsrc="([^"]+)"/i.exec(imageTag)?.[1];
+          const locator = `h1.oc-page-title; img${portrait.source_image_alt ? ".main-page-image" : ""}[alt="${imageAlt}"]` +
+            (portrait.identity_bridge === "official_email" ? '; li.contact-email a[href^="mailto:"]' : "");
+          if (heading !== pageName || !imagePath ||
+              new URL(imagePath, portrait.source_url).href !== portrait.display_image_url ||
+              portrait.source_page_locator !== locator ||
+              (pageName !== portrait.name && portrait.identity_bridge !== "official_email") ||
+              (portrait.identity_bridge === "exact_name" && pageName !== portrait.name)) {
+            failures.push(`portrait: page does not bind name and image for ${id}`);
+          }
+          profileEmails = [...html.matchAll(/<li\b[^>]*class="[^"]*\bcontact-email\b[^"]*"[^>]*>([\s\S]*?)<\/li>/gi)]
+            .flatMap((item) => [...item[1].matchAll(/<a\b[^>]*href="mailto:([^"]+)"/gi)]
+              .map((link) => link[1].toLowerCase()));
+        }
+        if (portrait.identity_bridge && !["exact_name", "official_email"].includes(portrait.identity_bridge)) {
+          failures.push(`portrait: unsupported identity bridge for ${id}`);
+        }
+        if (portrait.identity_bridge === "official_email" && !portrait.person_record_fixture) {
+          failures.push(`portrait: alias requires official person record for ${id}`);
+        }
+        if (portrait.person_record_fixture) {
+          const client = voter.identity_scope.slice("legistar:".length);
+          const expectedPersonUrl = `https://webapi.legistar.com/v1/${client}/Persons/${voter.official_person_id}`;
+          if (portrait.person_record_url !== expectedPersonUrl ||
+              portrait.person_record_fixture !== `fixtures/atlas/portrait-sources/${client}-person-${voter.official_person_id}.json` ||
+              !/^[a-f0-9]{64}$/.test(portrait.person_record_sha256 ?? "")) {
+            failures.push(`portrait: invalid official person record reference for ${id}`);
+          } else {
+            const recordPath = join(repositoryRoot, portrait.person_record_fixture);
+            const recordMeta = await lstat(recordPath);
+            if (!recordMeta.isFile() || recordMeta.isSymbolicLink() || recordMeta.size > 100_000) throw new Error("not a bounded regular person record");
+            const personBytes = await readFile(recordPath);
+            if (createHash("sha256").update(personBytes).digest("hex") !== portrait.person_record_sha256) {
+              failures.push(`portrait: official person record digest mismatch for ${id}`);
+            }
+            const person = JSON.parse(personBytes.toString("utf8"));
+            const timConflict = id === "recorded_voter_co_castle_rock_castlerock_co_494";
+            const expectedLocator = `$.PersonId; $.PersonFullName${portrait.identity_bridge === "official_email" ? "; $.PersonEmail" : ""}${timConflict ? "; $.PersonWWW" : ""}`;
+            if (String(person.PersonId) !== voter.official_person_id || person.PersonFullName !== voter.name ||
+                portrait.person_record_locator !== expectedLocator) {
+              failures.push(`portrait: official person record does not bind voter for ${id}`);
+            }
+            if (timConflict) {
+              const conflict = portrait.source_conflict;
+              const maxProfile = votePortraits.recorded_voter_co_castle_rock_castlerock_co_342?.source_url;
+              if (conflict?.state !== "UNRESOLVED" || conflict.field !== "PersonWWW" ||
+                  conflict.recorded_url !== "http://crgov.com/directory.aspx?eid=20" ||
+                  conflict.recorded_url !== person.PersonWWW || conflict.profile_url !== portrait.source_url ||
+                  new URL(maxProfile).searchParams.get("eid") !== "20" ||
+                  conflict.public_note !== "Source conflict: the portal's website field points to another council profile. The portrait match uses the town's name and email records.") {
+                failures.push(`portrait: unresolved portal profile conflict is not disclosed for ${id}`);
+              }
+            } else if (portrait.source_conflict) {
+              failures.push(`portrait: unreviewed source conflict field for ${id}`);
+            }
+            if (portrait.identity_bridge === "official_email") {
+              const email = String(person.PersonEmail ?? "").toLowerCase();
+              const officialEmailHost = new URL(portrait.source_url).hostname.replace(/^www\./, "");
+              if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+$/.test(email) ||
+                  !email.endsWith(`@${officialEmailHost}`) ||
+                  !profileEmails.includes(email)) {
+                failures.push(`portrait: official email bridge does not match profile for ${id}`);
+              }
+            }
+          }
+        }
+        const displayed = new URL(portrait.display_image_url);
+        const original = new URL(portrait.image_url);
+        if (captureKind === "raw_html" &&
+            (displayed.origin !== original.origin || displayed.pathname !== original.pathname || original.search || original.hash)) {
+          failures.push(`portrait: original image URL is not the page's image path for ${id}`);
+        }
+      } catch (error) { failures.push(`portrait: cannot verify source page for ${id} (${error.message})`); }
     }
   }
   if (decision?.share_url) {

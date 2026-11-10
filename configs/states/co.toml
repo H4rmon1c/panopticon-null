@@ -105,7 +105,7 @@ mime_type = "application/json"
 sha256 = "c019d02d7f2da00fa9aebbc4c4d3f37c98c051bc1d028db4c215fa30a70739b0"
 
 # Official HTML calendar for document-first, private candidate discovery.
-# The API event feed above remains an optional fallback and is not scheduled.
+# The API event feed above runs only if this calendar fails and its own source review is current.
 [[sources]]
 id = "colorado-springs-calendar"
 name = "Colorado Springs City Council official meeting calendar"

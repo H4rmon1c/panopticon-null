@@ -124,6 +124,23 @@ struct ConsentContext {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct VoteGap {
+    /// The exact official EventItems/{id}/Votes response must be an empty array.
+    checked_vote_source_id: String,
+}
+
+#[derive(Clone)]
+struct BlockVoteRow {
+    index: usize,
+    name: String,
+    vote: String,
+    vote_id: String,
+    person_id: String,
+    event_item_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TechnologyContext {
     name: Fact,
 }
@@ -165,6 +182,8 @@ struct Manifest {
     votes: Vec<Vote>,
     #[serde(default)]
     consent_context: Option<ConsentContext>,
+    #[serde(default)]
+    vote_gap: Option<VoteGap>,
     contract_link: MissingLink,
     #[serde(default)]
     technology_context: Vec<TechnologyContext>,
@@ -185,6 +204,7 @@ pub(super) struct Checked {
     binding_digest: String,
     sources: BTreeMap<String, VerifiedSource>,
     facts: BTreeMap<String, Fact>,
+    block_votes: Vec<BlockVoteRow>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -255,7 +275,7 @@ pub(super) fn inspect(path: &Path) -> Result<Checked, AtlasError> {
             ));
         }
     }
-    let facts = collect_facts(&manifest)?;
+    let mut facts = collect_facts(&manifest)?;
     let mut sources = BTreeMap::new();
     for (key, fact) in &facts {
         if fact.value.trim().is_empty() || fact.proof.quote.trim().is_empty() {
@@ -276,7 +296,11 @@ pub(super) fn inspect(path: &Path) -> Result<Checked, AtlasError> {
             .get(&fact.proof.source_id)
             .ok_or_else(|| AtlasError::Source(format!("unregistered source at {key}")))?;
         if !sources.contains_key(&source.id) {
-            let bytes = read_source(&manifest_path, source)?;
+            let bytes = read_source(
+                &manifest_path,
+                source,
+                &manifest.jurisdiction.jurisdiction_ref,
+            )?;
             sources.insert(
                 source.id.clone(),
                 VerifiedSource {
@@ -296,7 +320,11 @@ pub(super) fn inspect(path: &Path) -> Result<Checked, AtlasError> {
             AtlasError::Source(format!("unregistered supporting source: {source_id}"))
         })?;
         if !sources.contains_key(source_id) {
-            let bytes = read_source(&manifest_path, source)?;
+            let bytes = read_source(
+                &manifest_path,
+                source,
+                &manifest.jurisdiction.jurisdiction_ref,
+            )?;
             sources.insert(
                 source_id.clone(),
                 VerifiedSource {
@@ -306,7 +334,49 @@ pub(super) fn inspect(path: &Path) -> Result<Checked, AtlasError> {
             );
         }
     }
-    verify_relationships(&manifest, &sources)?;
+    let block_votes = verify_relationships(&manifest, &sources)?;
+    if let Some(consent) = &manifest.consent_context {
+        for row in &block_votes {
+            for (key, field, value) in [
+                ("name", "VotePersonName", &row.name),
+                ("vote", "VoteValueName", &row.vote),
+                ("vote_id", "VoteId", &row.vote_id),
+                ("person_id", "VotePersonId", &row.person_id),
+                ("decision_ref", "VoteEventItemId", &row.event_item_id),
+            ] {
+                let key = format!("consent_vote_{}_{}", row.index, key);
+                let fact = Fact {
+                    value: value.clone(),
+                    proof: ProofRef {
+                        source_id: consent.block_vote_source_id.clone(),
+                        locator: format!("$[{}].{field}", row.index),
+                        quote: value.clone(),
+                    },
+                };
+                verify_fact(&key, &fact, &sources[&consent.block_vote_source_id])?;
+                facts.insert(key, fact);
+            }
+        }
+    }
+    if let Some(gap) = &manifest.vote_gap {
+        let fact = Fact {
+            value: "[]".to_owned(),
+            proof: ProofRef {
+                source_id: gap.checked_vote_source_id.clone(),
+                locator: "$".to_owned(),
+                quote: "[]".to_owned(),
+            },
+        };
+        verify_fact(
+            "vote_gap_empty_response",
+            &fact,
+            &sources[&gap.checked_vote_source_id],
+        )?;
+        facts.insert("vote_gap_empty_response".to_owned(), fact);
+    }
+    if facts.len() > 512 {
+        return Err(AtlasError::Manifest("too many case facts".to_owned()));
+    }
     let binding_digest = review_digest(
         "atlas-v2-release-binding",
         &[&manifest_digest, &registry_digest, &geography_digest],
@@ -316,6 +386,7 @@ pub(super) fn inspect(path: &Path) -> Result<Checked, AtlasError> {
         binding_digest,
         sources,
         facts,
+        block_votes,
     })
 }
 
@@ -471,7 +542,11 @@ fn verify_jurisdiction(place: &Place, raw: &[u8]) -> Result<(), AtlasError> {
     Ok(())
 }
 
-fn read_source(manifest_path: &Path, source: &RegisteredSource) -> Result<Vec<u8>, AtlasError> {
+fn read_source(
+    manifest_path: &Path,
+    source: &RegisteredSource,
+    jurisdiction_ref: &str,
+) -> Result<Vec<u8>, AtlasError> {
     if source.title.trim().is_empty() || source.authority.trim().is_empty() {
         return Err(AtlasError::Source(
             "source metadata is incomplete".to_owned(),
@@ -485,24 +560,30 @@ fn read_source(manifest_path: &Path, source: &RegisteredSource) -> Result<Vec<u8
     }
     let url = Url::parse(&source.url)
         .map_err(|error| AtlasError::Source(format!("invalid official URL: {error}")))?;
-    if !official_source_url(&url) {
+    if !official_source_url(&url, jurisdiction_ref) {
         return Err(AtlasError::Source(format!(
             "untrusted official source URL: {}",
             source.url
         )));
     }
     let rel = Path::new(&source.fixture);
+    let mut components = rel.components();
+    let fixture_group = match (components.next(), components.next()) {
+        (Some(Component::Normal(root)), Some(Component::Normal(group))) if root == "fixtures" => {
+            group.to_str()
+        }
+        _ => None,
+    };
     if rel.is_absolute()
-        || ![
-            "fixtures/co/",
-            "fixtures/co2/",
-            "fixtures/co-commerce/",
-            "fixtures/co-castlerock/",
-            "fixtures/co-denver/",
-            "fixtures/co-arapahoe/",
-        ]
-        .iter()
-        .any(|prefix| source.fixture.starts_with(prefix))
+        || !fixture_group.is_some_and(|group| {
+            matches!(group, "co" | "co2")
+                || group.strip_prefix("co-").is_some_and(|suffix| {
+                    !suffix.is_empty()
+                        && suffix
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                })
+        })
         || rel
             .components()
             .any(|part| !matches!(part, Component::Normal(_)))
@@ -533,7 +614,23 @@ fn read_source(manifest_path: &Path, source: &RegisteredSource) -> Result<Vec<u8
     Ok(bytes)
 }
 
-fn official_source_url(url: &Url) -> bool {
+fn official_portal(jurisdiction_ref: &str) -> Option<(&'static str, &'static str)> {
+    match jurisdiction_ref {
+        "us-co-place-0816000" => Some(("coloradosprings", "coloradosprings.legistar.com")),
+        "us-co-place-0816495" => Some(("commerce", "commerce.legistar.com")),
+        "us-co-place-0820000" => Some(("denver", "denver.legistar.com")),
+        "us-co-place-0812415" => Some(("castlerock-co", "castlerock-co.legistar.com")),
+        "us-co-county-08005" => Some(("arapahoe", "arapahoe.legistar.com")),
+        "us-co-county-08035" => Some(("douglascounty", "douglascounty.legistar.com")),
+        "us-co-place-0845255" => Some(("littletongov", "littletongov.legistar.com")),
+        _ => None,
+    }
+}
+
+fn official_source_url(url: &Url, jurisdiction_ref: &str) -> bool {
+    let Some((client, portal_host)) = official_portal(jurisdiction_ref) else {
+        return false;
+    };
     if url.scheme() != "https"
         || url.username() != ""
         || url.password().is_some()
@@ -547,37 +644,45 @@ fn official_source_url(url: &Url) -> bool {
         .extension()
         .and_then(|value| value.to_str());
     match url.host_str() {
-        Some("webapi.legistar.com") => [
-            "coloradosprings",
-            "commerce",
-            "denver",
-            "castlerock-co",
-            "arapahoe",
-        ]
-        .iter()
-        .any(|city| path.starts_with(&format!("/v1/{city}/"))),
-        Some(
-            "coloradosprings.legistar.com"
-            | "commerce.legistar.com"
-            | "denver.legistar.com"
-            | "castlerock-co.legistar.com"
-            | "arapahoe.legistar.com",
-        ) => path == "/legislationdetail.aspx" || path == "/view.ashx",
+        Some("webapi.legistar.com") => {
+            let parts = path.trim_start_matches('/').split('/').collect::<Vec<_>>();
+            parts.first() == Some(&"v1")
+                && parts.get(1) == Some(&client)
+                && match parts.as_slice() {
+                    [_, _, "events" | "matters", id] => {
+                        id.parse::<u64>().is_ok_and(|number| number > 0)
+                    }
+                    [_, _, "eventitems", id, "votes"] => {
+                        url.query().is_none() && id.parse::<u64>().is_ok_and(|number| number > 0)
+                    }
+                    _ => false,
+                }
+        }
+        Some(host) if host == portal_host => {
+            matches!(
+                path.as_str(),
+                "/legislationdetail.aspx" | "/meetingdetail.aspx" | "/view.ashx"
+            )
+        }
         Some("legistar.granicus.com") => {
-            ["commerce", "castlerock-co", "denver"]
-                .iter()
-                .any(|city| path.starts_with(&format!("/{city}/attachments/")))
+            matches!(client, "commerce" | "castlerock-co" | "denver")
+                && path.starts_with(&format!("/{client}/attachments/"))
                 && extension == Some("pdf")
         }
         Some("legistar2.granicus.com") => {
-            path.starts_with("/castlerock-co/attachments/")
+            client == "castlerock-co"
+                && path.starts_with("/castlerock-co/attachments/")
                 && matches!(extension, Some("pdf" | "docx"))
         }
         Some("denver.legistar1.com") => {
-            path.starts_with("/denver/attachments/") && extension == Some("pdf")
+            client == "denver"
+                && path.starts_with("/denver/attachments/")
+                && extension == Some("pdf")
         }
         Some("arapahoe.legistar1.com") => {
-            (path.starts_with("/arapahoe/attachments/") || path.starts_with("/arapahoe/meetings/"))
+            client == "arapahoe"
+                && (path.starts_with("/arapahoe/attachments/")
+                    || path.starts_with("/arapahoe/meetings/"))
                 && extension == Some("pdf")
         }
         _ => false,
@@ -614,6 +719,9 @@ fn verify_fact(key: &str, fact: &Fact, source: &VerifiedSource) -> Result<(), At
                 Value::String(text) => text.clone(),
                 Value::Number(number) => number.to_string(),
                 Value::Bool(boolean) => boolean.to_string(),
+                Value::Array(rows) if key == "vote_gap_empty_response" && rows.is_empty() => {
+                    "[]".to_owned()
+                }
                 _ => {
                     return Err(AtlasError::Source(format!(
                         "locator is not a scalar: {}",
@@ -742,17 +850,23 @@ fn collect_facts(manifest: &Manifest) -> Result<BTreeMap<String, Fact>, AtlasErr
 fn verify_relationships(
     manifest: &Manifest,
     sources: &BTreeMap<String, VerifiedSource>,
-) -> Result<(), AtlasError> {
+) -> Result<Vec<BlockVoteRow>, AtlasError> {
     let decision = &manifest.decision;
     let direct_votes = manifest.vote_record_state == "direct"
         && !manifest.votes.is_empty()
-        && manifest.consent_context.is_none();
+        && manifest.consent_context.is_none()
+        && manifest.vote_gap.is_none();
     let consent_block = manifest.vote_record_state == "consent_block"
         && manifest.votes.is_empty()
-        && manifest.consent_context.is_some();
-    if !direct_votes && !consent_block {
+        && manifest.consent_context.is_some()
+        && manifest.vote_gap.is_none();
+    let vote_gap = manifest.vote_record_state == "not_established"
+        && manifest.votes.is_empty()
+        && manifest.consent_context.is_none()
+        && manifest.vote_gap.is_some();
+    if !direct_votes && !consent_block && !vote_gap {
         return Err(AtlasError::Manifest(
-            "v2 case must have a complete direct roll call or verified consent block".to_owned(),
+            "v2 case must have a complete direct roll call, verified consent block, or checked empty vote response".to_owned(),
         ));
     }
     let event_source_id = &decision.event_item_id.proof.source_id;
@@ -915,6 +1029,12 @@ fn verify_relationships(
         .ok_or_else(|| AtlasError::Source("event lacks numeric EventId".to_owned()))?;
     let item = locate(&event, item_prefix)
         .ok_or_else(|| AtlasError::Source("event item disappeared".to_owned()))?;
+    if !consent_block && item["EventItemConsent"].as_u64() == Some(1) {
+        return Err(AtlasError::Source(
+            "consent agenda item cannot be given item-specific votes or an empty-vote inference"
+                .to_owned(),
+        ));
+    }
     let event_url = Url::parse(&event_source.registered.url)
         .map_err(|_| AtlasError::Source("invalid event source URL".to_owned()))?;
     let event_parts = event_url
@@ -965,6 +1085,7 @@ fn verify_relationships(
             "outcome class differs from official outcome".to_owned(),
         ));
     }
+    let mut block_votes = Vec::new();
     if let Some(consent) = &manifest.consent_context {
         if manifest.review_state != "pending" {
             return Err(AtlasError::Manifest(
@@ -1060,7 +1181,9 @@ fn verify_relationships(
             .as_array()
             .ok_or_else(|| AtlasError::Source("consent votes are not an array".to_owned()))?;
         let mut vote_ids = BTreeSet::new();
+        let mut person_ids = BTreeSet::new();
         if vote_source.registered.format != "json"
+            || vote_url.query().is_some()
             || vote_parts.len() != 5
             || vote_parts[0] != "v1"
             || vote_parts[1] != event_parts[1]
@@ -1068,14 +1191,83 @@ fn verify_relationships(
             || vote_parts[3] != consent.block_item_id.value
             || vote_parts[4] != "votes"
             || vote_rows.is_empty()
+            || vote_rows.len() > 64
             || vote_rows.iter().any(|row| {
                 row["VoteEventItemId"].as_u64().map(|id| id.to_string())
                     != Some(consent.block_item_id.value.clone())
-                    || !row["VoteId"].as_u64().is_some_and(|id| vote_ids.insert(id))
+                    || !row["VoteId"]
+                        .as_u64()
+                        .is_some_and(|id| id > 0 && vote_ids.insert(id))
+                    || !row["VotePersonId"]
+                        .as_u64()
+                        .is_some_and(|id| id > 0 && person_ids.insert(id))
+                    || !row["VotePersonName"]
+                        .as_str()
+                        .is_some_and(|value| !value.trim().is_empty() && value.len() <= 200)
+                    || !row["VoteValueName"]
+                        .as_str()
+                        .is_some_and(|value| !value.trim().is_empty() && value.len() <= 40)
             })
         {
             return Err(AtlasError::Source(
                 "consent vote rows are not bound to the block motion".to_owned(),
+            ));
+        }
+        block_votes = vote_rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| BlockVoteRow {
+                index,
+                name: row["VotePersonName"]
+                    .as_str()
+                    .expect("checked name")
+                    .to_owned(),
+                vote: row["VoteValueName"]
+                    .as_str()
+                    .expect("checked vote")
+                    .to_owned(),
+                vote_id: row["VoteId"].as_u64().expect("checked vote ID").to_string(),
+                person_id: row["VotePersonId"]
+                    .as_u64()
+                    .expect("checked person ID")
+                    .to_string(),
+                event_item_id: consent.block_item_id.value.clone(),
+            })
+            .collect();
+    }
+    if let Some(gap) = &manifest.vote_gap {
+        if !manifest
+            .supporting_sources
+            .contains(&gap.checked_vote_source_id)
+        {
+            return Err(AtlasError::Source(
+                "empty vote response is not a preserved supporting source".to_owned(),
+            ));
+        }
+        let source = sources.get(&gap.checked_vote_source_id).ok_or_else(|| {
+            AtlasError::Source("empty vote response source is unavailable".to_owned())
+        })?;
+        let url = Url::parse(&source.registered.url)
+            .map_err(|_| AtlasError::Source("invalid empty vote response URL".to_owned()))?;
+        let parts = url
+            .path_segments()
+            .ok_or_else(|| AtlasError::Source("invalid empty vote response path".to_owned()))?
+            .map(str::to_ascii_lowercase)
+            .collect::<Vec<_>>();
+        let rows: Value = serde_json::from_slice(&source.bytes)?;
+        if source.registered.format != "json"
+            || url.query().is_some()
+            || parts.len() != 5
+            || parts[0] != "v1"
+            || parts[1] != event_parts[1]
+            || parts[2] != "eventitems"
+            || parts[3] != decision.event_item_id.value
+            || parts[4] != "votes"
+            || !rows.as_array().is_some_and(Vec::is_empty)
+        {
+            return Err(AtlasError::Source(
+                "not-established vote state requires the exact empty official item-votes response"
+                    .to_owned(),
             ));
         }
     }
@@ -1120,6 +1312,7 @@ fn verify_relationships(
             .map(str::to_ascii_lowercase)
             .collect::<Vec<_>>();
         if vote_source.registered.format != "json"
+            || vote_url.query().is_some()
             || vote_parts.len() != 5
             || vote_parts[0] != "v1"
             || vote_parts[1] != event_parts[1]
@@ -1180,7 +1373,7 @@ fn verify_relationships(
             ));
         }
     }
-    Ok(())
+    Ok(block_votes)
 }
 
 pub(super) fn requirement(checked: &Checked) -> AtlasReviewRequirement {
@@ -1676,6 +1869,51 @@ pub(super) fn snapshot(
             "unknowns":[{"kind":"office_role","state":"not_established"},{"kind":"office_term","state":"not_established"}],
         }));
     }
+    let mut consent_roll_call = Vec::new();
+    if let Some(consent) = &manifest.consent_context {
+        let vote_source = &checked.sources[&consent.block_vote_source_id].registered;
+        let vote_url = Url::parse(&vote_source.url)
+            .map_err(|_| AtlasError::Source("invalid verified consent vote URL".to_owned()))?;
+        let client = vote_url
+            .path_segments()
+            .and_then(|mut segments| segments.nth(1).map(str::to_owned))
+            .ok_or_else(|| {
+                AtlasError::Source("verified consent vote lacks portal client".to_owned())
+            })?;
+        for row in &checked.block_votes {
+            let voter_id = format!(
+                "recorded_voter_{}_{}_{}",
+                manifest.jurisdiction.id.replace('-', "_"),
+                client.replace('-', "_"),
+                row.person_id
+            );
+            let key = format!("consent_vote_{}_vote", row.index);
+            let name_key = format!("consent_vote_{}_name", row.index);
+            let person_key = format!("consent_vote_{}_person_id", row.index);
+            consent_roll_call.push(json!({
+                "name":row.name,"vote":row.vote,"voter_entity_id":voter_id,
+                "office_role":"not_established","office_term":"not_established",
+                "evidence_id":evidence_id(&key),"review_state":review_state,
+                "corrections":[],"scope":"consent_motion",
+            }));
+            entities.push(json!({
+                "id":voter_id,"type":"RECORDED_VOTER","name":row.name,
+                "jurisdiction_ref":manifest.jurisdiction.jurisdiction_ref,
+                "identity_scope":format!("legistar:{client}"),
+                "official_person_id":row.person_id,
+                "subtitle":"Recorded voter; office role and term not established",
+                "status":review_state,
+                "description":"The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+                "jurisdiction_ids":[jurisdiction_id],"aliases":[],"tags":["public roll call"],
+                "updated_at":date,"source_count":1,"relation_count":0,
+                "attributes":[fact_item(&name_key,"Name in roll call",&row.name),
+                    fact_item(&person_key,"Official portal person ID",&row.person_id)],
+                "relationships":[],"timeline":[],
+                "source_ids":[consent.block_vote_source_id],
+                "unknowns":[{"kind":"office_role","state":"not_established"},{"kind":"office_term","state":"not_established"}],
+            }));
+        }
+    }
     let mut technologies = Vec::new();
     let technology_relationship = if manifest.agreement_context.is_some() {
         "Named in an authorized agreement decision; execution and payments are not established"
@@ -1760,6 +1998,11 @@ pub(super) fn snapshot(
             "{place_name} {outcome_text} {decision_name} on {date} as a consent agenda item. The recorded roll call belongs to the consent block; individual votes on this item are not established. {}",
             manifest.contract_link.detail
         )
+    } else if manifest.vote_gap.is_some() {
+        format!(
+            "{place_name} {outcome_text} {decision_name} on {date}. The checked official item-votes response contains no individual rows; individual votes on this decision are not established in these records. {}",
+            manifest.contract_link.detail
+        )
     } else {
         format!(
             "{place_name} {outcome_text} {decision_name} on {date}. The direct roll call records {ordered_tally}. {}",
@@ -1778,12 +2021,25 @@ pub(super) fn snapshot(
             "motion_title":consent.block_title.value,
             "motion_outcome":consent.block_outcome.value,
             "block_vote_source_id":consent.block_vote_source_id,
+            "roll_call":consent_roll_call,
             "motion_evidence_id":evidence_id("consent_block_item_id"),
             "motion_title_evidence_id":evidence_id("consent_block_title"),
             "motion_action_evidence_id":evidence_id("consent_block_action"),
             "motion_outcome_evidence_id":evidence_id("consent_block_outcome"),
             "item_consent_evidence_id":evidence_id("consent_item_consent"),
             "note":"Block roll call covers multiple items; no item-specific voter attribution is published."
+        })
+    });
+    let vote_gap = manifest.vote_gap.as_ref().map(|gap| {
+        unknowns.push(json!({
+            "kind":"individual_votes","state":"not_established",
+            "detail":"The checked official item-votes response contains no individual rows; other records may exist."
+        }));
+        json!({
+            "state":"not_established",
+            "checked_vote_source_id":gap.checked_vote_source_id,
+            "evidence_id":evidence_id("vote_gap_empty_response"),
+            "detail":"The checked official item-votes response contains no individual rows; other records may exist."
         })
     });
     entities.push(json!({
@@ -1801,7 +2057,7 @@ pub(super) fn snapshot(
             "title":timeline_title,"evidence_id":evidence_id("decision_outcome"),
             "review_state":review_state,"corrections":[]}],
         "source_ids":source_ids,"votes":votes,"vote_record_state":manifest.vote_record_state,
-        "consent_block":consent_record,"technology_context":technologies,
+        "consent_block":consent_record,"vote_gap":vote_gap,"technology_context":technologies,
         "unknowns":unknowns,
         "unresolved_question":manifest.unresolved_question,"share_url":share_url,
     }));
@@ -1896,6 +2152,81 @@ mod tests {
 
     fn copy_case(name: &str) -> (tempfile::TempDir, PathBuf) {
         copy_case_from(&format!("cases/{name}"))
+    }
+
+    #[test]
+    fn official_legistar_client_is_scoped_to_colorado_geography() {
+        let douglas_api = Url::parse("https://webapi.legistar.com/v1/douglascounty/Events/123")
+            .expect("Douglas API URL");
+        let littleton_document =
+            Url::parse("https://littletongov.legistar.com/View.ashx?M=M&ID=123")
+                .expect("Littleton document URL");
+        let littleton_meeting =
+            Url::parse("https://littletongov.legistar.com/MeetingDetail.aspx?ID=123")
+                .expect("Littleton meeting URL");
+        assert!(official_source_url(&douglas_api, "us-co-county-08035"));
+        assert!(official_source_url(
+            &littleton_document,
+            "us-co-place-0845255"
+        ));
+        assert!(official_source_url(
+            &littleton_meeting,
+            "us-co-place-0845255"
+        ));
+        assert!(!official_source_url(&douglas_api, "us-co-place-0845255"));
+        assert!(!official_source_url(
+            &littleton_document,
+            "us-co-place-0820000"
+        ));
+        assert!(!official_source_url(&douglas_api, "us-co-county-08001"));
+        assert!(!official_source_url(
+            &Url::parse("https://webapi.legistar.com/v1/douglascounty/People/123")
+                .expect("other API URL"),
+            "us-co-county-08035"
+        ));
+        assert!(!official_source_url(
+            &Url::parse("https://webapi.legistar.com/v1/douglascounty/Events/not-an-id")
+                .expect("non-numeric event URL"),
+            "us-co-county-08035"
+        ));
+        assert!(!official_source_url(
+            &Url::parse("https://webapi.legistar.com/v1/douglascounty/EventItems/123/Votes?$top=1")
+                .expect("filtered item-votes URL"),
+            "us-co-county-08035"
+        ));
+    }
+
+    #[test]
+    fn new_colorado_fixture_group_stays_inside_archived_sources() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fixture = "fixtures/co-littleton/meeting.json";
+        let path = dir.path().join(fixture);
+        fs::create_dir_all(path.parent().expect("fixture parent")).expect("create fixture parent");
+        let raw = br#"{"EventId":1}"#;
+        fs::write(&path, raw).expect("write fixture");
+        let source = RegisteredSource {
+            id: "test-littleton-event".to_owned(),
+            acquisition_source_id: None,
+            acquisition_config_digest: None,
+            authority: "Littleton City Council".to_owned(),
+            url: "https://webapi.legistar.com/v1/littletongov/Events/1".to_owned(),
+            fixture: fixture.to_owned(),
+            sha256: sha256_hex(raw),
+            title: "Littleton event".to_owned(),
+            format: "json".to_owned(),
+        };
+        let manifest_path = dir.path().join("fixtures/atlas/case.v2.json");
+        fs::create_dir_all(manifest_path.parent().expect("manifest parent"))
+            .expect("create manifest parent");
+        fs::write(&manifest_path, b"{}").expect("manifest path");
+        assert_eq!(
+            read_source(&manifest_path, &source, "us-co-place-0845255").expect("source"),
+            raw
+        );
+        assert!(read_source(&manifest_path, &source, "us-co-place-0820000").is_err());
+        let mut traversal = source;
+        traversal.fixture = "fixtures/co-littleton/../outside.json".to_owned();
+        assert!(read_source(&manifest_path, &traversal, "us-co-place-0845255").is_err());
     }
 
     fn copy_case_from(relative: &str) -> (tempfile::TempDir, PathBuf) {
@@ -2143,6 +2474,29 @@ mod tests {
         assert_eq!(decision["vote_record_state"], "consent_block");
         assert!(decision["votes"].as_array().expect("votes").is_empty());
         assert_eq!(decision["consent_block"]["motion_item_id"], "38020");
+        let block_votes = decision["consent_block"]["roll_call"]
+            .as_array()
+            .expect("block-motion roll call");
+        let preserved: Value = serde_json::from_slice(
+            &fs::read(
+                dir.path()
+                    .join("fixtures/co-arapahoe/votes-38020-consent-2024-11-26.json"),
+            )
+            .expect("preserved vote bytes"),
+        )
+        .expect("preserved roll call");
+        assert_eq!(block_votes.len(), preserved.as_array().expect("rows").len());
+        let evidence = published["evidence"].as_array().expect("evidence");
+        for (index, row) in block_votes.iter().enumerate() {
+            assert_eq!(row["scope"], "consent_motion");
+            assert_eq!(row["name"], preserved[index]["VotePersonName"]);
+            assert_eq!(row["vote"], preserved[index]["VoteValueName"]);
+            assert!(evidence.iter().any(|item| {
+                item["id"] == row["evidence_id"]
+                    && item["source_id"] == decision["consent_block"]["block_vote_source_id"]
+                    && item["locator"] == format!("$[{index}].VoteValueName")
+            }));
+        }
         assert!(
             decision["summary"]
                 .as_str()
@@ -2237,6 +2591,12 @@ mod tests {
             assert!(decision["votes"].as_array().expect("votes").is_empty());
             assert_eq!(decision["consent_block"]["motion_item_id"], block_id);
             assert!(
+                !decision["consent_block"]["roll_call"]
+                    .as_array()
+                    .expect("consent motion votes")
+                    .is_empty()
+            );
+            assert!(
                 decision["unknowns"]
                     .as_array()
                     .expect("unknowns")
@@ -2286,6 +2646,180 @@ mod tests {
                 Err(AtlasError::Review(_))
             ));
         }
+    }
+
+    #[test]
+    fn consent_block_context_rejects_missing_or_duplicate_voter_identity() {
+        let (dir, case) = copy_case_from("preview-cases/arapahoe-county-24-633-2024-11-26.v2.json");
+        let source_id = "co-arapahoe-votes-38020-consent-2024-11-26";
+        let registry_path = dir.path().join(REGISTRY_PATH);
+        let registry: Value = serde_json::from_slice(&fs::read(&registry_path).expect("registry"))
+            .expect("registry JSON");
+        let fixture = registry["sources"]
+            .as_array()
+            .expect("sources")
+            .iter()
+            .find(|source| source["id"] == source_id)
+            .expect("consent vote source")["fixture"]
+            .as_str()
+            .expect("fixture path");
+        let path = dir.path().join(fixture);
+        let original: Value =
+            serde_json::from_slice(&fs::read(&path).expect("votes")).expect("vote JSON");
+        for field in ["VotePersonId", "VotePersonName", "VoteValueName"] {
+            let mut rows = original.clone();
+            rows[0][field] = if field == "VotePersonId" {
+                rows[1][field].clone()
+            } else {
+                json!("")
+            };
+            let bytes = serde_json::to_vec(&rows).expect("tampered JSON");
+            fs::write(&path, &bytes).expect("write tampered source");
+            edit_json(&registry_path, |registry| {
+                let source = registry["sources"]
+                    .as_array_mut()
+                    .expect("sources")
+                    .iter_mut()
+                    .find(|item| item["id"] == source_id)
+                    .expect("vote source");
+                source["sha256"] = json!(sha256_hex(&bytes));
+            });
+            assert!(inspect(&case).is_err(), "invalid {field} was accepted");
+        }
+    }
+
+    #[test]
+    fn filtered_api_vote_urls_cannot_prove_complete_direct_or_block_roll_calls() {
+        for (relative, vote_source_id) in [
+            (
+                "cases/commerce-city-ord-2755-2026-04-06.v2.json",
+                "co-commerce-2026-ord2755-votes",
+            ),
+            (
+                "preview-cases/arapahoe-county-24-633-2024-11-26.v2.json",
+                "co-arapahoe-votes-38020-consent-2024-11-26",
+            ),
+        ] {
+            let (dir, case) = copy_case_from(relative);
+            inspect(&case).expect("unfiltered official vote source");
+            edit_json(&dir.path().join(REGISTRY_PATH), |registry| {
+                let source = registry["sources"]
+                    .as_array_mut()
+                    .expect("sources")
+                    .iter_mut()
+                    .find(|item| item["id"] == vote_source_id)
+                    .expect("vote source");
+                let original = source["url"].as_str().expect("source URL");
+                source["url"] = json!(format!("{original}?%24top=1"));
+            });
+            assert!(
+                inspect(&case).is_err(),
+                "filtered vote source was accepted for {relative}"
+            );
+        }
+    }
+
+    #[test]
+    fn checked_empty_item_vote_api_reports_gap_without_inventing_voters() {
+        let (dir, case) = copy_case("commerce-city-ord-2755-2026-04-06.v2.json");
+        let vote_source_id = "co-commerce-2026-ord2755-votes";
+        edit_json(&case, |manifest| {
+            manifest["votes"] = json!([]);
+            manifest["vote_record_state"] = json!("not_established");
+            manifest["vote_gap"] = json!({"checked_vote_source_id":vote_source_id});
+            manifest["supporting_sources"]
+                .as_array_mut()
+                .expect("supporting sources")
+                .push(json!(vote_source_id));
+        });
+        assert!(
+            inspect(&case).is_err(),
+            "nonempty official vote response cannot be hidden as a gap"
+        );
+
+        let registry_path = dir.path().join(REGISTRY_PATH);
+        let registry: Value = serde_json::from_slice(&fs::read(&registry_path).expect("registry"))
+            .expect("registry JSON");
+        let fixture = registry["sources"]
+            .as_array()
+            .expect("sources")
+            .iter()
+            .find(|source| source["id"] == vote_source_id)
+            .expect("vote registry row")["fixture"]
+            .as_str()
+            .expect("fixture path");
+        let vote_path = dir.path().join(fixture);
+        fs::write(&vote_path, b"[]").expect("empty official response fixture");
+        edit_json(&registry_path, |registry| {
+            let source = registry["sources"]
+                .as_array_mut()
+                .expect("sources")
+                .iter_mut()
+                .find(|item| item["id"] == vote_source_id)
+                .expect("vote source");
+            source["sha256"] = json!(sha256_hex(b"[]"));
+        });
+        inspect(&case).expect("checked empty item-votes response");
+        let store = Store::open(dir.path().join("db")).expect("store");
+        let output = dir.path().join("gap-preview.json");
+        super::super::export_atlas(&store, &case, &output, AtlasExportMode::Preview, None)
+            .expect("preview decision with missing individual votes");
+        let snapshot: Value = serde_json::from_slice(&fs::read(output).expect("preview bytes"))
+            .expect("preview JSON");
+        let decision = snapshot["entities"]
+            .as_array()
+            .expect("entities")
+            .iter()
+            .find(|entity| entity["type"] == "DECISION")
+            .expect("decision");
+        assert_eq!(decision["vote_record_state"], "not_established");
+        assert!(decision["votes"].as_array().expect("votes").is_empty());
+        assert!(decision["consent_block"].is_null());
+        assert_eq!(
+            decision["vote_gap"]["checked_vote_source_id"],
+            vote_source_id
+        );
+        assert!(
+            snapshot["evidence"]
+                .as_array()
+                .expect("evidence")
+                .iter()
+                .any(|record| {
+                    record["id"] == decision["vote_gap"]["evidence_id"]
+                        && record["source_id"] == vote_source_id
+                        && record["locator"] == "$"
+                        && record["claim"] == "[]"
+                })
+        );
+        assert!(
+            decision["summary"]
+                .as_str()
+                .expect("summary")
+                .contains("individual votes on this decision are not established")
+        );
+        assert!(
+            snapshot["entities"]
+                .as_array()
+                .expect("entities")
+                .iter()
+                .all(|entity| entity["type"] != "RECORDED_VOTER")
+        );
+        edit_json(&registry_path, |registry| {
+            let source = registry["sources"]
+                .as_array_mut()
+                .expect("sources")
+                .iter_mut()
+                .find(|item| item["id"] == vote_source_id)
+                .expect("vote source");
+            let original = source["url"].as_str().expect("source URL");
+            source["url"] = json!(format!(
+                "{original}?%24filter=VoteValueName%20eq%20%27Aye%27"
+            ));
+        });
+        assert!(
+            inspect(&case).is_err(),
+            "filtered empty response cannot establish an individual-vote gap"
+        );
     }
 
     #[test]

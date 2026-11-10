@@ -1,0 +1,36 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Silver Plume, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Silver Plume public-record alerts"
+default_dry_run = true
+demo_documents = []
+
+# The town's official HTML index links agenda, packet, and approved-minute PDFs.
+# This source is deliberately absent from the unattended collection matrix
+# until its exact robots/terms/source review has been recorded.
+[[sources]]
+id = "silver-plume-document-index"
+name = "Town of Silver Plume agendas and minutes index"
+url = "https://silverplumetown.com/agendas-and-minutes/"
+source_type = "html_page"
+documented_at = "https://silverplumetown.com/agendas-and-minutes/"
+official_discovery_url = "https://silverplumetown.com/"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review the town's current terms and this exact index path; link candidates remain private."
+
+# One same-host PDF from a digest-bound index snapshot per operator invocation.
+# This is a path policy, not an unrestricted WordPress crawl.
+[[sources]]
+id = "silver-plume-pdf-documents"
+name = "Town of Silver Plume official uploaded PDF candidate path"
+url = "https://silverplumetown.com/wp-content/uploads/"
+source_type = "candidate_index_pdf"
+documented_at = "https://silverplumetown.com/agendas-and-minutes/"
+official_discovery_url = "https://silverplumetown.com/agendas-and-minutes/"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact upload prefix and current terms; fetch only preserved same-host PDF links, one per invocation."

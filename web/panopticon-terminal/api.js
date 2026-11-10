@@ -145,7 +145,7 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     if (snapshot.release_review?.state !== aggregate) throw new Error("Aggregate case release state is inconsistent");
   }
 
-  const entities = new Set(snapshot.entities.map((entity) => entity.id));
+  const entities = new Map(snapshot.entities.map((entity) => [entity.id, entity]));
   const sources = new Map(snapshot.sources.map((source) => [source.id, source]));
   const evidence = new Map(snapshot.evidence.map((record) => [record.id, record]));
   if (entities.size !== snapshot.entities.length || sources.size !== snapshot.sources.length || evidence.size !== snapshot.evidence.length) {
@@ -193,8 +193,40 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
           [title, action, outcome, item].some((record) => record.source_id !== motion.source_id)) {
         throw new Error(`Entity ${entity.id} has an invalid consent-block record`);
       }
+      if (entity.vote_gap || (block.roll_call !== undefined && !Array.isArray(block.roll_call))) {
+        throw new Error(`Entity ${entity.id} has an invalid consent-block vote shape`);
+      }
+      for (const vote of block.roll_call ?? []) {
+        const proof = evidence.get(vote.evidence_id);
+        const voter = entities.get(vote.voter_entity_id);
+        if (vote.scope !== "consent_motion" || !proof ||
+            proof.source_id !== block.block_vote_source_id ||
+            !/^\$\[\d+\]\.VoteValueName$/.test(proof.locator) ||
+            proof.claim !== vote.vote || !voter || voter.type !== "RECORDED_VOTER" ||
+            voter.name !== vote.name ||
+            (!demo && vote.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED"))) {
+          throw new Error(`Entity ${entity.id} has an unsupported consent-motion roll call`);
+        }
+      }
+    } else if (entity.vote_record_state === "not_established") {
+      const gap = entity.vote_gap;
+      const gapProof = evidence.get(gap?.evidence_id);
+      if (entity.type !== "DECISION" || (entity.votes ?? []).length || entity.consent_block ||
+          gap?.state !== "not_established" || !sources.has(gap.checked_vote_source_id) ||
+          !gapProof || gapProof.source_id !== gap.checked_vote_source_id ||
+          gapProof.locator !== "$" || gapProof.claim !== "[]" ||
+          !Array.isArray(entity.unknowns) ||
+          !entity.unknowns.some((item) => item.kind === "individual_votes" && item.state === "not_established")) {
+        throw new Error(`Entity ${entity.id} has an invalid vote gap`);
+      }
+    } else if (entity.vote_record_state === "direct") {
+      if (entity.type !== "DECISION" || !(entity.votes ?? []).length || entity.consent_block || entity.vote_gap) {
+        throw new Error(`Entity ${entity.id} has an invalid direct vote record`);
+      }
     } else if (entity.consent_block) {
       throw new Error(`Entity ${entity.id} has an unbound consent-block record`);
+    } else if (entity.vote_gap || entity.vote_record_state !== undefined) {
+      throw new Error(`Entity ${entity.id} has an unsupported vote-record state`);
     }
     for (const relation of entity.relationships ?? []) {
       if (!validCount(relation.source_count)) throw new Error(`Entity ${entity.id} has an invalid relationship count`);
@@ -208,7 +240,11 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
       if (!demo && item.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid fact verification state`);
     }
     for (const vote of entity.votes ?? []) {
-      if (!evidence.has(vote.evidence_id)) throw new Error(`Entity ${entity.id} has a vote without evidence`);
+      const voter = entities.get(vote.voter_entity_id);
+      if (!evidence.has(vote.evidence_id) || (!demo &&
+          (!voter || voter.type !== "RECORDED_VOTER" || voter.name !== vote.name))) {
+        throw new Error(`Entity ${entity.id} has a vote without evidence or a matching voter`);
+      }
       if (!demo && vote.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid vote verification state`);
     }
     for (const context of entity.technology_context ?? []) {

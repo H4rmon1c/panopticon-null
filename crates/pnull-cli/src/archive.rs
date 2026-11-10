@@ -16,12 +16,53 @@ use anyhow::{Context, Result, bail};
 use pnull_core::{FetchObservation, Store, sha256_hex};
 use pnull_http::{FetchConfig, PriorEvidence};
 use pnull_ingest::fetch_source;
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::{SourceConfig, StateConfig, source_config_digest, verify_source_review};
+
+const WORDPRESS_PDF_PREFIX: &str = "/wp-content/uploads/";
+const TOWNCLOUD_PDF_PREFIX: &str = "/uploads/";
+
+fn town_index_path_allowed(path: &str) -> bool {
+    matches!(path, "/agendas-and-minutes/" | "/documents")
+}
+
+fn town_pdf_prefix_allowed(path: &str) -> bool {
+    matches!(path, WORDPRESS_PDF_PREFIX | TOWNCLOUD_PDF_PREFIX)
+}
+
+fn town_index_pdf_policy<'a>(
+    config: &'a StateConfig,
+    index_url: &url::Url,
+) -> Result<&'a SourceConfig> {
+    let mut policies = config.sources.iter().filter(|source| {
+        source.source_type == "candidate_index_pdf"
+            && source.official_discovery_url == index_url.as_str()
+            && source.documented_at == index_url.as_str()
+    });
+    let policy = policies
+        .next()
+        .context("document index lacks a matching PDF path policy")?;
+    if policies.next().is_some() {
+        bail!("document index has multiple PDF path policies");
+    }
+    let policy_url = url::Url::parse(&policy.url)?;
+    if !town_pdf_prefix_allowed(policy_url.path())
+        || policy_url.scheme() != "https"
+        || policy_url.host_str() != index_url.host_str()
+        || policy_url.port_or_known_default() != Some(443)
+        || policy_url.query().is_some()
+        || policy_url.fragment().is_some()
+        || !policy_url.username().is_empty()
+        || policy_url.password().is_some()
+    {
+        bail!("document index PDF policy is outside the approved same-host paths");
+    }
+    Ok(policy)
+}
 
 trait ArchiveFetcher {
     fn fetch(
@@ -157,6 +198,138 @@ pub(super) fn discover_calendar(
         path.display()
     );
     Ok(())
+}
+
+/// Small-town HTML indexes can expose official PDF records without an API.
+/// Only links on the same host and under a separately reviewed upload path
+/// become private candidates. Nothing here implies a vote or a public case.
+pub(super) fn discover_index(data_dir: &Path, config: &StateConfig, source_id: &str) -> Result<()> {
+    if source_id.is_empty()
+        || !source_id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        bail!("invalid document index source ID");
+    }
+    let source = config
+        .sources
+        .iter()
+        .find(|source| source.id == source_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown source: {source_id}"))?;
+    let source_url = url::Url::parse(&source.url)?;
+    if source.source_type != "html_page"
+        || source_url.scheme() != "https"
+        || source_url.port_or_known_default() != Some(443)
+        || !town_index_path_allowed(source_url.path())
+        || source_url.query().is_some()
+        || source_url.fragment().is_some()
+        || !source_url.username().is_empty()
+        || source_url.password().is_some()
+    {
+        bail!(
+            "document index discovery requires a configured official agendas-and-minutes HTML source"
+        );
+    }
+    let policy_url = url::Url::parse(&town_index_pdf_policy(config, &source_url)?.url)?;
+    let store = Store::open(data_dir)?;
+    let outcome = archive_with(&store, config, source_id, &mut LiveFetcher)?;
+    let mut raw = Vec::new();
+    fs::File::open(store.content_path(&outcome.digest)?)?
+        .take((source.maximum_bytes as u64).saturating_add(1))
+        .read_to_end(&mut raw)?;
+    if raw.is_empty() || raw.len() > source.maximum_bytes || sha256_hex(&raw) != outcome.digest {
+        bail!("archived document index bytes do not match their digest");
+    }
+    let manifest = CalendarCandidates {
+        schema_version: 1,
+        source_id: source_id.to_owned(),
+        source_url: source.url.clone(),
+        snapshot_sha256: outcome.digest,
+        candidates: parse_town_pdf_candidates(&source_url, &policy_url, &raw)?,
+    };
+    let path = persist_calendar_candidates(data_dir, &manifest)?;
+    println!(
+        "discovered {} private PDF candidates from {} (SHA-256 {})\n  artifact: {}",
+        manifest.candidates.len(),
+        source_id,
+        manifest.snapshot_sha256,
+        path.display()
+    );
+    Ok(())
+}
+
+fn town_pdf_url_allowed(policy_url: &url::Url, candidate_url: &url::Url) -> bool {
+    candidate_url.scheme() == "https"
+        && candidate_url.host_str() == policy_url.host_str()
+        && candidate_url.port_or_known_default() == Some(443)
+        && candidate_url.username().is_empty()
+        && candidate_url.password().is_none()
+        && candidate_url.query().is_none()
+        && candidate_url.fragment().is_none()
+        && town_pdf_prefix_allowed(policy_url.path())
+        && candidate_url.path().starts_with(policy_url.path())
+        && candidate_url.path().len() > policy_url.path().len()
+        && !candidate_url.path().contains(['%', '\\'])
+        && !candidate_url.path().contains("//")
+        && candidate_url.path().to_ascii_lowercase().ends_with(".pdf")
+        && candidate_url.as_str().len() <= 2_048
+}
+
+fn parse_town_pdf_candidates(
+    source_url: &url::Url,
+    policy_url: &url::Url,
+    raw: &[u8],
+) -> Result<Vec<CalendarCandidate>> {
+    let html = std::str::from_utf8(raw).context("document index HTML is not UTF-8")?;
+    let document = Html::parse_document(html);
+    let anchors = Selector::parse("a[href]").expect("static selector is valid");
+    let mut candidates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (anchor_index, anchor) in document.select(&anchors).enumerate() {
+        let Some(href) = anchor.value().attr("href") else {
+            continue;
+        };
+        let Ok(url) = source_url.join(href) else {
+            continue;
+        };
+        if !town_pdf_url_allowed(policy_url, &url) || !seen.insert(url.to_string()) {
+            continue;
+        }
+        if candidates.len() >= 2_000 {
+            bail!("document index has more than 2,000 eligible PDF links");
+        }
+        let label = anchor
+            .parent()
+            .and_then(ElementRef::wrap)
+            .unwrap_or(anchor)
+            .text()
+            .flat_map(str::split_whitespace)
+            .take(24)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(160)
+            .collect();
+        candidates.push(CalendarCandidate {
+            kind: "document".to_owned(),
+            url: url.to_string(),
+            anchor_index,
+            label,
+        });
+    }
+    if candidates.is_empty() {
+        bail!("document index yielded no same-host upload PDF links");
+    }
+    Ok(candidates)
+}
+
+fn parse_reviewed_index_candidates(
+    config: &StateConfig,
+    index_url: &url::Url,
+    raw: &[u8],
+) -> Result<Vec<CalendarCandidate>> {
+    let policy_url = url::Url::parse(&town_index_pdf_policy(config, index_url)?.url)?;
+    parse_town_pdf_candidates(index_url, &policy_url, raw)
 }
 
 fn persist_calendar_candidates(data_dir: &Path, manifest: &CalendarCandidates) -> Result<PathBuf> {
@@ -346,25 +519,39 @@ fn archive_candidate_with(
     let (expected_kind, document_type, path) = match policy.source_type.as_str() {
         "candidate_meeting_html" => ("meeting", "html_page", "/MeetingDetail.aspx"),
         "candidate_document_pdf" => ("document", "pdf", "/View.ashx"),
+        "candidate_index_pdf" => ("index_document", "pdf", ""),
         _ => bail!("source is not a reviewed calendar document path policy"),
     };
     if (expected_kind == "meeting" && candidate.kind != "meeting")
         || (expected_kind == "document"
             && !matches!(candidate.kind.as_str(), "agenda" | "packet" | "minutes"))
+        || (expected_kind == "index_document" && candidate.kind != "document")
     {
         bail!("candidate kind does not match the reviewed document path policy");
     }
     let policy_url = url::Url::parse(&policy.url)?;
     let candidate_url = url::Url::parse(&candidate.url)?;
+    let path_allowed = if expected_kind == "index_document" {
+        policy.official_discovery_url
+            == config
+                .sources
+                .iter()
+                .find(|source| source.id == calendar_source_id)
+                .context("document index source disappeared")?
+                .url
+            && policy.documented_at == policy.official_discovery_url
+            && town_pdf_prefix_allowed(policy_url.path())
+            && town_pdf_url_allowed(&policy_url, &candidate_url)
+    } else {
+        policy_url.path() == path && candidate_url.path() == path && candidate_url.query().is_some()
+    };
     if policy_url.scheme() != "https"
         || policy_url.query().is_some()
         || policy_url.fragment().is_some()
-        || policy_url.path() != path
+        || !path_allowed
         || candidate_url.scheme() != "https"
         || candidate_url.host_str() != policy_url.host_str()
         || candidate_url.port_or_known_default() != Some(443)
-        || candidate_url.path() != path
-        || candidate_url.query().is_none()
         || candidate_url.fragment().is_some()
         || !candidate_url.username().is_empty()
         || candidate_url.password().is_some()
@@ -422,11 +609,20 @@ fn load_verified_candidate(
         .find(|source| source.id == calendar_source_id)
         .ok_or_else(|| anyhow::anyhow!("unknown calendar source: {calendar_source_id}"))?;
     let calendar_url = url::Url::parse(&calendar.url)?;
-    if calendar.source_type != "html_page"
-        || calendar_url.path() != "/Calendar.aspx"
-        || calendar_url.query().is_some()
+    let is_legistar_calendar = calendar.source_type == "html_page"
+        && calendar_url.path() == "/Calendar.aspx"
+        && calendar_url.query().is_none();
+    let is_town_index = calendar.source_type == "html_page"
+        && town_index_path_allowed(calendar_url.path())
+        && calendar_url.query().is_none();
+    if (!is_legistar_calendar && !is_town_index)
+        || calendar_url.scheme() != "https"
+        || calendar_url.port_or_known_default() != Some(443)
+        || calendar_url.fragment().is_some()
+        || !calendar_url.username().is_empty()
+        || calendar_url.password().is_some()
     {
-        bail!("candidate origin is not a configured official HTML calendar");
+        bail!("candidate origin is not a configured official HTML calendar or document index");
     }
     verify_source_review(store, config, calendar_source_id)?;
     let mut raw = Vec::new();
@@ -457,7 +653,11 @@ fn load_verified_candidate(
         source_id: calendar_source_id.to_owned(),
         source_url: calendar.url.clone(),
         snapshot_sha256: calendar_snapshot.to_owned(),
-        candidates: parse_calendar_candidates(&calendar_url, &raw)?,
+        candidates: if is_legistar_calendar {
+            parse_calendar_candidates(&calendar_url, &raw)?
+        } else {
+            parse_reviewed_index_candidates(config, &calendar_url, &raw)?
+        },
     };
     let path = store
         .data_dir()
@@ -648,7 +848,7 @@ fn checked_archive_url(
 ) -> Result<url::Url> {
     let expected_type = match source.source_type.as_str() {
         "candidate_meeting_html" => "html_page",
-        "candidate_document_pdf" => "pdf",
+        "candidate_document_pdf" | "candidate_index_pdf" => "pdf",
         ordinary => ordinary,
     };
     if expected_type != document_type {
@@ -656,13 +856,21 @@ fn checked_archive_url(
     }
     let reviewed_url = url::Url::parse(&source.url)?;
     let requested_url = url::Url::parse(url)?;
+    let path_allowed = if source.source_type == "candidate_index_pdf" {
+        town_pdf_prefix_allowed(reviewed_url.path())
+            && town_pdf_url_allowed(&reviewed_url, &requested_url)
+    } else {
+        reviewed_url.path() == requested_url.path()
+    };
     if reviewed_url.scheme() != "https"
         || reviewed_url.port_or_known_default() != Some(443)
         || !reviewed_url.username().is_empty()
         || reviewed_url.password().is_some()
+        || (source.source_type.starts_with("candidate_")
+            && (reviewed_url.query().is_some() || reviewed_url.fragment().is_some()))
         || reviewed_url.host_str() != requested_url.host_str()
         || reviewed_url.port_or_known_default() != requested_url.port_or_known_default()
-        || reviewed_url.path() != requested_url.path()
+        || !path_allowed
         || requested_url.fragment().is_some()
         || !requested_url.username().is_empty()
         || requested_url.password().is_some()
@@ -972,6 +1180,89 @@ mod tests {
     }
 
     #[test]
+    fn silver_plume_official_excerpt_yields_private_pdf_candidates() {
+        let raw = include_bytes!("../../../fixtures/co-silver-plume/index-excerpt.html");
+        assert_eq!(
+            sha256_hex(raw),
+            "8302b7bc8119c963ccf11f687aabc60aaacce93186ced8faf97c012dc6539ab4"
+        );
+        let url = url::Url::parse("https://silverplumetown.com/agendas-and-minutes/").unwrap();
+        let policy = url::Url::parse("https://silverplumetown.com/wp-content/uploads/").unwrap();
+        let candidates = parse_town_pdf_candidates(&url, &policy, raw).unwrap();
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates.iter().all(|item| item.kind == "document"));
+        assert!(candidates[0].label.contains("BOT Agenda 11.9.2026"));
+        assert!(candidates[1].label.contains("February 12, 2024"));
+        assert!(candidates.iter().all(|item| {
+            item.url
+                .starts_with("https://silverplumetown.com/wp-content/uploads/")
+        }));
+    }
+
+    #[test]
+    fn moffat_and_simla_document_indexes_yield_only_reviewed_upload_pdfs() {
+        for (source, policy, raw, digest) in [
+            (
+                "https://www.townofmoffatco.gov/documents",
+                "https://www.townofmoffatco.gov/uploads/",
+                include_bytes!("../../../fixtures/co-moffat/index-excerpt.html").as_slice(),
+                "d27ebab69581b050e9bb882e7238e59d6e7de3cc6462313bafc26beb4c0db58d",
+            ),
+            (
+                "https://townofsimla.com/documents",
+                "https://townofsimla.com/uploads/",
+                include_bytes!("../../../fixtures/co-simla/index-excerpt.html").as_slice(),
+                "cbdb51960b9879a9702de50b3e72232c8daa8cea4a559ef0feb720cb837d3297",
+            ),
+        ] {
+            assert_eq!(sha256_hex(raw), digest);
+            let source_url = url::Url::parse(source).unwrap();
+            let policy_url = url::Url::parse(policy).unwrap();
+            let candidates = parse_town_pdf_candidates(&source_url, &policy_url, raw).unwrap();
+            assert_eq!(candidates.len(), 2);
+            assert!(candidates.iter().all(|item| item.url.starts_with(policy)));
+            assert!(candidates.iter().all(|item| item.kind == "document"));
+            assert!(!town_pdf_url_allowed(
+                &policy_url,
+                &url::Url::parse(&format!(
+                    "{}uploads-evil/minutes.pdf",
+                    source_url.origin().ascii_serialization()
+                ))
+                .unwrap()
+            ));
+        }
+    }
+
+    #[test]
+    fn town_pdf_index_rejects_cross_host_paths_queries_and_long_urls() {
+        let url = url::Url::parse("https://silverplumetown.com/agendas-and-minutes/").unwrap();
+        let policy = url::Url::parse("https://silverplumetown.com/wp-content/uploads/").unwrap();
+        let long_url = format!("/wp-content/uploads/{}.pdf", "x".repeat(2_100));
+        let html = format!(
+            "<html><body>\
+            <a href='/wp-content/uploads/2026/11/minutes.pdf'>valid</a>\
+            <a href='https://evil.example/wp-content/uploads/2026/11/minutes.pdf'>cross host</a>\
+            <a href='https://silverplumetown.com.evil.example/wp-content/uploads/a.pdf'>lookalike</a>\
+            <a href='/other/minutes.pdf'>wrong path</a>\
+            <a href='/wp-content/uploads/minutes.pdf.exe'>wrong extension</a>\
+            <a href='/wp-content/uploads/minutes.pdf?download=1'>query</a>\
+            <a href='/wp-content/uploads/minutes.pdf#x'>fragment</a>\
+            <a href='{long_url}'>long URL</a>\
+            <a href='/wp-content/uploads/2026/11/minutes.pdf'>duplicate</a>\
+            </body></html>"
+        );
+        let candidates = parse_town_pdf_candidates(&url, &policy, html.as_bytes()).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].anchor_index, 0);
+        assert_eq!(
+            candidates[0].url,
+            "https://silverplumetown.com/wp-content/uploads/2026/11/minutes.pdf"
+        );
+        assert!(parse_town_pdf_candidates(&url, &policy, b"<html>no documents</html>").is_err());
+        assert!(parse_town_pdf_candidates(&url, &policy, b"not utf8 \xff").is_err());
+    }
+
+    #[test]
     fn calendar_origin_requires_public_nonredirected_parseable_receipt() {
         let url = "https://official.example.test/Calendar.aspx";
         let raw = b"<html>calendar bytes</html>";
@@ -1243,6 +1534,70 @@ mod tests {
         config
     }
 
+    fn town_index_config() -> StateConfig {
+        let mut config = candidate_config(0, 0);
+        config.sources.truncate(2);
+        config.sources[0].id = "test-index".to_owned();
+        config.sources[0].url = "https://official.example.test/agendas-and-minutes/".to_owned();
+        config.sources[1].id = "test-index-pdf".to_owned();
+        config.sources[1].url = "https://official.example.test/wp-content/uploads/".to_owned();
+        config.sources[1].source_type = "candidate_index_pdf".to_owned();
+        config.sources[1].official_discovery_url = config.sources[0].url.clone();
+        config.sources[1].documented_at = config.sources[0].url.clone();
+        config
+    }
+
+    #[test]
+    fn town_index_pdf_policy_accepts_only_reviewed_upload_prefix() {
+        let config = town_index_config();
+        let policy = &config.sources[1];
+        let valid = "https://official.example.test/wp-content/uploads/2026/11/board-minutes.pdf";
+        assert!(checked_archive_url(policy, &policy.id, valid, "pdf").is_ok());
+        for invalid in [
+            "https://evil.example/wp-content/uploads/2026/11/board-minutes.pdf",
+            "https://official.example.test/wp-content/uploads-evil/minutes.pdf",
+            "https://official.example.test/wp-content/uploads/minutes.pdf?x=1",
+            "https://official.example.test/wp-content/uploads/minutes.pdf#x",
+            "https://official.example.test/wp-content/uploads/%2e%2e/minutes.pdf",
+            "https://official.example.test/wp-content/uploads/%252e%252e/minutes.pdf",
+            "https://official.example.test/wp-content/uploads//minutes.pdf",
+            "https://official.example.test/wp-content/uploads/minutes.pdf.exe",
+        ] {
+            assert!(checked_archive_url(policy, &policy.id, invalid, "pdf").is_err());
+        }
+    }
+
+    #[test]
+    fn towncloud_document_index_policy_requires_exact_index_and_upload_path() {
+        let mut config = town_index_config();
+        config.sources[0].url = "https://official.example.test/documents".to_owned();
+        config.sources[1].url = "https://official.example.test/uploads/".to_owned();
+        config.sources[1].official_discovery_url = config.sources[0].url.clone();
+        config.sources[1].documented_at = config.sources[0].url.clone();
+        let index_url = url::Url::parse(&config.sources[0].url).unwrap();
+        let policy = town_index_pdf_policy(&config, &index_url).unwrap();
+        assert!(
+            checked_archive_url(
+                policy,
+                &policy.id,
+                "https://official.example.test/uploads/meeting-minutes.pdf",
+                "pdf"
+            )
+            .is_ok()
+        );
+        for invalid in [
+            "https://official.example.test/wp-content/uploads/minutes.pdf",
+            "https://official.example.test/uploads-evil/minutes.pdf",
+            "https://official.example.test/uploads/minutes.pdf?download=1",
+            "https://evil.example/uploads/minutes.pdf",
+        ] {
+            assert!(checked_archive_url(policy, &policy.id, invalid, "pdf").is_err());
+        }
+        config.sources[1].official_discovery_url =
+            "https://official.example.test/unrelated".to_owned();
+        assert!(town_index_pdf_policy(&config, &index_url).is_err());
+    }
+
     fn install_candidate_review(store: &Store, config: &StateConfig, source_id: &str) {
         let source = config
             .sources
@@ -1326,8 +1681,15 @@ mod tests {
                 error: None,
             })
             .expect("calendar receipt");
-        let candidates = parse_calendar_candidates(&url::Url::parse(&calendar.url).unwrap(), raw)
-            .expect("candidates");
+        let source_url = url::Url::parse(&calendar.url).unwrap();
+        let candidates = if source_url.path() == "/Calendar.aspx" {
+            parse_calendar_candidates(&source_url, raw)
+        } else {
+            let policy_url =
+                url::Url::parse(&town_index_pdf_policy(config, &source_url).unwrap().url).unwrap();
+            parse_town_pdf_candidates(&source_url, &policy_url, raw)
+        }
+        .expect("candidates");
         let artifact = CalendarCandidates {
             schema_version: 1,
             source_id: calendar.id.clone(),
@@ -1751,6 +2113,50 @@ mod tests {
         assert_eq!(
             fs::metadata(&record_path).unwrap().permissions().mode() & 0o777,
             0o600
+        );
+    }
+
+    #[test]
+    fn town_index_candidate_archives_reviewed_pdf_without_public_claim() {
+        let config = town_index_config();
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        install_candidate_review(&store, &config, "test-index");
+        install_candidate_review(&store, &config, "test-index-pdf");
+        let raw = br#"<html><li>Board minutes<a href="/wp-content/uploads/2026/11/minutes.pdf">Download PDF</a></li></html>"#;
+        let (index_digest, candidates) = seed_calendar(&store, &config, raw);
+        let pdf = b"%PDF-1.7\nprivate test document\n".to_vec();
+        let mut fetcher = FakeFetcher {
+            body: pdf.clone(),
+            content_type: "application/pdf".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let (outcome, record_path) = archive_candidate_with(
+            &store,
+            &config,
+            "test-index",
+            &index_digest,
+            candidates[0].anchor_index,
+            "test-index-pdf",
+            &mut fetcher,
+        )
+        .unwrap();
+        assert_eq!(outcome.digest, sha256_hex(&pdf));
+        assert_eq!(outcome.status, 200);
+        assert_eq!(fetcher.calls, 1);
+        assert_eq!(fetcher.urls, vec![candidates[0].url.clone()]);
+        assert_eq!(
+            fetcher.reviewed_paths,
+            vec![Some(vec![
+                "/wp-content/uploads/2026/11/minutes.pdf".to_owned()
+            ])]
+        );
+        let record = fs::read_to_string(record_path).unwrap();
+        assert!(record.contains("\"candidate_kind\": \"document\""));
+        assert!(record.contains("\"document_source_review_id\""));
+        assert_eq!(
+            fs::read(store.content_path(&outcome.digest).unwrap()).unwrap(),
+            pdf
         );
     }
 
