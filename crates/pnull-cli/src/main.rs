@@ -32,6 +32,7 @@ use time::format_description::well_known::Rfc3339;
 
 mod approval_cmd;
 mod archive;
+mod case_proposal;
 mod procurement_cmd;
 mod refresh;
 
@@ -296,6 +297,11 @@ enum CaseCommand {
         #[arg(long, default_value = "case-output")]
         output: PathBuf,
     },
+    /// Build a private, source-checked proposal from reviewed candidate archives.
+    Propose {
+        #[arg(long)]
+        input: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -356,6 +362,18 @@ enum SourceCommand {
         anchor_index: usize,
         #[arg(long)]
         source_id: String,
+    },
+    /// Fetch a bounded private queue of digest-bound, reviewed document candidates.
+    ArchiveQueue {
+        origin_source_id: String,
+        #[arg(long)]
+        snapshot: Option<String>,
+        #[arg(long, default_value_t = 2)]
+        max_fetches: usize,
+        #[arg(long, default_value_t = 86_400)]
+        refresh_after_seconds: u64,
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -522,6 +540,7 @@ fn main() -> Result<()> {
     run(cli)
 }
 
+#[allow(clippy::too_many_lines)] // CLI dispatch enumerates independent subcommands.
 fn run(cli: Cli) -> Result<()> {
     let mut config = load_config(&cli.config)?;
     if let Some(site_url) = &cli.site_url {
@@ -576,6 +595,24 @@ fn run(cli: Cli) -> Result<()> {
             anchor_index,
             &source_id,
         ),
+        Command::Source {
+            command:
+                SourceCommand::ArchiveQueue {
+                    origin_source_id,
+                    snapshot,
+                    max_fetches,
+                    refresh_after_seconds,
+                    dry_run,
+                },
+        } => archive::archive_queue(
+            &cli.data_dir,
+            &config,
+            &origin_source_id,
+            snapshot.as_deref(),
+            max_fetches,
+            refresh_after_seconds,
+            dry_run,
+        ),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
         Command::Scan => scan_all(&cli.data_dir, &cli.rules),
         Command::Diff {
@@ -599,7 +636,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::Demo { output } => run_demo(&output, &config, &cli.rules),
         Command::Procurement { command } => procurement_command(&cli.data_dir, &config, command),
         Command::Coverage { command } => coverage_command(&cli.data_dir, command),
-        Command::Case { command } => case_command(&cli.data_dir, command),
+        Command::Case { command } => case_command(&cli.data_dir, &cli.config, &config, command),
         Command::Cora { command } => cora_command(&cli.data_dir, command),
         Command::Approval { command } => approval_command(&cli.data_dir, command),
         Command::Atlas { command } => {
@@ -874,11 +911,19 @@ fn coverage_command(data_dir: &Path, command: CoverageCommand) -> Result<()> {
     }
 }
 
-fn case_command(data_dir: &Path, command: CaseCommand) -> Result<()> {
+fn case_command(
+    data_dir: &Path,
+    config_path: &Path,
+    config: &StateConfig,
+    command: CaseCommand,
+) -> Result<()> {
     let store = Store::open(data_dir)?;
     match command {
         CaseCommand::Build { matter, output } => {
             procurement_cmd::case_build(&store, &matter, &output)
+        }
+        CaseCommand::Propose { input } => {
+            case_proposal::propose(&store, config_path, config, &input)
         }
     }
 }
@@ -1178,12 +1223,90 @@ fn latest_robots_capture(
     )
 }
 
+/// Conservatively deny any configured path matched by a Disallow rule for our
+/// HTTP user agent or the wildcard group. An Allow rule cannot override a
+/// matching Disallow here: a human must resolve that ambiguity before fetch.
+fn robots_disallows_path(bytes: &[u8], path: &str) -> Result<bool> {
+    let text = std::str::from_utf8(bytes).context("robots.txt is not UTF-8")?;
+    if text.trim_start().starts_with('<') {
+        bail!("robots.txt returned markup instead of directives");
+    }
+    let mut agents = Vec::<String>::new();
+    let mut in_rules = false;
+    for line in text.trim_start_matches('\u{feff}').lines() {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            if line.to_ascii_lowercase().starts_with("disallow")
+                || line.to_ascii_lowercase().starts_with("user-agent")
+            {
+                bail!("robots.txt has a malformed access directive");
+            }
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+        if key.eq_ignore_ascii_case("user-agent") {
+            if in_rules {
+                agents.clear();
+                in_rules = false;
+            }
+            if value.is_empty() {
+                bail!("robots.txt has an empty user-agent directive");
+            }
+            agents.push(value.to_ascii_lowercase());
+        } else if key.eq_ignore_ascii_case("disallow") {
+            in_rules = true;
+            let applies = agents.is_empty()
+                || agents
+                    .iter()
+                    .any(|agent| matches!(agent.as_str(), "*" | "pnull" | "panopticonnull"));
+            if applies && !value.is_empty() {
+                if !value.starts_with('/') || value.chars().any(char::is_whitespace) {
+                    bail!("robots.txt has an unsupported disallow path");
+                }
+                // Wildcards, query qualifiers and end anchors can only narrow
+                // this prefix. Denying the prefix may overblock, but cannot
+                // miss a matching rule for the reviewed path.
+                let prefix = value.split(['*', '$', '?', '%']).next().unwrap_or_default();
+                if path.starts_with(prefix) {
+                    return Ok(true);
+                }
+            }
+        } else if key.eq_ignore_ascii_case("allow") {
+            in_rules = true;
+        }
+    }
+    Ok(false)
+}
+
 /// Legacy reviews with an empty digest or absent provenance fail closed. A
 /// recorded review must still point to the exact saved bytes and HTTP receipt.
 pub(crate) fn require_preserved_robots_capture(
     store: &Store,
     source_id: &str,
     review: &SourceReview,
+) -> Result<()> {
+    require_preserved_robots_capture_for_path(store, source_id, review, None)
+}
+
+pub(crate) fn require_preserved_robots_candidate_path(
+    store: &Store,
+    source_id: &str,
+    review: &SourceReview,
+    candidate_path: &str,
+) -> Result<()> {
+    require_preserved_robots_capture_for_path(store, source_id, review, Some(candidate_path))
+}
+
+#[allow(clippy::too_many_lines)] // This verifies one preserved receipt chain and its exact paths.
+fn require_preserved_robots_capture_for_path(
+    store: &Store,
+    source_id: &str,
+    review: &SourceReview,
+    candidate_path: Option<&str>,
 ) -> Result<()> {
     let robots_url = url::Url::parse(&review.robots_url)
         .with_context(|| format!("live retrieval refused: invalid robots URL for {source_id}"))?;
@@ -1275,6 +1398,20 @@ pub(crate) fn require_preserved_robots_capture(
         bail!(
             "live retrieval refused: preserved robots bytes do not match the review digest for {source_id}"
         );
+    }
+    if (200..=204).contains(&body.status_code) {
+        for path in review
+            .endpoint_patterns
+            .iter()
+            .map(String::as_str)
+            .chain(candidate_path)
+        {
+            if robots_disallows_path(&bytes, path).with_context(|| {
+                format!("live retrieval refused: invalid robots.txt for {source_id}")
+            })? {
+                bail!("live retrieval refused: robots.txt disallows {path} for source {source_id}");
+            }
+        }
     }
     Ok(())
 }
@@ -3005,6 +3142,107 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("within 24 hours"));
+    }
+
+    #[test]
+    fn robots_disallow_rules_fail_closed_for_our_user_agent_and_reviewed_path() {
+        for body in [
+            "User-agent: *\nDisallow: /\n",
+            "USER-AGENT: PanopticonNull\nDisallow: /Commerce/attachments/\n",
+            "User-agent: pnull\nAllow: /\nDisallow: /Commerce/*\n",
+            "User-agent: OtherBot\nDisallow: /\nUser-agent: *\nDisallow: /Commerce/attachments/\n",
+            "Disallow: /\n",
+        ] {
+            assert!(
+                robots_disallows_path(body.as_bytes(), "/Commerce/attachments/file.pdf")
+                    .expect("parse robots"),
+                "rule was not enforced: {body}"
+            );
+        }
+        assert!(
+            !robots_disallows_path(
+                b"User-agent: OtherBot\nDisallow: /\nUser-agent: *\nAllow: /\n",
+                "/Commerce/attachments/file.pdf"
+            )
+            .expect("unrelated bot rule")
+        );
+        assert!(
+            !robots_disallows_path(b"User-agent: *\nDisallow: /private\n", "/public/file.pdf")
+                .expect("unrelated path")
+        );
+        assert!(robots_disallows_path(b"User-agent: *\nDisallow /\n", "/").is_err());
+        assert!(robots_disallows_path(b"<html>error</html>", "/").is_err());
+        assert!(robots_disallows_path(b"\xff", "/").is_err());
+    }
+
+    #[test]
+    fn disallowed_robots_snapshot_cannot_be_recorded_or_used_by_a_forged_review() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = load_config(&root.join("configs/states/co-commerce-archive.toml"))
+            .expect("Commerce archive config");
+        let source_id = "commerce-ord2755-ordinance";
+        let source = config
+            .sources
+            .iter()
+            .find(|source| source.id == source_id)
+            .expect("official attachment source");
+        let robots_url = "https://legistar.granicus.com/robots.txt";
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let captured_at = OffsetDateTime::now_utc().format(&Rfc3339).expect("time");
+        let (digest, provenance) = record_fake_robots_capture(
+            &store,
+            source_id,
+            robots_url,
+            200,
+            b"User-agent: *\nDisallow: /\n",
+            &captured_at,
+        );
+        let error = source_review_command(
+            directory.path(),
+            &config,
+            SourceReviewCommand::Record {
+                source_id: source_id.to_owned(),
+                reviewer: "operator".to_owned(),
+                note: "checked official terms".to_owned(),
+                expires: "2099-01-01".to_owned(),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("robots.txt disallows"));
+        assert!(
+            store
+                .current_source_review(source_id)
+                .expect("review query")
+                .is_none()
+        );
+
+        let review = SourceReview {
+            id: "source-review:forged".to_owned(),
+            source_id: source_id.to_owned(),
+            source_config_digest: source_config_digest(source),
+            reviewed_hosts: vec!["legistar.granicus.com".to_owned()],
+            endpoint_patterns: vec![
+                "/Commerce/attachments/c23f7685-bbef-4a3c-9a78-f3d9da853712.pdf".to_owned(),
+            ],
+            robots_url: robots_url.to_owned(),
+            robots_snapshot_digest: digest,
+            robots_provenance: Some(provenance),
+            terms_urls: Vec::new(),
+            terms_snapshot_digests: Vec::new(),
+            reviewer: "operator".to_owned(),
+            note: "checked official terms".to_owned(),
+            reviewed_at: captured_at,
+            expires_at: "2099-01-01".to_owned(),
+            minimum_interval_seconds: source.minimum_interval_seconds,
+            restrictions: Vec::new(),
+            supersedes: None,
+        };
+        store
+            .insert_source_review(&review)
+            .expect("inject legacy review");
+        let error = verify_source_review(&store, &config, source_id).unwrap_err();
+        assert!(error.to_string().contains("robots.txt disallows"));
     }
 
     #[test]

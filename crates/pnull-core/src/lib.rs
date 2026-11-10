@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub mod approval;
+pub mod candidate_queue;
 pub mod migrate;
 pub mod procurement;
 pub mod types;
@@ -20,6 +21,7 @@ pub use approval::{
     DecisionKind, DecisionOutcome, DecisionParticipation, OfficeTerm, ParticipationKind,
     SourceProof, TechnologyRecord,
 };
+pub use candidate_queue::{CandidateQueueItem, CandidateQueueOutcome, CandidateQueueSeed};
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use procurement::{
     CaseFile, CaseFileState, CoraDraft, CoraRequest, CoraRequestEvent, CoraRequestState,
@@ -73,6 +75,8 @@ pub enum CoreError {
     ApprovalConflict(String),
     #[error("posting state conflict for alert {0}")]
     PostStateConflict(String),
+    #[error("invalid private candidate queue state: {0}")]
+    InvalidCandidateQueue(String),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -878,6 +882,22 @@ impl Store {
         self.read_json_rows(
             "SELECT observation_json FROM fetch_observations WHERE source_id = ?1 ORDER BY json_extract(observation_json, '$.retrieved_at')",
             &[source_id],
+        )
+    }
+
+    /// Read receipts for one exact URL through the indexed source/URL key.
+    /// The caller must still check receipt integrity and byte provenance.
+    pub fn fetch_observations_for_url(
+        &self,
+        source_id: &str,
+        requested_url: &str,
+    ) -> Result<Vec<FetchObservation>, CoreError> {
+        self.read_json_rows(
+            "SELECT observation_json FROM fetch_observations
+             WHERE source_id = ?1
+               AND json_extract(observation_json, '$.requested_url') = ?2
+             ORDER BY json_extract(observation_json, '$.retrieved_at')",
+            &[source_id, requested_url],
         )
     }
 
@@ -1790,5 +1810,18 @@ mod tests {
             .fetch_observations("co")
             .expect("fetch observations query");
         assert_eq!(observations.len(), 1);
+        assert_eq!(
+            store
+                .fetch_observations_for_url("co", "https://example.test/robots.txt")
+                .expect("indexed URL receipts")
+                .len(),
+            1
+        );
+        assert!(
+            store
+                .fetch_observations_for_url("co", "https://example.test/elsewhere")
+                .expect("other URL receipts")
+                .is_empty()
+        );
     }
 }

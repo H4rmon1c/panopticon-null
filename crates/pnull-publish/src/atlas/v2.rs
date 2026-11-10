@@ -2112,6 +2112,7 @@ pub(super) fn snapshot(
             "manifest_digest":checked.binding_digest,
             "counts":{"entities":entities.len(),"records":evidence.len(),"sources":sources.len(),
                 "relationships":relationship_count}},
+        "case_releases":[{"case_id":manifest.case_id,"release":release_review.clone()}],
         "release_review":release_review,"activity":[],"entities":entities,
         "evidence":evidence,"sources":sources,
     }))
@@ -2429,6 +2430,14 @@ mod tests {
             serde_json::from_slice(&fs::read(&output).expect("public bytes")).expect("public JSON");
         assert_eq!(published["release_review"]["state"], "SOURCE_VERIFIED");
         assert!(published["release_review"]["reviewed_at"].is_null());
+        assert_eq!(
+            published["case_releases"][0]["case_id"],
+            "co-commerce-city-ord-2755-2026-04-06"
+        );
+        assert_eq!(
+            published["case_releases"][0]["release"],
+            published["release_review"]
+        );
         let decision = published["entities"]
             .as_array()
             .expect("entities")
@@ -2914,6 +2923,73 @@ mod tests {
             6
         );
         assert!(castle.manifest.agreement_context.is_some());
+    }
+
+    #[test]
+    fn colorado_release_cases_keep_claim_proofs_without_restricted_attachments() {
+        let mut cited = BTreeSet::new();
+        for relative in [
+            "commerce-city-ord-2755-2026-04-06.v2.json",
+            "commerce-city-ord-2756-2026-04-06.v2.json",
+            "castle-rock-res-2025-071.v2.json",
+            "denver-25-0413-2025-05-05.v2.json",
+        ] {
+            let checked = inspect(&manifest(relative)).expect("all case facts have exact proofs");
+            assert_eq!(checked.manifest.contract_link.state, "not_established");
+            for source in checked.sources.values() {
+                let host = Url::parse(&source.registered.url)
+                    .expect("source URL")
+                    .host_str()
+                    .expect("source host")
+                    .to_owned();
+                assert!(
+                    !matches!(
+                        host.as_str(),
+                        "legistar.granicus.com" | "legistar2.granicus.com" | "denver.legistar1.com"
+                    ),
+                    "restricted attachment remains cited by {relative}: {}",
+                    source.registered.id
+                );
+                cited.insert(source.registered.id.clone());
+            }
+            let title = &checked.manifest.decision.title.value;
+            match relative {
+                "commerce-city-ord-2755-2026-04-06.v2.json" => {
+                    assert!(title.contains("LICENSE PLATE RECOGNITION CAMERAS"));
+                    assert!(title.contains("DRONES"));
+                    assert_eq!(
+                        checked
+                            .manifest
+                            .agreement_context
+                            .as_ref()
+                            .map(|a| a.status.as_str()),
+                        Some("approved_format")
+                    );
+                }
+                "commerce-city-ord-2756-2026-04-06.v2.json" => {
+                    assert!(title.contains("$608,900"));
+                }
+                "castle-rock-res-2025-071.v2.json" => {
+                    assert!(title.contains("Master Services Agreement and Order Form"));
+                    assert!(title.contains("Drone-As-First-Responder"));
+                    assert_eq!(
+                        checked
+                            .manifest
+                            .agreement_context
+                            .as_ref()
+                            .map(|a| a.status.as_str()),
+                        Some("award_authorized")
+                    );
+                }
+                "denver-25-0413-2025-05-05.v2.json" => {
+                    assert!(title.contains("$666,000.00"));
+                    assert!(title.contains("$1,005,450.00"));
+                    assert_eq!(checked.manifest.decision.outcome_class, "failed");
+                }
+                _ => unreachable!(),
+            }
+        }
+        assert_eq!(cited.len(), 12, "unexpected release source set");
     }
 
     #[test]

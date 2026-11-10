@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { runInNewContext } from "node:vm";
 import { PanopticonClient, validateSnapshot } from "../api.js";
 import { portraitForRecordedVote, votePortraits } from "../portraits/portraits.js";
-import { buildDecisionPages } from "./build-decision-pages.mjs";
+import { buildDecisionPages, genericDecisionTemplate } from "./build-decision-pages.mjs";
 import { selectPublishedPortraits } from "./filter-portraits.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -354,7 +354,7 @@ test("case-specific static pages use their own metadata and escape source text",
   const auto = { state: "SOURCE_VERIFIED", bound_digest: `sha256:${"c".repeat(64)}`, reviewed_at: null, corrections: [] };
   snapshot.release_review = clone(auto);
   snapshot.entities.push(
-    { id: "decision_legacy", slug: "co-colorado-springs-25-581-2025-11-25", type: "DECISION", name: "Colorado Springs case", share_url: "https://panopticon.fail/decision.html?decision=co-colorado-springs-25-581-2025-11-25" },
+    { id: "decision_legacy", slug: "co-colorado-springs-25-581-2025-11-25", type: "DECISION", name: "Colorado Springs case", social_title: "Colorado Springs police technology surcharge vote", social_summary: "Council voted 6–3. Read the official record.", share_url: "https://panopticon.fail/decisions/co-colorado-springs-25-581-2025-11-25.html" },
     { id: "decision_new", slug: "co-commerce-city-ord-2755-2026-04-06", type: "DECISION", name: 'Commerce City <Flock> "agreement"', summary: 'Council approved <agreement> & asked "what next?" $& $\' $`', share_url: "https://panopticon.fail/decisions/co-commerce-city-ord-2755-2026-04-06.html" },
   );
   snapshot.case_releases = [
@@ -362,17 +362,44 @@ test("case-specific static pages use their own metadata and escape source text",
     { case_id: snapshot.entities.at(-1).slug, release: clone(auto) },
   ];
   const template = await readFile(join(root, "decision.html"), "utf8");
+  assert.match(template, /name="robots" content="noindex,follow"/);
+  assert.doesNotMatch(template, /Colorado Springs police technology surcharge vote/);
+  assert.doesNotMatch(template, /co-colorado-springs-25-581-2025-11-25/);
+  const otherOrigin = genericDecisionTemplate(template, "https://atlas.test");
+  assert.match(otherOrigin, /property="og:url" content="https:\/\/atlas.test\/decision.html"/);
+  assert.match(otherOrigin, /rel="canonical" href="https:\/\/atlas.test\/decision.html"/);
+  assert.doesNotMatch(otherOrigin, /https:\/\/panopticon.fail\/decision.html/);
   const pages = buildDecisionPages(snapshot, template, "https://panopticon.fail");
-  assert.equal(pages.length, 1);
-  assert.equal(pages[0].path, "decisions/co-commerce-city-ord-2755-2026-04-06.html");
-  assert.match(pages[0].html, /Commerce City &lt;Flock&gt; &quot;agreement&quot;/);
-  assert.match(pages[0].html, /Council approved &lt;agreement&gt; &amp; asked &quot;what next\?&quot;/);
-  assert.match(pages[0].html, /&quot;what next\?&quot; \$&amp; \$&#39; \$`/);
-  assert.match(pages[0].html, /href="\.\.\/decision\.css"/);
-  assert.doesNotMatch(pages[0].html, /Colorado Springs police technology surcharge vote/);
+  assert.equal(pages.length, 2);
+  const springPage = pages.find((page) => page.path === "decisions/co-colorado-springs-25-581-2025-11-25.html");
+  assert.match(springPage.html, /property="og:url" content="https:\/\/panopticon.fail\/decisions\/co-colorado-springs-25-581-2025-11-25.html"/);
+  assert.match(springPage.html, /property="og:title" content="Colorado Springs police technology surcharge vote \| PANOPTICON.FAIL"/);
+  assert.match(springPage.html, /name="twitter:description" content="Council voted 6–3\. Read the official record\."/);
+  assert.match(springPage.html, /name="robots" content="index,follow"/);
+  assert.match(springPage.html, /property="og:type" content="article"/);
+  const newPage = pages.find((page) => page.path === "decisions/co-commerce-city-ord-2755-2026-04-06.html");
+  assert.match(newPage.html, /Commerce City &lt;Flock&gt; &quot;agreement&quot;/);
+  assert.match(newPage.html, /Council approved &lt;agreement&gt; &amp; asked &quot;what next\?&quot;/);
+  assert.match(newPage.html, /&quot;what next\?&quot; \$&amp; \$&#39; \$`/);
+  assert.match(newPage.html, /href="\.\.\/decision\.css"/);
+  assert.doesNotMatch(newPage.html, /Colorado Springs case/);
   const bad = clone(snapshot);
   bad.entities.at(-1).share_url = "https://panopticon.fail/decision.html?decision=co-colorado-springs-25-581-2025-11-25";
   assert.throws(() => buildDecisionPages(bad, template, "https://panopticon.fail"), /lacks its case-specific share URL/);
+  const missingReleases = clone(snapshot);
+  delete missingReleases.case_releases;
+  assert.throws(() => buildDecisionPages(missingReleases, template, "https://panopticon.fail"), /require per-case release records/);
+});
+
+test("bundled Colorado Springs share page matches the released snapshot", async () => {
+  const snapshot = JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8"));
+  const template = await readFile(join(root, "decision.html"), "utf8");
+  const pages = buildDecisionPages(snapshot, template, "https://panopticon.fail");
+  assert.equal(pages.length, 1);
+  const bundled = await readFile(join(root, pages[0].path), "utf8");
+  assert.equal(bundled, pages[0].html);
+  assert.match(bundled, /Colorado Springs police technology surcharge vote/);
+  assert.match(bundled, /A named vendor contract link is not established/);
 });
 
 test("atlas dossier routes published cases to their own static pages", async () => {

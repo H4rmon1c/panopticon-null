@@ -339,11 +339,13 @@ try {
       } catch (error) { failures.push(`portrait: cannot verify source page for ${id} (${error.message})`); }
     }
   }
-  if (decision?.share_url) {
-    const socialUrl = decisionHtml.match(/property="og:url" content="([^"]+)"/)?.[1];
-    if (socialUrl !== decision.share_url) failures.push("decision.html: social URL differs from the released decision URL");
-    if (!decisionHtml.includes('name="twitter:card" content="summary"')) failures.push("decision.html: missing X summary card metadata");
+  const genericSocialUrl = decisionHtml.match(/property="og:url" content="([^"]+)"/)?.[1];
+  if (!genericSocialUrl?.endsWith("/decision.html") || decisions.some((item) => item.share_url === genericSocialUrl) ||
+      !decisionHtml.includes('name="robots" content="noindex,follow"') ||
+      decisionHtml.includes("Colorado Springs police technology surcharge vote")) {
+    failures.push("decision.html: generic route claims a specific decision");
   }
+  if (!decisionHtml.includes('name="twitter:card" content="summary"')) failures.push("decision.html: missing X summary card metadata");
   if (process.env.PNUL_VALIDATE_RELEASE === "1") {
     for (const item of decisions) {
       const slug = item.slug;
@@ -354,6 +356,7 @@ try {
         const html = await readFile(join(root, path), "utf8");
         if (!html.includes(`property="og:url" content="${item.share_url}"`)) failures.push(`${path}: wrong social URL`);
         if (!html.includes(`rel="canonical" href="${item.share_url}"`)) failures.push(`${path}: wrong canonical URL`);
+        if (!html.includes('name="robots" content="index,follow"') || !html.includes('property="og:type" content="article"')) failures.push(`${path}: case metadata is not indexable article content`);
         if (!html.includes('href="../decision.css"') || !html.includes('src="../decision.js"')) failures.push(`${path}: broken relative assets`);
       } catch (error) { failures.push(`${path}: missing static case page (${error.message})`); }
     }

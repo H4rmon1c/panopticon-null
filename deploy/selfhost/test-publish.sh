@@ -49,6 +49,13 @@ export PNUL_TEST_SNAPSHOT="$repo_dir/web/panopticon-terminal/public/public-snaps
 "$script_dir/publish.sh"
 [[ -L "$PNUL_CURRENT_LINK" ]]
 [[ -f "$PNUL_CURRENT_LINK/public/public-snapshot.json" ]]
+spring_page="$PNUL_CURRENT_LINK/decisions/co-colorado-springs-25-581-2025-11-25.html"
+[[ -f "$spring_page" ]]
+grep -Fq 'property="og:title" content="Colorado Springs police technology surcharge vote | PANOPTICON.FAIL"' "$spring_page"
+grep -Fq 'name="twitter:title" content="Colorado Springs police technology surcharge vote | PANOPTICON.FAIL"' "$spring_page"
+grep -Fq 'name="robots" content="index,follow"' "$spring_page"
+grep -Fq 'name="robots" content="noindex,follow"' "$PNUL_CURRENT_LINK/decision.html"
+! grep -Fq 'Colorado Springs police technology surcharge vote' "$PNUL_CURRENT_LINK/decision.html"
 [[ -f "$PNUL_CURRENT_LINK/portraits/tom-bailey.jpg" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/portraits/susan-noble-original.png" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/portraits/joanna-sandoval-original.png" ]]

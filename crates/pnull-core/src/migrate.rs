@@ -20,13 +20,18 @@
 //! v0.0.5 introduces additive approval-ledger tables for documented public
 //! office terms, decisions, individual participation, contracts, technology,
 //! reviewed links, corrections, and explicit unknowns.
+//! v0.0.6 adds a private candidate queue index. It is scheduling metadata;
+//! immutable candidate artifacts and public-network receipts remain the
+//! authority for any fetch or public claim.
+//! v0.0.7 adds a durable queue turn so a large historical backlog cannot
+//! indefinitely postpone refreshing documents on the current index.
 
 use rusqlite::{Connection, Transaction};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 7;
 /// The highest schema version this build understands.
-pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 5;
+pub const MAX_SUPPORTED_SCHEMA_VERSION: u32 = 7;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
@@ -44,7 +49,7 @@ pub fn current_version(connection: &Connection) -> Result<u32, MigrationError> {
     Ok(u32::try_from(version).unwrap_or(u32::MAX))
 }
 
-/// Runs the v0.0.1 -> v0.0.2 -> v0.0.3 -> v0.0.4 -> v0.0.4c -> v0.0.5 migration inside a
+/// Runs the v0.0.1 -> v0.0.2 -> v0.0.3 -> v0.0.4 -> v0.0.4c -> v0.0.5 -> v0.0.6 -> v0.0.7 migration inside a
 /// transaction.
 ///
 /// This is a no-op for a fresh database (which is created at the target schema).
@@ -74,6 +79,12 @@ pub fn migrate(connection: &mut Connection) -> Result<(), MigrationError> {
     }
     if version < 5 {
         apply_v5(&transaction)?;
+    }
+    if version < 6 {
+        apply_v6(&transaction)?;
+    }
+    if version < 7 {
+        apply_v7(&transaction)?;
     }
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
@@ -358,12 +369,85 @@ fn apply_v5(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
     )
 }
 
+/// Adds bounded scheduling metadata without rewriting preserved source bytes.
+fn apply_v6(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "CREATE TABLE IF NOT EXISTS candidate_queue_origins (
+           origin_source_id TEXT PRIMARY KEY,
+           latest_digest TEXT NOT NULL,
+           latest_observed_unix INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS candidate_queue_snapshots (
+           origin_source_id TEXT NOT NULL,
+           digest TEXT NOT NULL,
+           observed_unix INTEGER NOT NULL,
+           PRIMARY KEY(origin_source_id, digest)
+         );
+         CREATE TABLE IF NOT EXISTS candidate_queue_items (
+           origin_source_id TEXT NOT NULL,
+           url TEXT NOT NULL,
+           kind TEXT NOT NULL,
+           snapshot_digest TEXT NOT NULL,
+           anchor_index INTEGER NOT NULL CHECK(anchor_index >= 0),
+           last_seen_digest TEXT NOT NULL,
+           last_seen_unix INTEGER NOT NULL,
+           status TEXT NOT NULL CHECK(status IN ('pending', 'archived', 'blocked')),
+           last_attempt_unix INTEGER,
+           last_success_unix INTEGER,
+           retry_after_unix INTEGER NOT NULL DEFAULT 0,
+           blocked_context TEXT,
+           PRIMARY KEY(origin_source_id, url)
+         );
+         CREATE INDEX IF NOT EXISTS idx_cqi_due
+           ON candidate_queue_items(origin_source_id, status, retry_after_unix, last_attempt_unix, url);
+         CREATE INDEX IF NOT EXISTS idx_cqi_latest
+           ON candidate_queue_items(origin_source_id, last_seen_digest, last_success_unix);
+         CREATE INDEX IF NOT EXISTS idx_fetch_observations_source_url
+           ON fetch_observations(source_id, json_extract(observation_json, '$.requested_url'));",
+    )
+}
+
+fn apply_v7(transaction: &Transaction<'_>) -> Result<(), rusqlite::Error> {
+    transaction.execute_batch(
+        "ALTER TABLE candidate_queue_origins
+         ADD COLUMN next_class TEXT NOT NULL DEFAULT 'pending'
+         CHECK(next_class IN ('pending', 'archived'));",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rusqlite::Connection;
     use std::path::Path;
     use tempfile::tempdir;
+
+    #[test]
+    fn v06_queue_origin_gains_pending_turn_without_losing_snapshot() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE candidate_queue_origins (
+                   origin_source_id TEXT PRIMARY KEY,
+                   latest_digest TEXT NOT NULL,
+                   latest_observed_unix INTEGER NOT NULL
+                 );
+                 INSERT INTO candidate_queue_origins VALUES ('town-index', 'abc', 123);
+                 PRAGMA user_version = 6;",
+            )
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let row: (String, i64, String) = connection
+            .query_row(
+                "SELECT latest_digest, latest_observed_unix, next_class
+                 FROM candidate_queue_origins WHERE origin_source_id = 'town-index'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(row, ("abc".to_owned(), 123, "pending".to_owned()));
+        assert_eq!(current_version(&connection).unwrap(), 7);
+    }
 
     type EvidenceRow = (String, String, String, String, String);
 
@@ -500,8 +584,8 @@ mod tests {
         let evidence_before = read_evidence(&connection);
         let snapshots_before = rows_of(&connection, "source_snapshots", 3);
         let rows_before = rows_of(&connection, "snapshot_row_sets", 5);
-        migrate(&mut connection).expect("migrate v4 to v5");
-        assert_eq!(current_version(&connection).expect("version"), 5);
+        migrate(&mut connection).expect("migrate v4 to v7");
+        assert_eq!(current_version(&connection).expect("version"), 7);
         assert_eq!(read_evidence(&connection), evidence_before);
         assert_eq!(
             rows_of(&connection, "source_snapshots", 3),
@@ -576,7 +660,7 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 5);
+        assert_eq!(SCHEMA_VERSION, 7);
 
         // Every canonical v0.0.1 and v0.0.2 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -644,7 +728,7 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 5);
+        assert_eq!(SCHEMA_VERSION, 7);
 
         // Every canonical v0.0.1, v0.0.2, and v0.0.3 row survives byte-for-byte.
         assert_eq!(read_evidence(&connection), evidence_before);
@@ -702,7 +786,7 @@ mod tests {
             current_version(&connection).expect("version"),
             SCHEMA_VERSION
         );
-        assert_eq!(SCHEMA_VERSION, 5);
+        assert_eq!(SCHEMA_VERSION, 7);
 
         // Every canonical v0.0.4 row survives byte-for-byte, including the
         // public-ledger tables that this version introduces.

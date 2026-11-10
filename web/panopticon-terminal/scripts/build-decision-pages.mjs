@@ -15,8 +15,25 @@ function replaceOne(html, pattern, replacement, label) {
   return html.replace(pattern, () => replacement);
 }
 
+export function genericDecisionTemplate(template, siteUrl) {
+  const origin = new URL(siteUrl);
+  if (origin.protocol !== "https:" || origin.href !== `${origin.origin}/`) {
+    throw new Error("Site URL must be an HTTPS origin");
+  }
+  const url = escapeHtml(`${origin.origin}/decision.html`);
+  return replaceOne(
+    replaceOne(template, /<meta property="og:url" content="[^"]*"\s*\/>/g,
+      `<meta property="og:url" content="${url}" />`, "generic og:url"),
+    /<link rel="canonical" href="[^"]*"\s*\/>/g,
+    `<link rel="canonical" href="${url}" />`, "generic canonical URL",
+  );
+}
+
 export function buildDecisionPages(snapshot, template, siteUrl) {
   validateSnapshot(snapshot);
+  if (!Array.isArray(snapshot.case_releases)) {
+    throw new Error("Static decision pages require per-case release records");
+  }
   const origin = new URL(siteUrl);
   if (origin.protocol !== "https:" || origin.href !== `${origin.origin}/`) {
     throw new Error("Site URL must be an HTTPS origin");
@@ -30,15 +47,15 @@ export function buildDecisionPages(snapshot, template, siteUrl) {
     }
     seen.add(slug);
     const expectedUrl = `${origin.origin}/decisions/${slug}.html`;
-    const legacyUrl = `${origin.origin}/decision.html?decision=co-colorado-springs-25-581-2025-11-25`;
-    if (slug === "co-colorado-springs-25-581-2025-11-25" && decision.share_url === legacyUrl) continue;
     if (decision.share_url !== expectedUrl) throw new Error(`Decision ${slug} lacks its case-specific share URL`);
 
-    const title = escapeHtml(`${decision.name} | PANOPTICON.FAIL`);
-    const summary = escapeHtml(String(decision.summary ?? decision.description ?? decision.name).replace(/\s+/g, " ").trim().slice(0, 280));
+    const title = escapeHtml(`${decision.social_title ?? decision.name} | PANOPTICON.FAIL`);
+    const summary = escapeHtml(String(decision.social_summary ?? decision.summary ?? decision.description ?? decision.name).replace(/\s+/g, " ").trim().slice(0, 280));
     const url = escapeHtml(expectedUrl);
     let html = template;
     for (const [pattern, replacement, label] of [
+      [/<meta name="robots" content="[^"]*"\s*\/>/g, '<meta name="robots" content="index,follow" />', "robots policy"],
+      [/<meta property="og:type" content="[^"]*"\s*\/>/g, '<meta property="og:type" content="article" />', "og:type"],
       [/<meta name="description" content="[^"]*"\s*\/>/g, `<meta name="description" content="${summary}" />`, "description"],
       [/<meta property="og:title" content="[^"]*"\s*\/>/g, `<meta property="og:title" content="${title}" />`, "og:title"],
       [/<meta property="og:description" content="[^"]*"\s*\/>/g, `<meta property="og:description" content="${summary}" />`, "og:description"],
@@ -64,7 +81,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!stage || !siteUrl) throw new Error("Usage: build-decision-pages.mjs STAGE SITE_ORIGIN");
   const snapshot = JSON.parse(await readFile(join(stage, "public/public-snapshot.json"), "utf8"));
   const template = await readFile(join(stage, "decision.html"), "utf8");
-  const pages = buildDecisionPages(snapshot, template, siteUrl);
+  const generic = genericDecisionTemplate(template, siteUrl);
+  const pages = buildDecisionPages(snapshot, generic, siteUrl);
+  await writeFile(join(stage, "decision.html"), generic);
   await mkdir(join(stage, "decisions"), { recursive: true });
   for (const page of pages) await writeFile(join(stage, page.path), page.html, { flag: "wx" });
   console.log(`generated ${pages.length} case-specific decision page(s)`);

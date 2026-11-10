@@ -36,4 +36,33 @@ The command re-parses the preserved calendar HTML and checks the exact candidate
 
 This remains a discovery queue, not complete coverage. The default calendar view may omit older meetings or documents. A candidate agenda, minute, contract, or vote must be parsed with exact locators and checked against corroborating records before a case can be published. Where a published HTML/PDF record does not expose an individual roll call, a bounded official API response can still supply that narrow fact. The public site never calls that API.
 
-Next, add a bounded scheduler for reviewed candidate paths, historical calendar paging, and a candidate-to-case processor that distinguishes direct votes from consent blocks, failed motions from approvals, authorization from contract execution, and gaps from established links. Keep corrections and explicit rejections as publication vetoes.
+## Bounded private queue
+
+After the origin index and its candidate path policies have current source-level reviews, `source archive-queue` can follow their preserved link candidates without selecting every anchor by hand:
+
+```sh
+pnull --config configs/states/co-commerce-city.toml \
+  --data-dir /var/lib/panopticon source archive-queue commerce-city-calendar \
+  --max-fetches 2 --refresh-after-seconds 604800 --dry-run
+```
+
+Remove `--dry-run` to fetch. Each newly preserved index also updates a private SQLite scheduling index. The command examines at most 256 due candidates per invocation, re-verifies each selected index's raw bytes, SHA-256, accepted HTML type, public-network receipt, and immutable candidate artifact **before any document request**, and does not rescan every historical artifact. It checks the current origin and path-policy reviews, maps each candidate to the matching same-host meeting HTML or PDF policy, and rejects a changed config or unsafe path. It makes at most eight attempts per invocation and at most one per reviewed path policy, with the policy's atomic fetch cooldown enforced again at request time. `--snapshot <sha256>` selects one preserved index directly for an explicit historical run. Raw documents, receipts, and prior versions remain private.
+
+Indexed snapshots contribute never-fetched historical candidates; duplicate URLs are collapsed. Accepted prior receipts act as durable checkpoints. Already archived URLs are rechecked after `--refresh-after-seconds` only when they still appear on the newest index, or when an operator selects an older snapshot explicitly. When both historical candidates and current refreshes are due, the private scheduler alternates their priority between runs, so neither class can occupy every bounded selection window. A failed request remains eligible after its cooldown; a failed batch reports nonzero without undoing successful private captures. A link that falls outside the current reviewed path or exact robots rules is marked blocked in the private scheduler and reported while other eligible links continue. These blocked links are reconsidered when a new index snapshot or policy review changes their context. A missing or expired document-path review blocks only that path's candidates; other reviewed paths can continue. The origin review remains a prerequisite for the whole run. The queue does not parse a vote or publish a case.
+
+Legacy candidate artifacts created before the scheduling index was added do not enter the automatic backlog until the official index is rediscovered under a current review. An exact old digest can still be processed with `--snapshot`; historical backfill of every pre-index artifact is a separate migration task. The current candidate matrix is empty, so no scheduled backlog is affected.
+The 256-row window alternates pending and current-refresh work, but it does
+not balance candidates across different document policies. A large backlog
+for one policy can delay another policy by several runs; the bounded cursor
+still advances, and the operator can use an exact `--snapshot` for targeted
+backfill. Per-policy scheduling fairness remains a scaling task.
+
+[`candidate-queues.tsv`](../deploy/selfhost/candidate-queues.tsv) is intentionally empty until source reviews are complete. Add one exact config/origin row after review, then run [`collect-candidates.sh`](../deploy/selfhost/collect-candidates.sh) periodically. It validates its entire bounded matrix before calling the CLI and shares the collector lock while reading candidate artifacts. An optional [`panopticon-candidates.timer`](../deploy/selfhost/panopticon-candidates.timer) is prepared for 15-minute checks on a future self-hosted server; it has not been enabled. `bash deploy/selfhost/test-candidate-queue.sh` tests the schedule without network access. The regular calendar collector still needs historical calendar paging; a default calendar view can omit older meetings before they ever become candidates.
+
+The [private case proposal builder](private-case-proposals.md) accepts a
+preserved candidate archive and exact cited spans, including non-Legistar town
+PDFs. It distinguishes direct votes from consent blocks, failed motions from
+approvals, and a contract mention from an established award. Proposals retain
+explicit gaps and correction history; a separate verified release path is
+still required. Historical calendar paging and broader official source
+coverage remain future work.

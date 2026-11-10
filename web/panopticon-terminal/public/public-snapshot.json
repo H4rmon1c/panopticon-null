@@ -1,5 +1,16 @@
 {
   "activity": [],
+  "case_releases": [
+    {
+      "case_id": "co-colorado-springs-25-581-2025-11-25",
+      "release": {
+        "bound_digest": "sha256:64e23d56e655f81c4b525af97f1d0712dce63bc7f8b911bd793c9695e8deca59",
+        "corrections": [],
+        "reviewed_at": "2026-11-09T08:02:08.954663618Z",
+        "state": "APPROVED"
+      }
+    }
+  ],
   "demo": false,
   "entities": [
     {
@@ -77,6 +88,7 @@
         "jurisdiction_co_colorado_springs"
       ],
       "name": "Ordinance 25-93",
+      "social_title": "Colorado Springs police technology surcharge vote",
       "relation_count": 11,
       "relationships": [
         {
@@ -190,7 +202,8 @@
           "type": "RECORDED_VOTE"
         }
       ],
-      "share_url": "https://panopticon.fail/decision.html?decision=co-colorado-springs-25-581-2025-11-25",
+      "share_url": "https://panopticon.fail/decisions/co-colorado-springs-25-581-2025-11-25.html",
+      "social_summary": "Council voted 6–3 on Ordinance 25-93. Read the official vote and signed ordinance. A named vendor contract link is not established by these records.",
       "slug": "co-colorado-springs-25-581-2025-11-25",
       "source_count": 4,
       "source_ids": [

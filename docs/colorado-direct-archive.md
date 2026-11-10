@@ -13,6 +13,18 @@ The archive command does not crawl links or search for other records. JSON
 event and vote URLs are included where the release pipeline needs a private
 fetch receipt independent of its bundled fixture digest.
 
+On 2026-11-10 the 12 release-cited fixed endpoints were reviewed and captured
+once. Eleven responses matched their fixtures exactly; the Castle Rock detail
+page had a dynamic raw-byte revision. See the
+[capture results](colorado-source-capture-results.md).
+
+Five of these fixed historical attachment URLs are on hosts whose current
+`robots.txt` says `Disallow: /`. Keep them out of automated archive runs; the
+four source-verified release manifests no longer cite them. Their existing
+fixtures are historical observations, not current fetch receipts. Seek a
+city-hosted copy or a copy supplied directly by the public body before adding
+those attachments to a collection schedule.
+
 Before the first live fetch of each source, an operator captures its current
 robots response and records a source-level review according to
 [`operator-guide-source-review.md`](operator-guide-source-review.md). Review

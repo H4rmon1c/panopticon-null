@@ -7,6 +7,8 @@ from pathlib import Path
 import tomllib
 from urllib.parse import urlparse
 
+from archive_profile_digest import config_digest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = {
@@ -63,16 +65,6 @@ PROFILE_FIXTURES = {
     },
 }
 EXPECTED_TYPES = {"json": "official_api", "html": "html_page", "pdf": "pdf"}
-
-
-def config_digest(source):
-    fields = (
-        "id", "url", "name", "source_type", "documented_at",
-        "official_discovery_url", "minimum_interval_seconds", "maximum_bytes",
-        "robots_status", "terms_note",
-    )
-    joined = "\0".join(str(source[field]) for field in fields)
-    return hashlib.sha256(joined.encode()).hexdigest()
 
 
 def main():

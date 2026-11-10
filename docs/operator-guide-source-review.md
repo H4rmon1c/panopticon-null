@@ -46,6 +46,14 @@ When the robots response is 404, the reviewer note must explicitly mention
 an unavailable 4xx robots file does not by itself grant permission from the
 source owner, and unreachable 5xx/network failures are not treated as 404.
 
+For a preserved 2xx robots response, applicable `Disallow` rules for `*`,
+`pnull`, or the collector's `PanopticonNull` user agent block review recording
+and live verification even when a reviewer supplies a note. The check uses the
+preserved response bytes and each reviewed endpoint path. It conservatively
+denies ambiguous wildcard/query prefixes and is not a full RFC 9309 evaluator;
+an operator should seek an official alternate source or permission rather than
+trying to override a disallow rule in a note.
+
 An old review with an empty robots digest or missing receipt is invalid for live
 retrieval. Capture and record a new review; historical rows stay intact. If a
 review already exists for the same source and timestamp, the insert is a duplicate
@@ -76,6 +84,7 @@ Live retrieval (for example `pnull ingest` against a live source) refuses when a
 - no source review exists for the source;
 - the review lacks a matching preserved robots snapshot or fetch receipt;
 - a 404 robots response was not explicitly acknowledged in the review note;
+- a preserved 2xx robots response disallows the reviewed endpoint;
 - the review is expired;
 - the source configuration digest changed since the review (source configuration changed);
 - the reviewed hosts no longer include the source's reviewed host (allowed hosts changed);

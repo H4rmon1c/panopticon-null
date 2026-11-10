@@ -383,10 +383,18 @@ function renderDecision(model, snapshot, mode) {
   grid.append(main, sidebar);
   page.append(grid);
   document.title = `${model.decision.name} | PANOPTICON.FAIL`;
-  if (mode === "public") {
+  if (mode === "public" && !casePath) {
     const canonical = document.querySelector('link[rel="canonical"]') ?? node("link");
     canonical.rel = "canonical";
-    canonical.href = casePath ? `${location.origin}${location.pathname}` : `${location.origin}${location.pathname}?decision=${encodeURIComponent(model.decision.slug ?? model.decision.id)}`;
+    const slug = model.decision.slug;
+    const shareUrl = model.decision.share_url;
+    try {
+      const target = new URL(shareUrl);
+      canonical.href = target.protocol === "https:" && target.pathname === `/decisions/${slug}.html` && !target.search && !target.hash
+        ? target.href : `${location.origin}${location.pathname}`;
+    } catch {
+      canonical.href = `${location.origin}${location.pathname}`;
+    }
     if (!canonical.isConnected) document.head.append(canonical);
   }
 }

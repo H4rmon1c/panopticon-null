@@ -5,6 +5,7 @@
 //! its exact configuration, host, and path. The shared fetcher enforces DNS and
 //! response-size bounds and retains conditional-fetch provenance.
 
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::net::IpAddr;
@@ -13,7 +14,10 @@ use std::path::Component;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use pnull_core::{FetchObservation, Store, sha256_hex};
+use pnull_core::{
+    CandidateQueueItem, CandidateQueueOutcome, CandidateQueueSeed, FetchObservation, Store,
+    sha256_hex,
+};
 use pnull_http::{FetchConfig, PriorEvidence};
 use pnull_ingest::fetch_source;
 use scraper::{ElementRef, Html, Selector};
@@ -25,6 +29,10 @@ use crate::{SourceConfig, StateConfig, source_config_digest, verify_source_revie
 
 const WORDPRESS_PDF_PREFIX: &str = "/wp-content/uploads/";
 const TOWNCLOUD_PDF_PREFIX: &str = "/uploads/";
+const MAX_QUEUE_CANDIDATES: usize = 10_000;
+const MAX_QUEUE_APPEARANCES: usize = 20_000;
+const MAX_QUEUE_FETCHES: usize = 8;
+const MAX_QUEUE_INDEX_WINDOW: usize = 256;
 
 fn town_index_path_allowed(path: &str) -> bool {
     matches!(path, "/agendas-and-minutes/" | "/documents")
@@ -356,6 +364,25 @@ fn persist_calendar_candidates(data_dir: &Path, manifest: &CalendarCandidates) -
         }
         Err(error) => return Err(error.into()),
     }
+    // The SQLite index is scheduling metadata only. Every queued URL is
+    // rederived from the immutable artifact and raw response before a fetch.
+    // Recording it after the artifact is durable makes a crash safe to retry.
+    let store = Store::open(data_dir)?;
+    let seeds = manifest
+        .candidates
+        .iter()
+        .map(|candidate| CandidateQueueSeed {
+            url: candidate.url.clone(),
+            kind: candidate.kind.clone(),
+            anchor_index: candidate.anchor_index,
+        })
+        .collect::<Vec<_>>();
+    store.index_candidate_snapshot(
+        &manifest.source_id,
+        &manifest.snapshot_sha256,
+        OffsetDateTime::now_utc().unix_timestamp(),
+        &seeds,
+    )?;
     Ok(path)
 }
 
@@ -378,6 +405,7 @@ fn parse_calendar_candidates(source_url: &url::Url, raw: &[u8]) -> Result<Vec<Ca
             || !url.username().is_empty()
             || url.password().is_some()
             || url.fragment().is_some()
+            || url.as_str().len() > 2_048
         {
             continue;
         }
@@ -488,6 +516,735 @@ pub(super) fn archive_candidate(
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+struct QueueEntry {
+    snapshot: String,
+    candidate: CalendarCandidate,
+    policy_id: String,
+    previously_archived: bool,
+    last_attempt_unix: Option<i64>,
+}
+
+#[derive(Debug)]
+struct QueuePlan {
+    selected: Vec<QueueEntry>,
+    unique_candidates: usize,
+    not_selected_candidates: usize,
+    indexed: bool,
+    planned_at_unix: i64,
+    state_updates: Vec<(String, CandidateQueueOutcome, i64)>,
+}
+
+/// Read every bounded private candidate artifact before any network request.
+/// Prior accepted bytes and receipts are the checkpoint; an already archived
+/// URL becomes eligible again only after its configured refresh interval.
+pub(super) fn archive_queue(
+    data_dir: &Path,
+    config: &StateConfig,
+    origin_source_id: &str,
+    snapshot: Option<&str>,
+    max_fetches: usize,
+    refresh_after_seconds: u64,
+    dry_run: bool,
+) -> Result<()> {
+    let store = Store::open(data_dir)?;
+    if snapshot.is_none() && !dry_run {
+        // Do not mutate scheduling state when the origin itself is no longer
+        // reviewed; the planner also checks this before selecting a fetch.
+        verify_source_review(&store, config, origin_source_id)?;
+        let context = queue_context_token(&store, config, origin_source_id)?;
+        let reopened = store.requeue_blocked_candidate_context(
+            origin_source_id,
+            &context,
+            MAX_QUEUE_INDEX_WINDOW,
+        )?;
+        if reopened > 0 {
+            println!("reconsidering {reopened} private candidates after source policy changed");
+        }
+    }
+    let now = OffsetDateTime::now_utc();
+    let plan = plan_candidate_queue(
+        &store,
+        config,
+        origin_source_id,
+        snapshot,
+        max_fetches,
+        refresh_after_seconds,
+        now,
+    )?;
+    println!(
+        "{} indexed private candidates; {} selected in this bounded run; {} not selected; {} checkpoint/blocked/deferred",
+        plan.unique_candidates,
+        plan.selected.len(),
+        plan.not_selected_candidates,
+        plan.state_updates.len(),
+    );
+    for (url, outcome, _) in &plan.state_updates {
+        if matches!(outcome, CandidateQueueOutcome::Blocked { .. }) {
+            println!("  blocked {url}: {outcome:?}");
+        }
+    }
+    if dry_run {
+        for entry in &plan.selected {
+            println!("  {} {}", entry.policy_id, entry.candidate.url);
+        }
+        return Ok(());
+    }
+    let run = archive_queue_with(&store, config, origin_source_id, plan, &mut LiveFetcher)?;
+    for (url, outcome, path) in &run.successes {
+        println!(
+            "{} {} (SHA-256 {}, HTTP {}; private record {})",
+            if outcome.unchanged {
+                "unchanged"
+            } else {
+                "archived"
+            },
+            url,
+            outcome.digest,
+            outcome.status,
+            path.display(),
+        );
+    }
+    if !run.failures.is_empty() {
+        bail!(
+            "{} candidate fetch(es) failed; successful archives remain private:\n{}",
+            run.failures.len(),
+            run.failures.join("\n")
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct QueueRun {
+    successes: Vec<(String, ArchiveOutcome, PathBuf)>,
+    failures: Vec<String>,
+}
+
+fn archive_queue_with(
+    store: &Store,
+    config: &StateConfig,
+    origin_source_id: &str,
+    plan: QueuePlan,
+    fetcher: &mut dyn ArchiveFetcher,
+) -> Result<QueueRun> {
+    let mut run = QueueRun {
+        successes: Vec::new(),
+        failures: Vec::new(),
+    };
+    if plan.indexed {
+        for (url, outcome, at) in &plan.state_updates {
+            store.mark_candidate_queue_outcome(origin_source_id, url, *at, outcome.clone())?;
+        }
+        if !plan.selected.is_empty() {
+            store.advance_candidate_queue_turn(origin_source_id)?;
+        }
+    }
+    for entry in plan.selected {
+        let result = archive_candidate_with(
+            store,
+            config,
+            origin_source_id,
+            &entry.snapshot,
+            entry.candidate.anchor_index,
+            &entry.policy_id,
+            fetcher,
+        );
+        match result {
+            Ok((outcome, path)) => {
+                if plan.indexed {
+                    store.mark_candidate_queue_outcome(
+                        origin_source_id,
+                        &entry.candidate.url,
+                        plan.planned_at_unix,
+                        CandidateQueueOutcome::Archived,
+                    )?;
+                }
+                run.successes.push((entry.candidate.url, outcome, path));
+            }
+            Err(error) => {
+                if plan.indexed {
+                    let interval = config
+                        .sources
+                        .iter()
+                        .find(|source| source.id == entry.policy_id)
+                        .context("candidate policy disappeared after planning")?
+                        .minimum_interval_seconds;
+                    store.mark_candidate_queue_outcome(
+                        origin_source_id,
+                        &entry.candidate.url,
+                        plan.planned_at_unix,
+                        CandidateQueueOutcome::RetryAfter(
+                            plan.planned_at_unix
+                                .saturating_add(i64::try_from(interval.max(60))?),
+                        ),
+                    )?;
+                }
+                run.failures
+                    .push(format!("{}: {error:#}", entry.candidate.url));
+            }
+        }
+    }
+    Ok(run)
+}
+
+fn queue_snapshot_digests(
+    store: &Store,
+    origin_source_id: &str,
+    selected_snapshot: Option<&str>,
+) -> Result<Vec<String>> {
+    let directory = store
+        .data_dir()
+        .join("discovery-candidates")
+        .join(origin_source_id);
+    walk_private_directories(store.data_dir(), &directory, false)?;
+    let digest = selected_snapshot.context("explicit historical queue needs --snapshot")?;
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        bail!("selected candidate snapshot has an invalid digest");
+    }
+    let metadata = fs::symlink_metadata(directory.join(format!("{digest}.json")))?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > 8_388_608
+    {
+        bail!("candidate artifact is not a bounded regular file");
+    }
+    Ok(vec![digest.to_owned()])
+}
+
+fn policy_for_candidate<'a>(
+    config: &'a StateConfig,
+    origin_url: &str,
+    candidate: &CalendarCandidate,
+) -> Result<&'a SourceConfig> {
+    let source_type = match candidate.kind.as_str() {
+        "meeting" => "candidate_meeting_html",
+        "agenda" | "packet" | "minutes" => "candidate_document_pdf",
+        "document" => "candidate_index_pdf",
+        _ => bail!("unsupported candidate kind"),
+    };
+    let mut matching = config.sources.iter().filter(|source| {
+        source.source_type == source_type
+            && source.official_discovery_url == origin_url
+            && source.documented_at == origin_url
+    });
+    let policy = matching
+        .next()
+        .context("candidate lacks a matching reviewed path policy")?;
+    if matching.next().is_some() {
+        bail!("candidate has multiple matching path policies");
+    }
+    checked_archive_url(
+        policy,
+        &policy.id,
+        &candidate.url,
+        if source_type == "candidate_meeting_html" {
+            "html_page"
+        } else {
+            "pdf"
+        },
+    )?;
+    Ok(policy)
+}
+
+type QueueCandidates = HashMap<String, (String, CalendarCandidate, String)>;
+type QueuePolicies<'a> =
+    HashMap<String, (&'a SourceConfig, HashMap<String, Vec<FetchObservation>>)>;
+
+fn last_confirmed_fetch_unix(
+    history: Option<&Vec<FetchObservation>>,
+    prior: Option<&PriorEvidence>,
+    source_id: &str,
+    url: &str,
+    document_type: &str,
+) -> Option<i64> {
+    let digest = prior?.evidence_id.as_str();
+    history?
+        .iter()
+        .filter(|item| {
+            item.source_id.as_deref() == Some(source_id)
+                && item.requested_url == url
+                && item.final_url == url
+                && item.method == "GET"
+                && item.error.is_none()
+                && item.redirect_target.is_none()
+                && receipt_has_public_network(item, url)
+        })
+        .filter(|item| match item.status_code {
+            200 => {
+                let mime = item
+                    .content_type
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                item.body_digest.as_deref() == Some(digest)
+                    && match document_type {
+                        "pdf" => mime == "application/pdf" || mime.starts_with("application/pdf;"),
+                        "html_page" => {
+                            mime.starts_with("text/html")
+                                || mime.starts_with("application/xhtml+xml")
+                        }
+                        _ => false,
+                    }
+            }
+            304 => true,
+            _ => false,
+        })
+        .filter_map(|item| OffsetDateTime::parse(&item.retrieved_at, &Rfc3339).ok())
+        .map(OffsetDateTime::unix_timestamp)
+        .max()
+}
+
+fn load_queue_state<'a>(
+    store: &Store,
+    config: &'a StateConfig,
+    origin_source_id: &str,
+    snapshot: Option<&str>,
+) -> Result<(QueueCandidates, QueuePolicies<'a>, HashSet<String>)> {
+    let origin = config
+        .sources
+        .iter()
+        .find(|source| source.id == origin_source_id)
+        .context("unknown candidate origin source")?;
+    let snapshots = queue_snapshot_digests(store, origin_source_id, snapshot)?;
+    let mut receipt_times = HashMap::<String, i64>::new();
+    for observation in store.fetch_observations(origin_source_id)? {
+        if observation.source_id.as_deref() != Some(origin_source_id)
+            || observation.requested_url != origin.url
+            || observation.final_url != origin.url
+            || observation.status_code != 200
+            || observation.error.is_some()
+            || observation.redirect_target.is_some()
+            || !receipt_has_public_network(&observation, &origin.url)
+        {
+            continue;
+        }
+        if let (Some(digest), Ok(at)) = (
+            observation.body_digest,
+            OffsetDateTime::parse(&observation.retrieved_at, &Rfc3339),
+        ) {
+            receipt_times
+                .entry(digest)
+                .and_modify(|old| *old = (*old).max(at.unix_timestamp()))
+                .or_insert(at.unix_timestamp());
+        }
+    }
+    let newest_snapshot = snapshots
+        .iter()
+        .max_by_key(|digest| receipt_times.get(*digest).copied().unwrap_or(i64::MIN))
+        .context("candidate queue has no snapshot")?
+        .clone();
+    let mut current_urls = HashSet::new();
+    let mut unique = QueueCandidates::new();
+    let mut policy_ids = HashSet::new();
+    let mut appearances = 0_usize;
+    for digest in snapshots {
+        for candidate in load_verified_candidates(store, config, origin_source_id, &digest)? {
+            appearances += 1;
+            if appearances > MAX_QUEUE_APPEARANCES {
+                bail!(
+                    "candidate queue exceeds its total link bound; select one snapshot explicitly"
+                );
+            }
+            if digest == newest_snapshot {
+                current_urls.insert(candidate.url.clone());
+            }
+            let policy = policy_for_candidate(config, &origin.url, &candidate)?;
+            policy_ids.insert(policy.id.clone());
+            unique.entry(candidate.url.clone()).or_insert((
+                digest.clone(),
+                candidate,
+                policy.id.clone(),
+            ));
+            if unique.len() > MAX_QUEUE_CANDIDATES {
+                bail!(
+                    "candidate queue exceeds its unique URL bound; select one snapshot explicitly"
+                );
+            }
+        }
+    }
+    let mut policies = QueuePolicies::new();
+    for id in policy_ids {
+        let policy = config
+            .sources
+            .iter()
+            .find(|source| source.id == id)
+            .context("path policy disappeared")?;
+        verify_source_review(store, config, &id)?;
+        let mut by_url = HashMap::<String, Vec<FetchObservation>>::new();
+        for observation in store.fetch_observations(&id)? {
+            by_url
+                .entry(observation.requested_url.clone())
+                .or_default()
+                .push(observation);
+        }
+        policies.insert(id, (policy, by_url));
+    }
+    Ok((unique, policies, current_urls))
+}
+
+// Explicit historical selection retains the original source-checked planner;
+// the indexed branch below handles the default long-running queue.
+#[allow(clippy::too_many_lines)]
+fn plan_candidate_queue(
+    store: &Store,
+    config: &StateConfig,
+    origin_source_id: &str,
+    snapshot: Option<&str>,
+    max_fetches: usize,
+    refresh_after_seconds: u64,
+    now: OffsetDateTime,
+) -> Result<QueuePlan> {
+    if max_fetches == 0
+        || max_fetches > MAX_QUEUE_FETCHES
+        || refresh_after_seconds == 0
+        || refresh_after_seconds > 31_536_000
+        || origin_source_id.is_empty()
+        || !origin_source_id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        bail!("invalid bounded candidate queue parameters");
+    }
+    if snapshot.is_none() {
+        return plan_indexed_candidate_queue(
+            store,
+            config,
+            origin_source_id,
+            max_fetches,
+            refresh_after_seconds,
+            now,
+        );
+    }
+    let refresh_after_seconds = i64::try_from(refresh_after_seconds)?;
+    let (unique, policies, current_urls) =
+        load_queue_state(store, config, origin_source_id, snapshot)?;
+    let mut eligible = Vec::new();
+    for (digest, candidate, policy_id) in unique.values() {
+        let (policy, observations) = policies
+            .get(policy_id)
+            .context("path policy observations missing")?;
+        let history = observations.get(&candidate.url);
+        let last_attempt_unix = history.and_then(|items| {
+            items
+                .iter()
+                .filter(|item| item.source_id.as_deref() == Some(policy_id.as_str()))
+                .filter_map(|item| OffsetDateTime::parse(&item.retrieved_at, &Rfc3339).ok())
+                .map(OffsetDateTime::unix_timestamp)
+                .max()
+        });
+        let document_type = if policy.source_type == "candidate_meeting_html" {
+            "html_page"
+        } else {
+            "pdf"
+        };
+        let prior = latest_valid_archive_prior_in(
+            store,
+            policy_id,
+            &candidate.url,
+            document_type,
+            policy.maximum_bytes,
+            history.into_iter().flat_map(|items| items.iter().rev()),
+        );
+        if prior.is_some() && !current_urls.contains(&candidate.url) {
+            continue;
+        }
+        let last_confirmed_unix = last_confirmed_fetch_unix(
+            history,
+            prior.as_ref(),
+            policy_id,
+            &candidate.url,
+            document_type,
+        );
+        if last_confirmed_unix
+            .is_some_and(|then| now.unix_timestamp().saturating_sub(then) < refresh_after_seconds)
+        {
+            continue;
+        }
+        eligible.push(QueueEntry {
+            snapshot: digest.clone(),
+            candidate: candidate.clone(),
+            policy_id: policy_id.clone(),
+            previously_archived: prior.is_some(),
+            last_attempt_unix,
+        });
+    }
+    eligible.sort_by(|a, b| {
+        a.previously_archived
+            .cmp(&b.previously_archived)
+            .then_with(|| a.last_attempt_unix.cmp(&b.last_attempt_unix))
+            .then_with(|| a.candidate.url.cmp(&b.candidate.url))
+    });
+    let mut selected = Vec::new();
+    let mut selected_policies = HashSet::new();
+    for entry in eligible {
+        if selected.len() >= max_fetches {
+            break;
+        }
+        if selected_policies.contains(&entry.policy_id) {
+            continue;
+        }
+        let (policy, _) = policies
+            .get(&entry.policy_id)
+            .context("path policy missing")?;
+        if !store.source_fetch_allowed(
+            &entry.policy_id,
+            policy.minimum_interval_seconds,
+            now.unix_timestamp(),
+        )? {
+            continue;
+        }
+        selected_policies.insert(entry.policy_id.clone());
+        selected.push(entry);
+    }
+    Ok(QueuePlan {
+        not_selected_candidates: unique.len().saturating_sub(selected.len()),
+        selected,
+        unique_candidates: unique.len(),
+        indexed: false,
+        planned_at_unix: now.unix_timestamp(),
+        state_updates: vec![],
+    })
+}
+
+/// The queue index is only a bounded scheduler. Selected entries still pass
+/// the original raw-byte, receipt, anchor, path, review, robots, and fetch
+/// gates before any network request. Blocked entries are visible and cannot
+/// occupy the same due window forever.
+#[allow(clippy::too_many_lines)]
+fn plan_indexed_candidate_queue(
+    store: &Store,
+    config: &StateConfig,
+    origin_source_id: &str,
+    max_fetches: usize,
+    refresh_after_seconds: u64,
+    now: OffsetDateTime,
+) -> Result<QueuePlan> {
+    let origin = config
+        .sources
+        .iter()
+        .find(|source| source.id == origin_source_id)
+        .context("unknown candidate origin source")?;
+    verify_source_review(store, config, origin_source_id)?;
+    let context_token = queue_context_token(store, config, origin_source_id)?;
+    let now_unix = now.unix_timestamp();
+    let due: Vec<CandidateQueueItem> = store.candidate_queue_due(
+        origin_source_id,
+        now_unix,
+        i64::try_from(refresh_after_seconds)?,
+        MAX_QUEUE_INDEX_WINDOW,
+    )?;
+    let total = store.candidate_queue_total(origin_source_id)?;
+    if total == 0 {
+        bail!(
+            "no indexed candidate snapshots match this source; discover its official index first"
+        );
+    }
+    let mut checked_snapshots = HashMap::<String, Vec<CalendarCandidate>>::new();
+    let mut selected = Vec::new();
+    let mut selected_policies = HashSet::new();
+    let mut state_updates = Vec::new();
+    for item in due {
+        let candidates = if let Some(candidates) = checked_snapshots.get(&item.snapshot_digest) {
+            candidates
+        } else {
+            match load_verified_candidates(store, config, origin_source_id, &item.snapshot_digest) {
+                Ok(candidates) => {
+                    checked_snapshots.insert(item.snapshot_digest.clone(), candidates);
+                    checked_snapshots
+                        .get(&item.snapshot_digest)
+                        .context("validated snapshot vanished")?
+                }
+                Err(error) => {
+                    state_updates.push((
+                        item.url,
+                        queue_blocked(
+                            &context_token,
+                            &format!("snapshot verification failed: {error:#}"),
+                        ),
+                        now_unix,
+                    ));
+                    continue;
+                }
+            }
+        };
+        let candidate = candidates
+            .iter()
+            .find(|candidate| candidate.anchor_index == item.anchor_index)
+            .filter(|candidate| candidate.url == item.url && candidate.kind == item.kind)
+            .cloned();
+        let Some(candidate) = candidate else {
+            state_updates.push((
+                item.url,
+                queue_blocked(
+                    &context_token,
+                    "indexed anchor differs from preserved index",
+                ),
+                now_unix,
+            ));
+            continue;
+        };
+        let policy = match policy_for_candidate(config, &origin.url, &candidate) {
+            Ok(policy) => policy,
+            Err(error) => {
+                state_updates.push((
+                    item.url,
+                    queue_blocked(
+                        &context_token,
+                        &format!("candidate is outside current reviewed path: {error:#}"),
+                    ),
+                    now_unix,
+                ));
+                continue;
+            }
+        };
+        let review = match verify_source_review(store, config, &policy.id) {
+            Ok(review) => review,
+            Err(error) => {
+                state_updates.push((
+                    item.url,
+                    queue_blocked(
+                        &context_token,
+                        &format!("candidate path policy review unavailable: {error:#}"),
+                    ),
+                    now_unix,
+                ));
+                continue;
+            }
+        };
+        let candidate_path = url::Url::parse(&candidate.url)?.path().to_owned();
+        if let Err(error) = crate::require_preserved_robots_candidate_path(
+            store,
+            &policy.id,
+            &review,
+            &candidate_path,
+        ) {
+            if error.to_string().contains("robots.txt disallows") {
+                state_updates.push((
+                    item.url,
+                    queue_blocked(
+                        &context_token,
+                        &format!("candidate path disallowed by robots review {}", review.id),
+                    ),
+                    now_unix,
+                ));
+                continue;
+            }
+            return Err(error);
+        }
+        let observations = store.fetch_observations_for_url(&policy.id, &candidate.url)?;
+        let document_type = if policy.source_type == "candidate_meeting_html" {
+            "html_page"
+        } else {
+            "pdf"
+        };
+        let prior = latest_valid_archive_prior_in(
+            store,
+            &policy.id,
+            &candidate.url,
+            document_type,
+            policy.maximum_bytes,
+            observations.iter().rev(),
+        );
+        if item.last_success_unix.is_some() && prior.is_none() {
+            bail!("candidate queue success metadata lacks preserved accepted bytes and receipt");
+        }
+        if prior.is_some() && item.last_success_unix.is_none() {
+            let confirmed = last_confirmed_fetch_unix(
+                Some(&observations),
+                prior.as_ref(),
+                &policy.id,
+                &candidate.url,
+                document_type,
+            )
+            .context("accepted candidate has no confirmed receipt time")?;
+            if !item.is_current
+                || now_unix.saturating_sub(confirmed) < i64::try_from(refresh_after_seconds)?
+            {
+                state_updates.push((candidate.url, CandidateQueueOutcome::Archived, confirmed));
+                continue;
+            }
+        }
+        if selected.len() >= max_fetches {
+            state_updates.push((
+                candidate.url,
+                CandidateQueueOutcome::RetryAfter(now_unix.saturating_add(60)),
+                now_unix,
+            ));
+            continue;
+        }
+        if selected_policies.contains(&policy.id)
+            || !store.source_fetch_allowed(&policy.id, policy.minimum_interval_seconds, now_unix)?
+        {
+            state_updates.push((
+                candidate.url,
+                CandidateQueueOutcome::RetryAfter(
+                    now_unix
+                        .saturating_add(i64::try_from(policy.minimum_interval_seconds.max(60))?),
+                ),
+                now_unix,
+            ));
+            continue;
+        }
+        selected_policies.insert(policy.id.clone());
+        selected.push(QueueEntry {
+            snapshot: item.snapshot_digest,
+            candidate,
+            policy_id: policy.id.clone(),
+            previously_archived: prior.is_some(),
+            last_attempt_unix: item.last_attempt_unix,
+        });
+    }
+    Ok(QueuePlan {
+        not_selected_candidates: total.saturating_sub(selected.len()),
+        unique_candidates: total,
+        selected,
+        indexed: true,
+        planned_at_unix: now_unix,
+        state_updates,
+    })
+}
+
+fn queue_context_token(
+    store: &Store,
+    config: &StateConfig,
+    origin_source_id: &str,
+) -> Result<String> {
+    let origin = config
+        .sources
+        .iter()
+        .find(|source| source.id == origin_source_id)
+        .context("unknown candidate origin source")?;
+    let mut parts = Vec::new();
+    for source in &config.sources {
+        if source.id == origin_source_id || source.official_discovery_url == origin.url {
+            let review_id = store
+                .current_source_review(&source.id)?
+                .map(|review| review.id)
+                .unwrap_or_default();
+            parts.push(format!(
+                "{}:{}:{}",
+                source.id,
+                source_config_digest(source),
+                review_id
+            ));
+        }
+    }
+    parts.sort();
+    Ok(sha256_hex(parts.join("\n").as_bytes()))
+}
+
+fn queue_blocked(context_token: &str, reason: &str) -> CandidateQueueOutcome {
+    let brief = reason.chars().take(100).collect::<String>();
+    CandidateQueueOutcome::Blocked {
+        context: format!("{context_token}:{brief}"),
+    }
+}
+
 fn archive_candidate_with(
     store: &Store,
     config: &StateConfig,
@@ -592,6 +1349,18 @@ fn load_verified_candidate(
     calendar_snapshot: &str,
     anchor_index: usize,
 ) -> Result<CalendarCandidate> {
+    load_verified_candidates(store, config, calendar_source_id, calendar_snapshot)?
+        .into_iter()
+        .find(|candidate| candidate.anchor_index == anchor_index)
+        .context("anchor index is absent from archived calendar")
+}
+
+fn load_verified_candidates(
+    store: &Store,
+    config: &StateConfig,
+    calendar_source_id: &str,
+    calendar_snapshot: &str,
+) -> Result<Vec<CalendarCandidate>> {
     if calendar_source_id.is_empty()
         || !calendar_source_id
             .bytes()
@@ -687,11 +1456,7 @@ fn load_verified_candidate(
     if artifact != serde_json::to_vec_pretty(&expected)? {
         bail!("calendar candidate artifact differs from preserved HTML");
     }
-    expected
-        .candidates
-        .into_iter()
-        .find(|candidate| candidate.anchor_index == anchor_index)
-        .context("anchor index is absent from archived calendar")
+    Ok(expected.candidates)
 }
 
 fn calendar_receipt_matches(
@@ -924,21 +1689,41 @@ fn latest_valid_archive_prior(
     document_type: &str,
     maximum_bytes: usize,
 ) -> Result<Option<PriorEvidence>> {
-    for observation in store.fetch_observations(source_id)?.into_iter().rev() {
-        if observation.requested_url != url
+    let observations = store.fetch_observations(source_id)?;
+    Ok(latest_valid_archive_prior_in(
+        store,
+        source_id,
+        url,
+        document_type,
+        maximum_bytes,
+        observations.iter().rev(),
+    ))
+}
+
+fn latest_valid_archive_prior_in<'a>(
+    store: &Store,
+    source_id: &str,
+    url: &str,
+    document_type: &str,
+    maximum_bytes: usize,
+    observations: impl IntoIterator<Item = &'a FetchObservation>,
+) -> Option<PriorEvidence> {
+    for observation in observations {
+        if observation.source_id.as_deref() != Some(source_id)
+            || observation.requested_url != url
             || observation.final_url != url
             || observation.status_code != 200
             || observation.method != "GET"
             || observation.error.is_some()
             || observation.redirect_target.is_some()
-            || !receipt_has_public_network(&observation, url)
+            || !receipt_has_public_network(observation, url)
         {
             continue;
         }
-        let Some(digest) = observation.body_digest else {
+        let Some(digest) = observation.body_digest.as_ref() else {
             continue;
         };
-        let Ok(path) = store.content_path(&digest) else {
+        let Ok(path) = store.content_path(digest) else {
             continue;
         };
         let Ok(file) = fs::File::open(path) else {
@@ -951,7 +1736,7 @@ fn latest_valid_archive_prior(
             .is_err()
             || raw.is_empty()
             || raw.len() > maximum_bytes
-            || sha256_hex(&raw) != digest
+            || sha256_hex(&raw) != *digest
             || validate_document(
                 document_type,
                 &raw,
@@ -962,13 +1747,13 @@ fn latest_valid_archive_prior(
         {
             continue;
         }
-        return Ok(Some(PriorEvidence {
-            evidence_id: digest,
-            etag: observation.etag,
-            last_modified: observation.last_modified,
-        }));
+        return Some(PriorEvidence {
+            evidence_id: digest.clone(),
+            etag: observation.etag.clone(),
+            last_modified: observation.last_modified.clone(),
+        });
     }
-    Ok(None)
+    None
 }
 
 fn archive_url_with(
@@ -989,6 +1774,14 @@ fn archive_url_with(
     // This gate verifies expiration, preserved robots bytes and receipt, exact
     // config digest, host, endpoint path, and absence of response restrictions.
     let review = verify_source_review(store, config, source_id)?;
+    if source.source_type.starts_with("candidate_") {
+        crate::require_preserved_robots_candidate_path(
+            store,
+            source_id,
+            &review,
+            requested_url.path(),
+        )?;
+    }
     let now = OffsetDateTime::now_utc();
     let retrieved_at = now.format(&Rfc3339)?;
     if !store.try_record_source_fetch(
@@ -1162,6 +1955,18 @@ mod tests {
         let url = url::Url::parse("https://council.example.test/Calendar.aspx").unwrap();
         assert!(parse_calendar_candidates(&url, b"<html><body>no links</body></html>").is_err());
         assert!(parse_calendar_candidates(&url, b"not utf8 \xff").is_err());
+    }
+
+    #[test]
+    fn calendar_skips_oversized_candidate_urls() {
+        let url = url::Url::parse("https://council.example.test/Calendar.aspx").unwrap();
+        let html = format!(
+            "<a href=\"MeetingDetail.aspx?ID={}\">too long</a><a href=\"MeetingDetail.aspx?ID=2\">valid</a>",
+            "a".repeat(2_048)
+        );
+        let candidates = parse_calendar_candidates(&url, html.as_bytes()).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates[0].url.ends_with("?ID=2"));
     }
 
     #[test]
@@ -1568,6 +2373,53 @@ mod tests {
     }
 
     #[test]
+    fn town_candidate_checks_preserved_robots_for_exact_pdf_path_before_fetch() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = town_index_config();
+        install_candidate_review(&store, &config, "test-index");
+        install_candidate_review_with_robots(
+            &store,
+            &config,
+            "test-index-pdf",
+            b"User-agent: *\nDisallow: /wp-content/uploads/private/\n",
+        );
+        let (digest, candidates) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='/wp-content/uploads/private/secret.pdf'>private</a><a href='/wp-content/uploads/public.pdf'>public</a></html>",
+        );
+        let mut fetcher = FakeFetcher {
+            body: b"%PDF-1.7\nPublic meeting\n".to_vec(),
+            content_type: "application/pdf".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let denied = archive_candidate_with(
+            &store,
+            &config,
+            "test-index",
+            &digest,
+            candidates[0].anchor_index,
+            "test-index-pdf",
+            &mut fetcher,
+        )
+        .unwrap_err();
+        assert!(denied.to_string().contains("robots.txt disallows"));
+        assert_eq!(fetcher.calls, 0);
+        archive_candidate_with(
+            &store,
+            &config,
+            "test-index",
+            &digest,
+            candidates[1].anchor_index,
+            "test-index-pdf",
+            &mut fetcher,
+        )
+        .unwrap();
+        assert_eq!(fetcher.calls, 1);
+    }
+
+    #[test]
     fn towncloud_document_index_policy_requires_exact_index_and_upload_path() {
         let mut config = town_index_config();
         config.sources[0].url = "https://official.example.test/documents".to_owned();
@@ -1599,6 +2451,20 @@ mod tests {
     }
 
     fn install_candidate_review(store: &Store, config: &StateConfig, source_id: &str) {
+        install_candidate_review_with_robots(
+            store,
+            config,
+            source_id,
+            b"User-agent: *\nAllow: /\n",
+        );
+    }
+
+    fn install_candidate_review_with_robots(
+        store: &Store,
+        config: &StateConfig,
+        source_id: &str,
+        robots: &[u8],
+    ) {
         let source = config
             .sources
             .iter()
@@ -1606,7 +2472,6 @@ mod tests {
             .expect("source");
         let captured_at = OffsetDateTime::now_utc().format(&Rfc3339).expect("time");
         let robots_url = "https://official.example.test/robots.txt";
-        let robots = b"User-agent: *\nAllow: /\n";
         let robots_digest = sha256_hex(robots);
         let receipt = FetchObservation {
             id: stable_id("test-candidate-robots", &[source_id, &captured_at]),
@@ -1699,6 +2564,748 @@ mod tests {
         };
         persist_calendar_candidates(store.data_dir(), &artifact).expect("artifact");
         (digest, candidates)
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // One lifecycle verifies dedupe, checkpoint, and revision behavior.
+    fn queue_deduplicates_snapshots_fetches_one_per_policy_and_resumes_from_receipts() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        for source in [
+            "test-calendar",
+            "test-meeting-documents",
+            "test-pdf-documents",
+        ] {
+            install_candidate_review(&store, &config, source);
+        }
+        let (first_digest, _) = seed_calendar(&store, &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>one</a><a href='MeetingDetail.aspx?ID=2'>two</a></html>");
+        seed_calendar(&store, &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>repeat</a><a href='MeetingDetail.aspx?ID=2'>two</a><a href='View.ashx?M=A&amp;ID=3'>agenda</a></html>");
+        let now = OffsetDateTime::now_utc();
+        let plan =
+            plan_candidate_queue(&store, &config, "test-calendar", None, 8, 86_400, now).unwrap();
+        assert_eq!(plan.unique_candidates, 3);
+        assert_eq!(plan.selected.len(), 2); // one per reviewed path policy
+        assert!(
+            plan.selected
+                .iter()
+                .any(|entry| entry.policy_id == "test-meeting-documents")
+        );
+        assert!(
+            plan.selected
+                .iter()
+                .any(|entry| entry.policy_id == "test-pdf-documents")
+        );
+
+        let first = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            Some(&first_digest),
+            1,
+            86_400,
+            now,
+        )
+        .unwrap();
+        assert_eq!(first.selected.len(), 1);
+        let first_url = first.selected[0].candidate.url.clone();
+        let mut fetcher = FakeFetcher {
+            body: b"<html>meeting version one</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let run =
+            archive_queue_with(&store, &config, "test-calendar", first, &mut fetcher).unwrap();
+        assert_eq!(run.successes.len(), 1);
+        assert!(run.failures.is_empty());
+        assert_eq!(fetcher.calls, 1);
+        let next = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            Some(&first_digest),
+            1,
+            86_400,
+            now + time::Duration::minutes(1),
+        )
+        .unwrap();
+        assert_eq!(next.selected.len(), 1);
+        assert_ne!(next.selected[0].candidate.url, first_url);
+
+        let mut changed = FakeFetcher {
+            body: b"<html>meeting version two</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let refresh = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            Some(&first_digest),
+            1,
+            86_400,
+            now + time::Duration::days(2),
+        )
+        .unwrap();
+        // New URLs take priority over refreshes. After archiving the second URL,
+        // the older one can be rechecked and a changed response is retained.
+        let second =
+            archive_queue_with(&store, &config, "test-calendar", refresh, &mut changed).unwrap();
+        assert_eq!(second.successes.len(), 1);
+        let refresh = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            Some(&first_digest),
+            1,
+            86_400,
+            now + time::Duration::days(2),
+        )
+        .unwrap();
+        assert_eq!(refresh.selected[0].candidate.url, first_url);
+        let mut changed = FakeFetcher {
+            body: b"<html>meeting version two</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let refreshed =
+            archive_queue_with(&store, &config, "test-calendar", refresh, &mut changed).unwrap();
+        assert_eq!(refreshed.successes.len(), 1);
+        assert!(refreshed.successes[0].1.changed_from.is_some());
+        assert_eq!(
+            store
+                .fetch_observations("test-meeting-documents")
+                .unwrap()
+                .into_iter()
+                .filter(|item| item.requested_url.contains("/MeetingDetail.aspx"))
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn queue_rejects_drift_and_tampering_before_fetch() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        install_candidate_review(&store, &config, "test-calendar");
+        let (digest, _) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>one</a></html>",
+        );
+        let now = OffsetDateTime::now_utc();
+        let unavailable =
+            plan_candidate_queue(&store, &config, "test-calendar", None, 1, 86_400, now).unwrap();
+        assert!(unavailable.selected.is_empty());
+        assert!(matches!(
+            unavailable.state_updates.first().map(|item| &item.1),
+            Some(CandidateQueueOutcome::Blocked { .. })
+        ));
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        assert_eq!(
+            plan_candidate_queue(&store, &config, "test-calendar", None, 1, 86_400, now)
+                .unwrap()
+                .selected
+                .len(),
+            1
+        );
+        let mut changed = config.clone();
+        changed.sources[1].maximum_bytes += 1;
+        let drift =
+            plan_candidate_queue(&store, &changed, "test-calendar", None, 1, 86_400, now).unwrap();
+        assert!(drift.selected.is_empty());
+        assert!(matches!(
+            drift.state_updates.first().map(|item| &item.1),
+            Some(CandidateQueueOutcome::Blocked { .. })
+        ));
+        let artifact = store
+            .data_dir()
+            .join("discovery-candidates/test-calendar")
+            .join(format!("{digest}.json"));
+        fs::write(&artifact, b"{}").unwrap();
+        let tampered =
+            plan_candidate_queue(&store, &config, "test-calendar", None, 1, 86_400, now).unwrap();
+        assert!(tampered.selected.is_empty());
+        assert!(matches!(
+            tampered.state_updates.first().map(|item| &item.1),
+            Some(CandidateQueueOutcome::Blocked { .. })
+        ));
+    }
+
+    #[test]
+    fn explicit_queue_snapshot_skips_unbounded_directory_scan() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let path = store.data_dir().join("discovery-candidates/test-calendar");
+        private_directory(store.data_dir(), &path).unwrap();
+        for index in 0..=130 {
+            fs::write(path.join(format!("{index:064x}.json")), b"{}").unwrap();
+        }
+        assert!(queue_snapshot_digests(&store, "test-calendar", None).is_err());
+        let digest = format!("{:064x}", 1);
+        assert_eq!(
+            queue_snapshot_digests(&store, "test-calendar", Some(&digest)).unwrap(),
+            vec![digest]
+        );
+        assert!(queue_snapshot_digests(&store, "test-calendar", Some("../outside")).is_err());
+    }
+
+    #[test]
+    fn indexed_queue_progresses_after_more_than_128_immutable_snapshots() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        for index in 0..130 {
+            let html =
+                format!("<html><a href='MeetingDetail.aspx?ID={index}'>meeting {index}</a></html>");
+            seed_calendar(&store, &config, html.as_bytes());
+        }
+        let now = OffsetDateTime::now_utc();
+        let first =
+            plan_candidate_queue(&store, &config, "test-calendar", None, 1, 86_400, now).unwrap();
+        assert_eq!(first.unique_candidates, 130);
+        assert_eq!(first.selected.len(), 1);
+        let first_url = first.selected[0].candidate.url.clone();
+        let mut fetcher = FakeFetcher {
+            body: b"<html>official meeting</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        archive_queue_with(&store, &config, "test-calendar", first, &mut fetcher).unwrap();
+        let next = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            1,
+            86_400,
+            now + time::Duration::seconds(61),
+        )
+        .unwrap();
+        assert_eq!(next.unique_candidates, 130);
+        assert_eq!(next.selected.len(), 1);
+        assert_ne!(next.selected[0].candidate.url, first_url);
+    }
+
+    #[test]
+    fn indexed_queue_marks_disallowed_first_url_and_fetches_allowed_url() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = town_index_config();
+        install_candidate_review(&store, &config, "test-index");
+        install_candidate_review_with_robots(
+            &store,
+            &config,
+            "test-index-pdf",
+            b"User-agent: *\nDisallow: /wp-content/uploads/a-private.pdf\n",
+        );
+        seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='/wp-content/uploads/a-private.pdf'>private</a><a href='/wp-content/uploads/z-public.pdf'>public</a></html>",
+        );
+        let now = OffsetDateTime::now_utc();
+        let plan =
+            plan_candidate_queue(&store, &config, "test-index", None, 1, 86_400, now).unwrap();
+        assert_eq!(plan.selected.len(), 1);
+        assert!(plan.selected[0].candidate.url.ends_with("/z-public.pdf"));
+        assert!(matches!(
+            plan.state_updates.first().map(|item| &item.1),
+            Some(CandidateQueueOutcome::Blocked { .. })
+        ));
+        let mut fetcher = FakeFetcher {
+            body: b"%PDF-1.7\npublic minutes\n".to_vec(),
+            content_type: "application/pdf".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let run = archive_queue_with(&store, &config, "test-index", plan, &mut fetcher).unwrap();
+        assert_eq!(run.successes.len(), 1);
+        assert_eq!(fetcher.calls, 1);
+        assert!(fetcher.urls[0].ends_with("/z-public.pdf"));
+    }
+
+    #[test]
+    fn unavailable_pdf_review_does_not_stop_reviewed_meeting_candidate() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='View.ashx?M=A&amp;ID=1'>agenda</a><a href='MeetingDetail.aspx?ID=2'>meeting</a></html>",
+        );
+        let now = OffsetDateTime::now_utc();
+        let plan =
+            plan_candidate_queue(&store, &config, "test-calendar", None, 2, 86_400, now).unwrap();
+        assert_eq!(plan.selected.len(), 1);
+        assert_eq!(plan.selected[0].policy_id, "test-meeting-documents");
+        assert_eq!(plan.state_updates.len(), 1);
+        assert!(matches!(
+            &plan.state_updates[0].1,
+            CandidateQueueOutcome::Blocked { context }
+                if context.contains("policy review unavailable")
+        ));
+        let mut fetcher = FakeFetcher {
+            body: b"<html><body>official meeting</body></html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let run = archive_queue_with(&store, &config, "test-calendar", plan, &mut fetcher).unwrap();
+        assert_eq!(run.successes.len(), 1);
+        assert_eq!(fetcher.calls, 1);
+        assert!(fetcher.urls[0].contains("MeetingDetail.aspx"));
+    }
+
+    #[test]
+    fn missing_origin_review_cannot_requeue_blocked_private_state() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        let (_, candidates) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=2'>meeting</a></html>",
+        );
+        let url = &candidates[0].url;
+        store
+            .mark_candidate_queue_outcome(
+                "test-calendar",
+                url,
+                1,
+                CandidateQueueOutcome::Blocked {
+                    context: "outdated policy".to_owned(),
+                },
+            )
+            .unwrap();
+        assert!(archive_queue(dir.path(), &config, "test-calendar", None, 1, 60, false).is_err());
+        assert!(
+            store
+                .candidate_queue_due("test-calendar", 10, 60, 1)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn indexed_queue_skips_historical_out_of_scope_url_without_stopping_other_policy() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        for id in [
+            "test-calendar",
+            "test-meeting-documents",
+            "test-pdf-documents",
+        ] {
+            install_candidate_review(&store, &config, id);
+        }
+        seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='View.ashx?M=A&amp;ID=1'>old agenda</a></html>",
+        );
+        seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=2'>current meeting</a></html>",
+        );
+        let mut changed = config.clone();
+        changed.sources[2].official_discovery_url =
+            "https://official.example.test/another-index".to_owned();
+        let plan = plan_candidate_queue(
+            &store,
+            &changed,
+            "test-calendar",
+            None,
+            1,
+            86_400,
+            OffsetDateTime::now_utc(),
+        )
+        .unwrap();
+        assert_eq!(plan.selected.len(), 1);
+        assert!(
+            plan.selected[0]
+                .candidate
+                .url
+                .contains("MeetingDetail.aspx")
+        );
+        assert!(plan.state_updates.iter().any(|(url, outcome, _)| {
+            url.contains("View.ashx") && matches!(outcome, CandidateQueueOutcome::Blocked { .. })
+        }));
+    }
+
+    #[test]
+    fn indexed_queue_limits_each_planning_window() {
+        use std::fmt::Write as _;
+
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut config = candidate_config(0, 0);
+        config.sources[0].maximum_bytes = 65_536;
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        let mut html = "<html>".to_owned();
+        for index in 0..300 {
+            write!(
+                &mut html,
+                "<a href='MeetingDetail.aspx?ID={index}'>meeting {index}</a>"
+            )
+            .unwrap();
+        }
+        html.push_str("</html>");
+        seed_calendar(&store, &config, html.as_bytes());
+        let plan = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            1,
+            86_400,
+            OffsetDateTime::now_utc(),
+        )
+        .unwrap();
+        assert_eq!(plan.unique_candidates, 300);
+        assert_eq!(plan.selected.len(), 1);
+        assert_eq!(plan.state_updates.len(), MAX_QUEUE_INDEX_WINDOW - 1);
+    }
+
+    #[test]
+    fn queue_run_refreshes_current_link_despite_large_historical_backlog() {
+        use std::fmt::Write as _;
+
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut config = candidate_config(0, 0);
+        config.sources[0].maximum_bytes = 65_536;
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        let (first_digest, first) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=999'>current</a></html>",
+        );
+        let mut fetcher = FakeFetcher {
+            body: b"<html>meeting</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        archive_candidate_with(
+            &store,
+            &config,
+            "test-calendar",
+            &first_digest,
+            first[0].anchor_index,
+            "test-meeting-documents",
+            &mut fetcher,
+        )
+        .unwrap();
+        let now = OffsetDateTime::now_utc();
+        store
+            .mark_candidate_queue_outcome(
+                "test-calendar",
+                &first[0].url,
+                now.unix_timestamp(),
+                CandidateQueueOutcome::Archived,
+            )
+            .unwrap();
+
+        let mut html = "<html>".to_owned();
+        for index in 0..300 {
+            write!(
+                &mut html,
+                "<a href='MeetingDetail.aspx?ID={index}'>historical {index}</a>"
+            )
+            .unwrap();
+        }
+        html.push_str("<a href='MeetingDetail.aspx?ID=999'>current</a></html>");
+        seed_calendar(&store, &config, html.as_bytes());
+
+        let first_plan = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            1,
+            1,
+            now + time::Duration::seconds(2),
+        )
+        .unwrap();
+        assert_ne!(first_plan.selected[0].candidate.url, first[0].url);
+        let mut run_fetcher = FakeFetcher {
+            body: b"<html>historical meeting</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let run = archive_queue_with(
+            &store,
+            &config,
+            "test-calendar",
+            first_plan,
+            &mut run_fetcher,
+        )
+        .unwrap();
+        assert_eq!(run.successes.len(), 1);
+
+        let refresh_plan = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            1,
+            1,
+            now + time::Duration::seconds(3),
+        )
+        .unwrap();
+        assert_eq!(refresh_plan.selected[0].candidate.url, first[0].url);
+    }
+
+    #[test]
+    fn blocked_candidate_context_changes_with_reviewed_policy() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>meeting</a></html>",
+        );
+        let original = queue_context_token(&store, &config, "test-calendar").unwrap();
+        let url = "https://official.example.test/MeetingDetail.aspx?ID=1";
+        store
+            .mark_candidate_queue_outcome(
+                "test-calendar",
+                url,
+                10,
+                queue_blocked(&original, "old path policy"),
+            )
+            .unwrap();
+        assert!(
+            store
+                .candidate_queue_due("test-calendar", 11, 86_400, 1)
+                .unwrap()
+                .is_empty()
+        );
+        let mut changed = config;
+        changed.sources[1].maximum_bytes += 1;
+        let changed_token = queue_context_token(&store, &changed, "test-calendar").unwrap();
+        assert_ne!(original, changed_token);
+        assert_eq!(
+            store
+                .requeue_blocked_candidate_context("test-calendar", &changed_token, 1)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            store
+                .candidate_queue_due("test-calendar", 11, 86_400, 1)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn queue_reports_failed_document_without_losing_successful_archive() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        for source in [
+            "test-calendar",
+            "test-meeting-documents",
+            "test-pdf-documents",
+        ] {
+            install_candidate_review(&store, &config, source);
+        }
+        seed_calendar(&store, &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>meeting</a><a href='View.ashx?M=A&amp;ID=2'>agenda</a></html>");
+        let plan = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            8,
+            86_400,
+            OffsetDateTime::now_utc(),
+        )
+        .unwrap();
+        assert_eq!(plan.selected.len(), 2);
+        let mut fetcher = FakeFetcher {
+            body: b"<html>meeting</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        let run = archive_queue_with(&store, &config, "test-calendar", plan, &mut fetcher).unwrap();
+        assert_eq!(fetcher.calls, 2);
+        assert_eq!(run.successes.len(), 1);
+        assert_eq!(run.failures.len(), 1);
+        assert!(run.failures[0].contains("View.ashx"));
+        assert!(
+            store
+                .content_path(&run.successes[0].1.digest)
+                .unwrap()
+                .is_file()
+        );
+    }
+
+    #[test]
+    fn queue_retries_failed_receipts_after_policy_cooldown() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(60, 0);
+        install_candidate_review(&store, &config, "test-calendar");
+        install_candidate_review(&store, &config, "test-meeting-documents");
+        let (digest, candidates) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>meeting</a></html>",
+        );
+        let url = &candidates[0].url;
+        let now = OffsetDateTime::now_utc();
+        let failed_receipt = |at: OffsetDateTime| {
+            let retrieved_at = at.format(&Rfc3339).unwrap();
+            FetchObservation {
+                id: FetchObservation::id_for(url, &retrieved_at, 503),
+                source_id: Some("test-meeting-documents".to_owned()),
+                requested_url: url.clone(),
+                resolved_ips: vec!["1.1.1.1".to_owned()],
+                retrieved_at,
+                method: "GET".to_owned(),
+                status_code: 503,
+                redirect_target: None,
+                final_url: url.clone(),
+                allowlisted_headers: vec![],
+                content_type: Some("text/html".to_owned()),
+                content_length: None,
+                etag: None,
+                last_modified: None,
+                body_digest: None,
+                error: Some(pnull_core::StructuredError {
+                    code: "fetch_failed".to_owned(),
+                    message: "temporary failure".to_owned(),
+                }),
+            }
+        };
+        let first_failure = now - time::Duration::seconds(61);
+        store
+            .insert_fetch_observation(&failed_receipt(first_failure))
+            .unwrap();
+        store
+            .record_source_fetch("test-meeting-documents", first_failure.unix_timestamp())
+            .unwrap();
+        assert_eq!(
+            plan_candidate_queue(&store, &config, "test-calendar", None, 1, 604_800, now)
+                .unwrap()
+                .selected
+                .len(),
+            1
+        );
+        let mut fetcher = FakeFetcher {
+            body: b"<html>meeting</html>".to_vec(),
+            content_type: "text/html".to_owned(),
+            ..FakeFetcher::default()
+        };
+        archive_candidate_with(
+            &store,
+            &config,
+            "test-calendar",
+            &digest,
+            candidates[0].anchor_index,
+            "test-meeting-documents",
+            &mut fetcher,
+        )
+        .unwrap();
+        let later_failure = now + time::Duration::days(8);
+        store
+            .insert_fetch_observation(&failed_receipt(later_failure))
+            .unwrap();
+        store
+            .record_source_fetch("test-meeting-documents", later_failure.unix_timestamp())
+            .unwrap();
+        assert_eq!(
+            plan_candidate_queue(
+                &store,
+                &config,
+                "test-calendar",
+                None,
+                1,
+                604_800,
+                later_failure + time::Duration::seconds(61),
+            )
+            .unwrap()
+            .selected
+            .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn queue_backfills_removed_links_once_but_refreshes_only_current_links() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = candidate_config(0, 0);
+        for source in ["test-calendar", "test-meeting-documents"] {
+            install_candidate_review(&store, &config, source);
+        }
+        let (old_digest, old) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=1'>old</a></html>",
+        );
+        let (new_digest, newer) = seed_calendar(
+            &store,
+            &config,
+            br"<html><a href='MeetingDetail.aspx?ID=2'>current</a></html>",
+        );
+        let mut current_receipt = store
+            .fetch_observations("test-calendar")
+            .unwrap()
+            .into_iter()
+            .find(|item| item.body_digest.as_deref() == Some(&new_digest))
+            .unwrap();
+        current_receipt.retrieved_at = (OffsetDateTime::now_utc() + time::Duration::minutes(1))
+            .format(&Rfc3339)
+            .unwrap();
+        current_receipt.id = stable_id("newest-calendar", &[&new_digest]);
+        store.insert_fetch_observation(&current_receipt).unwrap();
+
+        for (digest, candidate) in [(&old_digest, &old[0]), (&new_digest, &newer[0])] {
+            let mut fetcher = FakeFetcher {
+                body: b"<html>meeting</html>".to_vec(),
+                content_type: "text/html".to_owned(),
+                ..FakeFetcher::default()
+            };
+            archive_candidate_with(
+                &store,
+                &config,
+                "test-calendar",
+                digest,
+                candidate.anchor_index,
+                "test-meeting-documents",
+                &mut fetcher,
+            )
+            .unwrap();
+        }
+        let plan = plan_candidate_queue(
+            &store,
+            &config,
+            "test-calendar",
+            None,
+            8,
+            86_400,
+            OffsetDateTime::now_utc() + time::Duration::days(2),
+        )
+        .unwrap();
+        assert_eq!(plan.unique_candidates, 2);
+        assert_eq!(plan.selected.len(), 1);
+        assert_eq!(plan.selected[0].candidate.url, newer[0].url);
     }
 
     #[derive(Default)]

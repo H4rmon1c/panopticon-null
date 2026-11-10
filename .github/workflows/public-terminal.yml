@@ -47,8 +47,12 @@ jobs:
           python3 deploy/selfhost/test-small-town-profile.py
       - name: Test multi-jurisdiction collection schedule
         run: bash deploy/selfhost/test-collect.sh
+      - name: Test bounded private candidate queue schedule
+        run: bash deploy/selfhost/test-candidate-queue.sh
       - name: Verify fixed official archive profiles
         run: python3 deploy/selfhost/test-archive-profiles.py
+      - name: Test exact Colorado source review batch
+        run: python3 deploy/selfhost/test-review-batch.py
       - name: Test staged publication and rollback
         run: bash deploy/selfhost/test-publish.sh
       - name: Browser smoke test

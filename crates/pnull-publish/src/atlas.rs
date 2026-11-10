@@ -1313,7 +1313,7 @@ fn snapshot(
     } else {
         site_url.map(|base| {
             format!(
-                "{}/decision.html?decision={}",
+                "{}/decisions/{}.html",
                 base.trim_end_matches('/'),
                 m.case_id
             )
@@ -1322,6 +1322,8 @@ fn snapshot(
     entities.push(json!({
         "id":decision_id, "slug":m.case_id, "type":"DECISION",
         "name":format!("Ordinance {}", m.decision.ordinance),
+        "social_title":"Colorado Springs police technology surcharge vote",
+        "social_summary":"Council voted 6–3 on Ordinance 25-93. Read the official vote and signed ordinance. A named vendor contract link is not established by these records.",
         "subtitle":format!("{} • {}–{}", m.decision.date, m.decision.tally.aye, m.decision.tally.no),
         "status":d.1, "description":m.decision.summary, "geo":geo,
         "jurisdiction_ids":[jurisdiction_id], "aliases":[m.decision.official_matter],
@@ -1355,6 +1357,7 @@ fn snapshot(
             "counts":{"entities":entities.len(),"records":evidence.len(),
                 "sources":checked.sources.len(),"relationships":relationship_count},
         },
+        "case_releases":[{"case_id":m.case_id,"release":release_review.clone()}],
         "release_review":release_review,
         "activity":[], "entities":entities, "evidence":evidence,
         "sources":checked.sources.values().collect::<Vec<_>>(),
@@ -1617,6 +1620,11 @@ mod tests {
         assert_eq!(data["status"]["state"], "released");
         assert_eq!(data["release_review"]["state"], "APPROVED");
         assert_eq!(
+            data["case_releases"][0]["case_id"],
+            "co-colorado-springs-25-581-2025-11-25"
+        );
+        assert_eq!(data["case_releases"][0]["release"], data["release_review"]);
+        assert_eq!(
             data["release_review"]["reviewed_at"],
             "2026-11-09T12:00:00Z"
         );
@@ -1637,7 +1645,11 @@ mod tests {
             .unwrap();
         assert_eq!(
             decision["share_url"],
-            "https://atlas.test/decision.html?decision=co-colorado-springs-25-581-2025-11-25"
+            "https://atlas.test/decisions/co-colorado-springs-25-581-2025-11-25.html"
+        );
+        assert_eq!(
+            decision["social_title"],
+            "Colorado Springs police technology surcharge vote"
         );
     }
 
