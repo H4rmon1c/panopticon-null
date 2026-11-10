@@ -20,7 +20,11 @@ Source review is per source and expires; it is not a review task for every fetch
 
 ## Provision a VPS
 
-The commands below assume a Debian/Ubuntu Namecheap VPS with systemd, Caddy, Rust, Node 22, `flock`, and `realpath`. Install the runtime packages through your distribution or pinned release process. A 2 GB plan may be tight for compiling Rust and running PDF/OCR extraction on the same host; build the CLI off-host and copy the binary, or choose more memory. Build and install the Rust CLI from the reviewed branch:
+The selected target is a [Namecheap Quasar VPS](https://www.namecheap.com/hosting/vps/) (4 CPU cores, 6 GB RAM, 120 GB SSD). Choose **Ubuntu 24.04 Blank**, **no web panel**, and **User-Responsible** management. The blank OS lets Caddy serve the static site without cPanel; User-Responsible retains the root access needed to install the collector and systemd units. [Namecheap lists Ubuntu 24.04 Blank](https://www.namecheap.com/support/knowledgebase/article.aspx/9979/2188/what-operating-systems-are-available-with-a-vpsdedicated-server/) and says [Complete management does not provide root access](https://www.namecheap.com/support/knowledgebase/article.aspx/9304/48/what-vps-management-options-do-you-provide/). Review the billing term and renewal price in Namecheap checkout before paying. No VPS order has been placed by this project.
+
+After activation, obtain the public IPv4 address from Namecheap's Hosting List and establish SSH key access for a non-root administrator. Keep the initial root password in your password manager; do not send it in chat. Keep DNS pointing at parking until the static release and server services pass local checks; then switch the A record and verify HTTPS. Namecheap's [VPS setup guide](https://www.namecheap.com/support/knowledgebase/article.aspx/10777/48/how-to-set-up-a-vps-beginnerfriendly-stepbystep-guide/) covers the first login, system updates, SSH keys, and firewall rules for ports 22, 80, and 443.
+
+The commands below assume a Debian/Ubuntu VPS with systemd, Caddy, Rust, Node 22, `flock`, and `realpath`. Install the runtime packages through your distribution or pinned release process. Build and install the Rust CLI from the reviewed branch:
 
 ```console
 cargo build --locked --release -p pnull-cli
