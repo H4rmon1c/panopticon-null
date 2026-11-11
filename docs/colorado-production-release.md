@@ -1,5 +1,9 @@
 # Colorado production release — November 10, 2026
 
+This is the November 10 release record. See the [November 11 statewide
+research snapshot](colorado-statewide-coverage-2026-11-11.md) for later
+discovery and coverage results.
+
 This release is prepared for the owner's Namecheap Magnetar VPS. No server IP,
 SSH connection, DNS cutover, or live HTTPS test has been performed. The website
 is a partial Colorado public-record atlas, not a completed statewide investigation.
