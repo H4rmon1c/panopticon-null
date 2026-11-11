@@ -2,3 +2,4 @@
 fixtures/atlas/portrait-sources/denver-2023-council-gallery.html -text -diff
 fixtures/atlas/portrait-sources/arapahoe-2022-budget-page.pdf -text -diff
 fixtures/pdf/scanned-sixth-page.pdf -text -diff
+fixtures/atlas/portrait-sources/arapahoe-2024-budget-page.pdf -text -diff

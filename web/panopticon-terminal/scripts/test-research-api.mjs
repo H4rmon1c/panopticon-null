@@ -82,6 +82,36 @@ test('recorded motions bind the same matter and distinguish consent votes', () =
   }
 });
 
+test('redirected documents expose the exact source link and timestamp uncertainty', () => {
+  const base = copy();
+  const record = base.records.find((item) => item.kind === 'meeting_document');
+  record.document_format = 'pdf';
+  record.source_url = 'https://cms3.revize.com/revize/town/Documents/Meeting%20Minutes.pdf';
+  record.indexed_source_url = 'https://example.org/Documents/Meeting%20Minutes.pdf?t=123';
+  record.source_index_url = 'https://example.org/agendas';
+  record.capture_adjustment = 'timestamp_omitted';
+  validateResearch(base);
+  for (const change of [
+    (item) => { item.source_url = item.source_url.replace('cms3.revize.com', 'attacker.example'); },
+    (item) => { item.source_url = item.source_url.replace('Meeting%20Minutes', 'Other'); },
+    (item) => { item.indexed_source_url = item.indexed_source_url.replace('example.org', 'attacker.example'); },
+    (item) => { item.indexed_source_url += '&another=1'; },
+    (item) => { item.capture_adjustment = 'direct_redirect'; },
+    (item) => { delete item.source_index_url; },
+  ]) {
+    const changed = structuredClone(base);
+    change(changed.records.find((item) => item.id === record.id));
+    assert.throws(() => validateResearch(changed));
+  }
+  record.source_url = 'https://example.org/Documents/Meeting%20Minutes.pdf?t=123';
+  delete record.indexed_source_url;
+  delete record.source_index_url;
+  delete record.capture_adjustment;
+  validateResearch(base);
+  record.source_url += '&redirect=x';
+  assert.throws(() => validateResearch(base));
+});
+
 test('county-linked agenda references remain scoped to their exact meeting and digest', () => {
   const base = copy();
   const sha = 'e'.repeat(64);

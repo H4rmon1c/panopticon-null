@@ -85,6 +85,8 @@ first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 [[ -f "$PNUL_CURRENT_LINK/api/v1/alerts.json" && -f "$PNUL_CURRENT_LINK/api/v1/feed.json" && -f "$PNUL_CURRENT_LINK/api/v1/coverage.json" ]]
 [[ -f "$PNUL_CURRENT_LINK/research.html" && -f "$PNUL_CURRENT_LINK/api/v1/research.json" ]]
 [[ -f "$PNUL_CURRENT_LINK/research-portraits/84202caa2919b815df89984e12ad15f4de4289a35b74f048f54f0e68f0954174.jpg" ]]
+[[ -f "$PNUL_CURRENT_LINK/research-portraits/3ea3f82d546b3de7b1d07cfdb69e429e643b6ade00677f189bdee6fc59b1e5a6.jpg" ]]
+[[ -f "$PNUL_CURRENT_LINK/research-portraits/942839934eb8ea112842148a95aa7deb38f94793e503d7ea5bf76e09cf439da2.jpg" ]]
 cmp -s "$PNUL_CURRENT_LINK/public/research-signals.json" "$PNUL_CURRENT_LINK/api/v1/research.json"
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/build-alert-api.mjs" ]]
 

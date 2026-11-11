@@ -24,9 +24,9 @@ import threading
 import time
 import tomllib
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.robotparser import RobotFileParser
 
 from public_http import USER_AGENT, BudgetExhausted, get, public_ip
+from vendor.protego import Protego
 
 ROOT = Path(__file__).resolve().parents[1]
 GEOGRAPHY = ROOT / 'web/panopticon-terminal/geography/colorado-jurisdictions.json'
@@ -259,11 +259,16 @@ class Links(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.links = []
         self.current = None
+        self.base_href = None
+        self.saw_base = False
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
         if tag == 'a' and 'href' in values:
             self.current = [values['href'], '']
+        elif tag == 'base' and 'href' in values and not self.saw_base:
+            self.base_href = values['href']
+            self.saw_base = True
         elif tag == 'iframe' and 'src' in values and len(self.links) < 10000:
             self.links.append((values['src'], 'iframe'))
 
@@ -282,6 +287,32 @@ def parse_links(body):
     parser = Links()
     parser.feed(body.decode('utf8', 'replace'))
     return parser.links
+
+
+def page_links(body, page):
+    """Honor only a same-origin HTML base, retaining source anchor ordinals."""
+    parser = Links()
+    parser.feed(body.decode('utf8', 'replace'))
+    if not parser.saw_base:
+        return parser.links, page
+    try:
+        base = urljoin(page, parser.base_href)
+        original, parsed = urlsplit(page), urlsplit(base)
+        if (parsed.scheme != 'https' or parsed.hostname != original.hostname or parsed.port not in (None, 443)
+                or parsed.username or parsed.password or parsed.query or parsed.fragment or len(base) > 2000):
+            return parser.links, None
+        return parser.links, base
+    except (ValueError, TypeError):
+        return parser.links, None
+
+
+def resolve_page_link(page, base, href):
+    # A foreign/invalid base cannot silently turn a relative link into a
+    # same-site assertion. Fully qualified links remain independently usable.
+    parsed = urlsplit(href)
+    if base is None and not (parsed.scheme or parsed.netloc):
+        return None
+    return urljoin(base or page, href)
 
 
 class Images(HTMLParser):
@@ -351,16 +382,57 @@ class RobotsDenied(ValueError):
         self.observations = observations
 
 
+def revize_host(host):
+    return bool(re.fullmatch(r'(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com', host or ''))
+
+
+class RobotsPolicy:
+    """Use RFC-style wildcard and longest-match rules with the existing API."""
+    def __init__(self, body):
+        self.rules = Protego.parse(body.decode('utf8'))
+
+    def can_fetch(self, user_agent, url):
+        return self.rules.can_fetch(url, user_agent)
+
+
 def get_robots(host, hosts=None, budget=None):
-    observations = get(f'https://{host}/robots.txt', hosts or {host}, maximum=MAX_PAGE_BYTES, budget=budget)
-    status = observations[-1][0]['status']
-    if status == 404:
-        return None, observations
-    if status != 200:
-        raise RobotsDenied(status, observations)
-    rules = RobotFileParser()
-    rules.parse(observations[-1][1].decode('utf8').splitlines())
-    return rules, observations
+    # Revize-hosted municipalities sometimes redirect only their robots file
+    # to a vendor tenant. Follow that narrow, explicit source response without
+    # admitting the vendor as a trusted host for pages, documents, or photos.
+    aliases = set(hosts or {host})
+    current = f'https://{host}/robots.txt'
+    observations = []
+    for hop in range(3):
+        target_host = urlsplit(current).hostname
+        rows = get(current, {target_host}, maximum=MAX_PAGE_BYTES, redirects=0,
+                   stop_at_redirect=True, budget=budget)
+        observations.extend(rows)
+        meta, body = rows[-1]
+        status = meta['status']
+        if status == 404:
+            return None, observations
+        if status in (301, 302, 303, 307, 308):
+            target = meta.get('redirect_target', '')
+            try:
+                parsed = urlsplit(target)
+                vendor = revize_host(parsed.hostname)
+                if (hop == 2 or parsed.scheme != 'https' or parsed.port not in (None, 443)
+                        or not parsed.hostname or parsed.username or parsed.password or parsed.fragment
+                        or (parsed.hostname not in aliases and not (vendor and not parsed.query
+                            and parsed.path.lower().endswith('/robots.txt')))):
+                    raise ValueError('untrusted robots redirect')
+            except ValueError:
+                raise RobotsDenied('redirect rejected', observations) from None
+            current = target
+            continue
+        if status != 200:
+            raise RobotsDenied(status, observations)
+        # An HTML homepage masquerading as robots.txt must not silently allow
+        # every path when a government site redirects an unknown URL to home.
+        if 'html' in meta.get('content_type', '').lower() or re.match(rb'\s*<(?:!doctype\s+html|html)\b', body, re.I):
+            raise RobotsDenied('200 HTML', observations)
+        return RobotsPolicy(body), observations
+    raise RobotsDenied('redirect limit', observations)
 
 
 def allowed(rules, url):
@@ -435,12 +507,16 @@ def candidate_kind(url, index_url, label):
     # Admit ordinary encoded filename spaces without admitting encoded path
     # separators, dot segments, controls, or double-encoded escapes.
     if (parsed.scheme != 'https' or parsed.hostname != index.hostname or parsed.port not in (None, 443)
-            or parsed.username or parsed.password or parsed.query or parsed.fragment or len(url) > 2000
+            or parsed.username or parsed.password or parsed.fragment or len(url) > 2000
             or re.search(r'%(?!20)', parsed.path, re.I) or '\\' in parsed.path or '..' in parsed.path.split('/')):
+        return None
+    # Revize uses numeric timestamps to version otherwise direct document
+    # links. Keep the full query in the archived URL; never strip it.
+    if parsed.query and not re.fullmatch(r't=[0-9]{1,20}', parsed.query):
         return None
     civic = re.fullmatch(r'/AgendaCenter/ViewFile/(Agenda|Minutes)/_([0-9]{2})([0-9]{2})([0-9]{4})-[0-9]{1,12}',
                          parsed.path, re.I)
-    if civic:
+    if civic and not parsed.query:
         return civic.group(1).lower(), f'{civic.group(4)}-{civic.group(2)}-{civic.group(3)}'
     # Small towns often link agenda/minutes PDFs directly from their own site.
     # A keyword match only schedules screening; it creates no decision claim.
@@ -451,13 +527,59 @@ def candidate_kind(url, index_url, label):
     return None
 
 
-def discovery_targets(links, page):
+def revize_file_redirect(origin, target):
+    """Accept only an origin's direct redirect to the same vendor-hosted path."""
+    try:
+        source, dest = urlsplit(origin), urlsplit(target)
+        if (source.scheme != 'https' or not source.hostname or source.username or source.password
+                or source.port not in (None, 443) or source.fragment or dest.scheme != 'https'
+                or not revize_host(dest.hostname) or dest.username or dest.password
+                or dest.port not in (None, 443) or dest.fragment or source.query != dest.query
+                or not source.path.lower().endswith(('.pdf', '.docx'))
+                or re.search(r'%(?!20)', dest.path, re.I) or '\\' in dest.path
+                or '..' in dest.path.split('/') or len(target) > 2000):
+            return False
+        source_path = re.sub(r'%20', ' ', source.path, flags=re.I)
+        dest_path = re.sub(r'%20', ' ', dest.path, flags=re.I)
+        if not dest_path.endswith(source_path):
+            return False
+        prefix = dest_path[:-len(source_path)]
+        return bool(re.fullmatch(r'/(?:revize/)?[A-Za-z0-9_-]{1,80}', prefix))
+    except (TypeError, ValueError):
+        return False
+
+
+def verified_redirect_receipt(data_dir, receipt, origin, target):
+    """Require the exact archived redirect receipt, not a constructed mapping."""
+    try:
+        addresses = receipt['resolved_ips']
+        if (receipt['url'] != origin or receipt['redirect_target'] != target
+                or receipt['status'] not in (301, 302, 303, 307, 308)
+                or not isinstance(addresses, list) or not addresses
+                or not all(public_ip(address) for address in addresses)
+                or receipt['connected_ip'] not in addresses
+                or not datetime.fromisoformat(receipt['retrieved_at'])):
+            return False
+        source_blob(data_dir, receipt['sha256'])
+        encoded = (json.dumps(receipt, sort_keys=True, separators=(',', ':')) + '\n').encode()
+        path = data_dir / 'observations' / (sha(encoded) + '.json')
+        return read_blob(path, 65_536) == encoded
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+
+
+_DEFAULT_BASE = object()
+
+
+def discovery_targets(links, page, base=_DEFAULT_BASE):
     """Prioritize bounded same-host agenda and meeting navigation."""
     host = urlsplit(page).hostname
     ranked = []
     for ordinal, (href, label) in enumerate(links):
         try:
-            target = urljoin(page, href)
+            target = resolve_page_link(page, page if base is _DEFAULT_BASE else base, href)
+            if target is None:
+                continue
             item = urlsplit(target)
             if (item.scheme != 'https' or item.hostname != host or item.port not in (None, 443)
                     or item.username or item.password or item.fragment or len(target) > 2000):
@@ -495,8 +617,11 @@ def discover_one(ref, name, website, budget):
                 rules, rows = get_robots(target_host, hosts, budget)
                 observations.extend(rows)
                 policies[target_host] = rules
-                # A robots redirect to the www alias identifies its canonical host.
-                policies[urlsplit(rows[-1][0]['url']).hostname] = rules
+                # A vendor robots file supplies policy for the original site;
+                # it does not authorize visiting the vendor as that site.
+                final_host = urlsplit(rows[-1][0]['url']).hostname
+                if final_host in hosts:
+                    policies[final_host] = rules
                 result['robots_status'] = rows[-1][0]['status']
             return allowed(policies[target_host], target)
 
@@ -514,10 +639,12 @@ def discover_one(ref, name, website, budget):
         candidates = [(final_home, body)]
         followed = set()
         for page, content in candidates:
-            links = parse_links(content)
+            links, base = page_links(content, page)
             for ordinal, (href, label) in enumerate(links):
                 try:
-                    target = urljoin(page, href)
+                    target = resolve_page_link(page, base, href)
+                    if target is None:
+                        continue
                     url = urlsplit(target)
                     shape = candidate_kind(target, page, label)
                     if shape and len(result['documents']) < 500:
@@ -538,7 +665,7 @@ def discover_one(ref, name, website, budget):
                     continue
             if page != final_home:
                 continue
-            for target in discovery_targets(links, page):
+            for target in discovery_targets(links, page, base):
                 if target in followed:
                     continue
                 followed.add(target)
@@ -674,11 +801,11 @@ def clients_from_store(db, data_dir):
             if (page, source_digest) not in receipts:
                 continue
             body = source_blob(data_dir, source_digest)
-            links = parse_links(body)
+            links, base = page_links(body, page)
             ordinal = proof['anchor_index']
             directory = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
             if (not directory or type(ordinal) is not int or not 0 <= ordinal < len(links)
-                    or urljoin(page, links[ordinal][0]) != proof['portal_url']
+                    or resolve_page_link(page, base, links[ordinal][0]) != proof['portal_url']
                     or urlsplit(proof['portal_url']).hostname != f'{client}.legistar.com'
                     or urlsplit(page).hostname.removeprefix('www.') != urlsplit(normalized_home(directory[0])).hostname.removeprefix('www.')):
                 continue
@@ -1047,16 +1174,84 @@ def extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr):
 
 def checked_document_candidate(data_dir, url, candidate):
     index_url = candidate['index_url']
-    links = parse_links(source_blob(data_dir, candidate['index_sha256']))
+    links, base = page_links(source_blob(data_dir, candidate['index_sha256']), index_url)
     anchor = candidate['anchor_index']
-    if (candidate['url'] != url or type(anchor) is not int or not 0 <= anchor < len(links)
-            or urljoin(index_url, links[anchor][0]) != url or not candidate_kind(url, index_url, links[anchor][1])):
+    if candidate['url'] != url or type(anchor) is not int or not 0 <= anchor < len(links):
         raise ValueError('document is not bound to its preserved source index')
+    linked = resolve_page_link(index_url, base, links[anchor][0])
+    if not linked or not candidate_kind(linked, index_url, links[anchor][1]):
+        raise ValueError('document is not bound to its preserved source index')
+    if 'redirect_receipt' not in candidate:
+        if linked != url:
+            raise ValueError('document is not bound to its preserved source index')
+        return
+    parsed = urlsplit(linked)
+    if parsed.query:
+        if not re.fullmatch(r't=[0-9]{1,20}', parsed.query):
+            raise ValueError('unsupported alternate document query')
+        origin = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, '', ''))
+        adjustment = 'timestamp_omitted'
+    else:
+        origin, adjustment = linked, 'direct_redirect'
+    if (candidate.get('linked_url') != linked or candidate.get('origin_url') != origin
+            or candidate.get('capture_adjustment') != adjustment
+            or not revize_file_redirect(origin, url)
+            or not verified_redirect_receipt(data_dir, candidate['redirect_receipt'], origin, url)):
+        raise ValueError('vendor document redirect is not bound to its preserved source')
+    if parsed.query:
+        target = urlsplit(url)
+        indexed_target = urlunsplit((target.scheme, target.netloc, target.path, parsed.query, ''))
+        if (not revize_file_redirect(linked, indexed_target)
+                or not verified_redirect_receipt(data_dir, candidate.get('indexed_redirect_receipt', {}), linked, indexed_target)):
+            raise ValueError('timestamped link redirect is not bound to its preserved source')
+
+
+def alternate_document(candidate, receipt, rules, budget, observations):
+    """Queue a source-directed vendor PDF; retain any timestamp uncertainty."""
+    linked = candidate['url']
+    target = receipt.get('redirect_target', '')
+    if not revize_file_redirect(linked, target):
+        return None
+    parsed = urlsplit(linked)
+    if parsed.query:
+        if not re.fullmatch(r't=[0-9]{1,20}', parsed.query):
+            return None
+        origin = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, '', ''))
+        if not allowed(rules, origin):
+            return None
+        reserved = budget.reserve()
+        if not reserved:
+            raise BudgetExhausted('research job byte budget exhausted')
+        try:
+            rows = get(origin, {parsed.hostname}, maximum=reserved, timeout=30, redirects=0, stop_at_redirect=True)
+        except ValueError as error:
+            if str(error) == 'HTTP response exceeds byte limit' and reserved < 20 * 1024 * 1024:
+                raise BudgetExhausted('remaining run budget cannot hold this response') from error
+            raise
+        observations.extend(rows)
+        redirect, body = rows[-1]
+        budget.release_unused(reserved - len(body))
+        adjustment = 'timestamp_omitted'
+    else:
+        origin, redirect, adjustment = linked, receipt, 'direct_redirect'
+    target = redirect.get('redirect_target', '')
+    if redirect['status'] not in (301, 302, 303, 307, 308) or not revize_file_redirect(origin, target):
+        return None
+    if parsed.query:
+        initial = urlsplit(receipt['redirect_target'])
+        if target != urlunsplit((initial.scheme, initial.netloc, initial.path, '', '')):
+            return None
+    alternate = {**candidate, 'url': target, 'linked_url': linked, 'origin_url': origin,
+                 'capture_adjustment': adjustment, 'redirect_receipt': redirect}
+    if parsed.query:
+        alternate['indexed_redirect_receipt'] = receipt
+    return alternate
 
 
 def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_cache):
     """Rebind the index anchor, then fetch and sandbox-extract one document."""
     observations = []
+    reserved = None
     try:
         url = candidate['url']
         checked_document_candidate(data_dir, url, candidate)
@@ -1071,10 +1266,17 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
             reserved = budget.reserve()
             if not reserved:
                 return {'state': 'deferred'}, observations
-            rows = get(url, {host}, maximum=reserved, timeout=30, redirects=0)
+            # Preserve the redirect response and charge only the bytes read.
+            # Redirects remain unfollowed for document-source binding.
+            rows = get(url, {host}, maximum=reserved, timeout=30, redirects=0, stop_at_redirect=True)
             observations.extend(rows)
-        receipt, pdf = rows[-1]
-        budget.release_unused(reserved - len(pdf))
+            receipt, pdf = rows[-1]
+            budget.release_unused(reserved - len(pdf))
+            if receipt['status'] in (301, 302, 303, 307, 308) and 'redirect_receipt' not in candidate:
+                alternate = alternate_document(candidate, receipt, rules, budget, observations)
+                if alternate:
+                    return {'state': 'error', 'error': 'source redirected; alternate document queued',
+                            'alternate_candidate': alternate}, observations
         if receipt['status'] != 200:
             raise ValueError(f"not a PDF (HTTP {receipt['status']})")
         archive(data_dir, observations)
@@ -1089,7 +1291,14 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
     except RobotsDenied as error:
         observations.extend(error.observations)
         return {'state': 'error', 'error': str(error)[:180]}, observations
-    except (OSError, UnicodeError, ValueError, RuntimeError, subprocess.TimeoutExpired, KeyError) as error:
+    except BudgetExhausted:
+        return {'state': 'deferred'}, observations
+    except ValueError as error:
+        if (str(error) == 'HTTP response exceeds byte limit' and reserved is not None
+                and reserved < 20 * 1024 * 1024):
+            return {'state': 'deferred'}, observations
+        return {'state': 'error', 'error': str(error)[:180]}, observations
+    except (OSError, UnicodeError, RuntimeError, subprocess.TimeoutExpired, KeyError) as error:
         return {'state': 'error', 'error': str(error)[:180]}, observations
 
 
@@ -1113,6 +1322,7 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
         SELECT jurisdiction_ref,candidate_json,url,state,last_attempt_at,
           ROW_NUMBER() OVER (PARTITION BY jurisdiction_ref ORDER BY
             COALESCE(last_attempt_at,''),
+            CASE WHEN json_extract(candidate_json,'$.redirect_receipt') IS NOT NULL THEN 0 ELSE 1 END,
             CASE WHEN lower(url) LIKE '%/minutes/%' THEN 0 ELSE 1 END,
             COALESCE(json_extract(candidate_json,'$.meeting_date'),'') DESC, url DESC) AS turn
         FROM document_candidates WHERE {condition}
@@ -1150,6 +1360,10 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
             else:
                 errors += 1
             with db:
+                alternate = result.get('alternate_candidate')
+                if alternate:
+                    db.execute('''INSERT OR IGNORE INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                  VALUES (?,?,?,'pending',?)''', (ref, alternate['url'], json.dumps(alternate), utcnow()))
                 if old_state == 'matched' and result['state'] in ('matched', 'no_match'):
                     previous = db.execute('SELECT candidate_json,result_json,updated_at FROM document_candidates WHERE jurisdiction_ref=? AND url=?',
                                           (ref, candidate['url'])).fetchone()
@@ -1267,9 +1481,12 @@ def civic_history(data_dir, db, limit, per_place, workers, only=None, pending_ca
                 observations.extend(rows)
             meta = rows[-1][0]
             documents = []
-            for ordinal, (href, label) in enumerate(parse_links(body)):
+            links, base = page_links(body, url)
+            for ordinal, (href, label) in enumerate(links):
                 try:
-                    target = urljoin(url, href)
+                    target = resolve_page_link(url, base, href)
+                    if target is None:
+                        continue
                     shape = candidate_kind(target, url, label)
                     if shape and shape[1] and not shape[1].startswith(f"{item['year']}-"):
                         continue
@@ -1913,12 +2130,19 @@ def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
     """Bind a scoped recorded voter to a pinned JPEG from the county budget."""
     if assets_dir is None or ref != 'us-co-county-08005' or client != 'arapahoe':
         return None
-    proof = json.loads(read_blob(ROOT / 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json', 100_000))
-    url = 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf'
-    source_digest = 'dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43'
-    page_digest = '23fc3217eaa1024751d62fde024dcf73f9f0ba6560fb4f86d7df1534f9fc6777'
-    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != 7
-            or proof['page_fixture'] != 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-page.pdf'
+    later = vote.get('person_id') in (571, 572)
+    year, page = (2024, 61) if later else (2022, 7)
+    proof = json.loads(read_blob(ROOT / f'fixtures/atlas/portrait-sources/arapahoe-{year}-budget-proof.json', 100_000))
+    if later:
+        url = 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2024%20Adopted%20Budget.pdf'
+        source_digest = '4e5366320ab2e190c4f5ab080669458566ed7a82fc666da85330db7588528f0c'
+        page_digest = '53e344b2f0f9747f1f1461e38934eafea675c1c81963c0901629411e99aa6531'
+    else:
+        url = 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf'
+        source_digest = 'dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43'
+        page_digest = '23fc3217eaa1024751d62fde024dcf73f9f0ba6560fb4f86d7df1534f9fc6777'
+    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != page
+            or proof['page_fixture'] != f'fixtures/atlas/portrait-sources/arapahoe-{year}-budget-page.pdf'
             or proof['page_fixture_sha256'] != page_digest
             or sha(read_blob(ROOT / proof['page_fixture'], 2_000_000)) != page_digest):
         raise ValueError('county budget portrait proof differs')
@@ -1929,6 +2153,17 @@ def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
         raise ValueError('county budget source receipt is missing')
     source_blob(data_dir, source_digest, 20 * 1024 * 1024)
     item = matches[0]
+    identity_url = None
+    if later and vote['person_id'] == 572:
+        identity_url = 'https://www.jessicaforcommissioner.com/home-1'
+        identity_digest = '0ba051c1be247ce00d6ea2aaa282af5707fc7f2fd001aa0ed4fb26fc2fd90712'
+        if (proof.get('alias_source_url') != identity_url or proof.get('alias_source_sha256') != identity_digest
+                or (identity_url, identity_digest) not in receipts):
+            raise ValueError('missing commissioner name-identity source')
+        nodes = visible_text(source_blob(data_dir, identity_digest))
+        if (len(nodes) < 3 or nodes[0] != 'Home (Copy) — Re-elect Jessica Campbell'
+                or nodes[2] != 'Hello! I’m Jessica Campbell-Swanson, your Democratic candidate for Arapahoe County Commissioner District 2.'):
+            raise ValueError('commissioner name-identity source differs')
     image_digest = item['sha256']
     if not re.fullmatch(r'[0-9a-f]{64}', image_digest) or type(item['image_index']) is not int:
         raise ValueError('invalid budget portrait identity')
@@ -1949,11 +2184,14 @@ def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
             handle.write(image)
             handle.flush()
             os.fsync(handle.fileno())
-    return {'src': f'./research-portraits/{image_digest}.jpg', 'sha256': image_digest,
+    result = {'src': f'./research-portraits/{image_digest}.jpg', 'sha256': image_digest,
             'source_kind': 'embedded_pdf', 'source_url': url, 'source_document_sha256': source_digest,
-            'source_page': 7, 'embedded_image_index': item['image_index'],
-            'caption': f"2022 county board; source labels this portrait {item['source_label']}.",
+            'source_page': page, 'embedded_image_index': item['image_index'],
+            'caption': f"{year} county board; source labels this portrait {item['source_label']}.",
             'portrait_date': 'not_established'}
+    if identity_url:
+        result['identity_source_url'] = identity_url
+    return result
 
 
 def littleton_report_portrait(data_dir, receipts, ref, client, vote, assets_dir):
@@ -2240,18 +2478,12 @@ def export_report(data_dir, db, output, assets_dir=None):
             prefix = {'pdf': b'%PDF-', 'docx': b'PK\x03\x04'}.get(format_name)
             if not prefix or not receipt_valid(receipt, url, doc_digest) or not source_blob(data_dir, doc_digest, 20 * 1024 * 1024).startswith(prefix):
                 raise ValueError('document receipt mismatch')
-            proof = source_blob(data_dir, candidate['index_sha256'])
             if (candidate['index_url'], candidate['index_sha256']) not in receipts:
                 raise ValueError('missing captured index receipt')
-            links = parse_links(proof)
-            anchor = candidate['anchor_index']
-            if type(anchor) is not int or not 0 <= anchor < len(links) or urljoin(candidate['index_url'], links[anchor][0]) != url:
-                raise ValueError('document is not bound to its preserved index anchor')
-            if urlsplit(url).hostname != urlsplit(candidate['index_url']).hostname:
-                raise ValueError('index and document hosts differ')
+            checked_document_candidate(data_dir, url, candidate)
             directory_row = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
             directory_host = urlsplit(normalized_home(directory_row[0])).hostname.removeprefix('www.') if directory_row else ''
-            if not directory_host or directory_host != urlsplit(url).hostname.removeprefix('www.'):
+            if not directory_host or directory_host != urlsplit(candidate['index_url']).hostname.removeprefix('www.'):
                 raise ValueError('document is not attached to its directory website lead')
             finding = result['finding']
             text_digest = result['extracted_sha256']
@@ -2292,7 +2524,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                     # A missing or mismatched portrait cannot suppress a
                     # separate, valid source reference.
                     continue
-            records.append({'id': 'co-document-' + sha((ref + '\0' + doc_digest).encode())[:24],
+            record = {'id': 'co-document-' + sha((ref + '\0' + doc_digest).encode())[:24],
                 'kind': 'meeting_document', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref, 'jurisdiction': jurisdiction_name(geography[ref]),
                 'file': public_text(candidate.get('label'), 120), 'title': title,
                 'signals': labels, 'source_status': '', 'source_url': url,
@@ -2301,7 +2533,11 @@ def export_report(data_dir, db, output, assets_dir=None):
                 'people_context': people,
                 'document_format': format_name,
                 'historical': bool(historical),
-                'ocr': result.get('extraction_status') == 'complete_with_ocr'})
+                'ocr': result.get('extraction_status') == 'complete_with_ocr'}
+            if 'redirect_receipt' in candidate:
+                record.update(capture_adjustment=candidate['capture_adjustment'],
+                              indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
+            records.append(record)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             omitted += 1
             omission_reasons[str(error)[:100]] += 1

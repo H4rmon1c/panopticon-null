@@ -1,0 +1,15 @@
+{
+  "source_url": "https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2024%20Adopted%20Budget.pdf",
+  "source_sha256": "4e5366320ab2e190c4f5ab080669458566ed7a82fc666da85330db7588528f0c",
+  "source_page": 61,
+  "page_fixture": "fixtures/atlas/portrait-sources/arapahoe-2024-budget-page.pdf",
+  "page_fixture_sha256": "53e344b2f0f9747f1f1461e38934eafea675c1c81963c0901629411e99aa6531",
+  "page_fixture_note": "A one-page derivative made from source page 61. The private archive retains the original complete PDF and its network receipt.",
+  "alias_source_url": "https://www.jessicaforcommissioner.com/home-1",
+  "alias_source_sha256": "0ba051c1be247ce00d6ea2aaa282af5707fc7f2fd001aa0ed4fb26fc2fd90712",
+  "alias_source_note": "The self-published campaign page uses Jessica Campbell in its title and identifies Jessica Campbell-Swanson as the District 2 candidate in visible text.",
+  "portraits": [
+    {"name":"Jessica Campbell","source_label":"Jessica Campbell-Swanson","person_id":572,"image_index":1,"sha256":"3ea3f82d546b3de7b1d07cfdb69e429e643b6ade00677f189bdee6fc59b1e5a6"},
+    {"name":"Leslie Summey","source_label":"Leslie Summey","person_id":571,"image_index":3,"sha256":"942839934eb8ea112842148a95aa7deb38f94793e503d7ea5bf76e09cf439da2"}
+  ]
+}
