@@ -44,6 +44,43 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_springs_download_without_filename_keyword_requires_complete_original_source_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                origin = 'https://coloradosprings.gov/sites/default/files/parks_board_october_2022.draft_.pdf'
+                page = 'https://coloradosprings.gov/document/parksboardoctober2022.draft.pdf'
+                pdf = 'https://coloradosprings.gov/system/files/parks_board_october_2022.draft_.pdf'
+                index = 'https://coloradosprings.gov/parksboard'
+                source = f'<a href="{origin}">October 13, 2022 minutes</a>'.encode()
+                html = f'<a href="{pdf}">Download PDF</a>'.encode()
+                redirect = receipt(origin, b''); redirect.update(status=301, redirect_target=page)
+                module.archive(root, [(receipt(index, source), source), (receipt(page, html), html), (redirect, b'')])
+                candidate = {'url': origin, 'index_url': index, 'index_sha256': module.sha(source),
+                             'anchor_index': 0, 'kind': 'minutes', 'label': 'October 13, 2022 minutes'}
+                alternate = module.springs_page_candidate(candidate, page, html, redirect)
+                self.assertEqual(alternate['url'], pdf)
+                self.assertEqual(alternate['kind'], 'minutes')
+                self.assertEqual(alternate['springs_source']['index_sha256'], module.sha(source))
+                module.checked_document_candidate(root, pdf, alternate)
+                changes = [
+                    {'springs_source': {**alternate['springs_source'], 'url': origin.replace('october', 'january')}},
+                    {'springs_source': {**alternate['springs_source'], 'anchor_index': 99}},
+                    {'springs_source': {**alternate['springs_source'], 'index_sha256': '0' * 64}},
+                    {'springs_source': {**alternate['springs_source'], 'index_url': 'https://user@coloradosprings.gov/parksboard'}},
+                    {'springs_source': {**alternate['springs_source'], 'index_url': 'https://coloradosprings.gov:8443/parksboard'}},
+                    {'springs_source': {**alternate['springs_source'], 'redirect_receipt': {**redirect, 'status': 200}}},
+                    {'kind': 'agenda'},
+                    {'label': 'Unrelated claims'},
+                ]
+                for change in changes:
+                    with self.subTest(change=change), self.assertRaises((ValueError, OSError)):
+                        module.checked_document_candidate(root, pdf, {**alternate, **change})
+                result, _ = module.screen_one(root, 'us-co-place-0816495', alternate, '/bin/false',
+                                               __import__('threading').Lock(), module.DownloadBudget(50_000_000), False, {})
+                self.assertIn('outside the city', result['error'])
+            finally:
+                db.close()
     def test_explicit_immediate_redirect_retry_is_scoped_and_keeps_other_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); db = module.root_store(root)
