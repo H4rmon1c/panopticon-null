@@ -9,6 +9,7 @@ import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
+from urllib.parse import parse_qs, urlsplit
 import zipfile
 from unittest.mock import patch
 
@@ -125,6 +126,109 @@ class ResearchTests(unittest.TestCase):
                 attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
                 self.assertEqual((attempt['website_check'], attempt['checked_at']),
                                  ('site_checked', recovered['checked_at']))
+            finally:
+                db.close()
+
+    def test_portal_scans_rotate_clients_and_resume_bounded_pagination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            calls = []
+            def fetch(url, *_args, **_kwargs):
+                parsed = urlsplit(url)
+                client = parsed.path.split('/')[2]
+                offset = int(parse_qs(parsed.query)['$skip'][0])
+                calls.append((client, offset))
+                body = b'[]' if (client, offset) == ('a', 4) else b'[{}]'
+                return [(receipt(url, body), body)]
+            try:
+                with patch.object(module, 'clients_from_store', return_value={'a': 'A', 'b': 'B'}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'allowed', return_value=True), \
+                     patch.object(module, 'archive'), patch.object(module, 'get', side_effect=fetch):
+                    module.scan(root, db, 1, 2, 1)
+                    module.scan(root, db, 1, 2, 1)
+                    module.scan(root, db, 1, 2, 1)
+                    module.scan(root, db, 1, 2, 1, only='a')
+                self.assertEqual(calls, [('a', 0), ('a', 1), ('b', 0), ('b', 1), ('a', 2), ('a', 3), ('a', 4)])
+                self.assertEqual(db.execute("SELECT next_page FROM scan_progress WHERE client='a'").fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT next_page FROM scan_progress WHERE client='b'").fetchone()[0], 2)
+                with db:
+                    db.execute("UPDATE scan_progress SET next_page=5 WHERE client='a'")
+                with patch.object(module, 'clients_from_store', return_value={'a': 'A'}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'allowed', return_value=True), patch.object(module, 'archive'), \
+                     patch.object(module, 'get', side_effect=OSError('fixture timeout')):
+                    module.scan(root, db, 1, 2, 1)
+                self.assertEqual(db.execute("SELECT next_page FROM scan_progress WHERE client='a'").fetchone()[0], 5)
+                with patch.object(module, 'clients_from_store', return_value={'a': 'A'}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'allowed', return_value=True), patch.object(module, 'archive'), \
+                     patch.object(module, 'get', side_effect=fetch):
+                    module.scan(root, db, 1, 1, 2)
+                self.assertEqual(calls[-1], ('a', 0))
+                self.assertEqual(db.execute("SELECT next_page,page_size FROM scan_progress WHERE client='a'").fetchone(), (0, 2))
+            finally:
+                db.close()
+
+    def test_retry_and_action_queues_prioritize_unattempted_then_oldest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                for ref, attempted in [('a', '2000-01-02T00:00:00+00:00'),
+                                       ('b', '2000-01-01T00:00:00+00:00'), ('z', None)]:
+                    url = f'https://example.org/{ref}.pdf'
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,
+                                  result_json,updated_at,last_attempt_at) VALUES (?,?,?,'error','{}',?,?)''',
+                               (ref, url, json.dumps({'url': url}), module.utcnow(), attempted))
+                db.commit()
+                selected = []
+                def screen(_root, ref, *_args):
+                    selected.append(ref)
+                    return {'state': 'error', 'error': 'fixture failure'}, []
+                with patch.object(module, 'screen_one', side_effect=screen):
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1, retry_errors=True)
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1, retry_errors=True)
+                self.assertEqual(selected, ['z', 'b'])
+                for client, matter in [('a', 1), ('z', 2)]:
+                    db.execute('INSERT INTO leads VALUES (?,?,?,?,?,?,?,?,?)',
+                               (client, 'ref', client, matter, 0, 0, 'a' * 64, '{}', module.utcnow()))
+                db.execute("INSERT INTO matter_action_checks(client,matter_id,checked_at,status) VALUES ('a',1,'2000-01-01T00:00:00+00:00','error')")
+                db.commit()
+                with patch.object(module, 'clients_from_store', return_value={}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), patch.object(module, 'archive'):
+                    module.collect_actions(root, db, 1)
+                self.assertEqual(db.execute("SELECT status FROM matter_action_checks WHERE client='z'").fetchone()[0], 'unbound_client')
+                self.assertEqual(db.execute("SELECT status FROM matter_action_checks WHERE client='a'").fetchone()[0], 'error')
+            finally:
+                db.close()
+
+    def test_portrait_queue_rotates_after_failed_lookups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                content = b'fixture\n'
+                digest = module.sha(content)
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / digest).write_bytes(content)
+                result = json.dumps({'extracted_sha256': digest,
+                                     'finding': {'citations': [{'locator': {'start': 1}}]}})
+                for ref in ['a', 'b', 'z']:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, f'https://example.org/{ref}.pdf', '{}', result, module.utcnow()))
+                db.commit()
+                with patch.object(module, 'officials_near_reference', return_value=[{'name': 'Test Official'}]), \
+                     patch.object(module, 'observation_keys', return_value=set()), \
+                     patch.object(module, 'clients_from_store', return_value={}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), patch.object(module, 'archive'), \
+                     patch.object(module, 'html_page', side_effect=OSError('fixture unavailable')):
+                    module.collect_portraits(root, db, 2)
+                    self.assertEqual({row[0] for row in db.execute('SELECT jurisdiction_ref FROM portrait_attempts')}, {'a', 'b'})
+                    module.collect_portraits(root, db, 2)
+                self.assertEqual({row[0] for row in db.execute('SELECT jurisdiction_ref FROM portrait_attempts')}, {'a', 'b', 'z'})
             finally:
                 db.close()
 

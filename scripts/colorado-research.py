@@ -98,6 +98,10 @@ def root_store(path):
         client TEXT NOT NULL, page INTEGER NOT NULL, receipt_json TEXT NOT NULL,
         PRIMARY KEY(client,page)
       );
+      CREATE TABLE IF NOT EXISTS scan_progress (
+        client TEXT PRIMARY KEY, next_page INTEGER NOT NULL,
+        page_size INTEGER NOT NULL, attempted_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS scan_history (
         client TEXT NOT NULL, page INTEGER NOT NULL, source_sha256 TEXT NOT NULL,
         receipt_json TEXT NOT NULL, PRIMARY KEY(client,page,source_sha256)
@@ -116,6 +120,9 @@ def root_store(path):
       CREATE TABLE IF NOT EXISTS official_portraits (
         jurisdiction_ref TEXT NOT NULL, name TEXT NOT NULL, portrait_json TEXT NOT NULL,
         PRIMARY KEY(jurisdiction_ref,name)
+      );
+      CREATE TABLE IF NOT EXISTS portrait_attempts (
+        jurisdiction_ref TEXT PRIMARY KEY, attempted_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS document_history (
         jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, source_sha256 TEXT NOT NULL,
@@ -694,9 +701,15 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
     rules, robots = get_robots(API_HOST, budget=budget)
     archive(data_dir, robots)
     print(f'Screening official matter titles in up to {min(max_clients, len(clients))} linked portals', flush=True)
-    for client, ref in sorted(clients.items())[:max_clients]:
+    attempts = {client: (page, size, at) for client, page, size, at in
+                db.execute('SELECT client,next_page,page_size,attempted_at FROM scan_progress')}
+    ordered = sorted(clients.items(), key=lambda item: (attempts.get(item[0], (0, 0, ''))[2], item[0]))
+    for client, ref in ordered[:max_clients]:
         count = 0
-        for page in range(pages):
+        saved_page, saved_size, _ = attempts.get(client, (0, page_size, ''))
+        next_page = saved_page if saved_size == page_size and 0 <= saved_page < 100 else 0
+        for _ in range(pages):
+            page = next_page
             url = query_url(client, page, page_size)
             if not allowed(rules, url):
                 print(f'{client}: source path blocked by robots policy', flush=True)
@@ -710,6 +723,7 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
                 items = json.loads(body)
                 if not isinstance(items, list) or len(items) > page_size:
                     raise ValueError('unexpected matter page shape')
+                next_page = page + 1 if len(items) == page_size and page < 99 else 0
                 with db:
                     db.execute('INSERT OR REPLACE INTO scans VALUES (?,?,?)', (client, page, json.dumps(receipt)))
                     db.execute('INSERT OR IGNORE INTO scan_history VALUES (?,?,?,?)',
@@ -731,11 +745,16 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
                                    (record_id, ref, client, matter, page, index, receipt['sha256'],
                                     json.dumps(record), utcnow()))
                         count += 1
-                if len(items) < page_size:
+                    db.execute('INSERT OR REPLACE INTO scan_progress VALUES (?,?,?,?)',
+                               (client, next_page, page_size, utcnow()))
+                if next_page == 0:
                     break
             except (OSError, UnicodeError, ValueError, RuntimeError, json.JSONDecodeError) as error:
                 print(f'{client}: page {page + 1} could not be screened ({str(error)[:120]})', flush=True)
                 break
+        with db:
+            db.execute('INSERT OR REPLACE INTO scan_progress VALUES (?,?,?,?)',
+                       (client, next_page, page_size, utcnow()))
         print(f'{client}: {count} potential matter references', flush=True)
 
 
@@ -770,16 +789,21 @@ def capture_action_json(data_dir, url, rules, budget, expected):
 def collect_actions(data_dir, db, limit):
     clients = clients_from_store(db, data_dir)
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    leads = db.execute('''SELECT client,matter_id,jurisdiction_ref FROM leads
-                          WHERE NOT EXISTS (SELECT 1 FROM matter_action_checks c
-                            WHERE c.client=leads.client AND c.matter_id=leads.matter_id AND c.checked_at>=?)
-                          ORDER BY client,matter_id LIMIT ?''', (cutoff, limit)).fetchall()
+    leads = db.execute('''SELECT l.client,l.matter_id,l.jurisdiction_ref FROM leads l
+                          LEFT JOIN matter_action_checks c ON c.client=l.client AND c.matter_id=l.matter_id
+                          WHERE c.checked_at IS NULL OR c.checked_at<?
+                          ORDER BY COALESCE(c.checked_at,''),l.client,l.matter_id LIMIT ?''', (cutoff, limit)).fetchall()
     budget = DownloadBudget(100 * 1024 * 1024)
     rules, robots = get_robots(API_HOST, budget=budget)
     archive(data_dir, robots)
     print(f'Checking recorded actions for up to {len(leads)} source-matched matters', flush=True)
     for count, (client, matter, ref) in enumerate(leads, 1):
         if clients.get(client) != ref:
+            with db:
+                db.execute('''INSERT INTO matter_action_checks(client,matter_id,checked_at,status)
+                              VALUES (?,?,?,'unbound_client') ON CONFLICT(client,matter_id)
+                              DO UPDATE SET checked_at=excluded.checked_at,status=excluded.status''',
+                           (client, matter, utcnow()))
             continue
         status = 'complete'
         latest_history = None
@@ -914,7 +938,8 @@ def collect_suite(data_dir, db, limit, pages):
                          WHERE state='pending' OR (state='error' AND (last_attempt_at IS NULL OR last_attempt_at<=?))
                            OR (state IN ('matched','no_match') AND updated_at<=?
                              AND (last_attempt_at IS NULL OR last_attempt_at<=?))
-                         ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END,meeting_id DESC LIMIT ?''',
+                         ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END,
+                           COALESCE(last_attempt_at,''),meeting_id DESC LIMIT ?''',
                       (day_ago, week_ago, day_ago, limit)).fetchall()
     print(f'Screening up to {len(rows)} county-linked AgendaSuite meeting pages', flush=True)
     for count, (meeting, raw, old_state, old_raw, updated) in enumerate(rows, 1):
@@ -1061,12 +1086,13 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
         condition, parameters = "state='pending'", ()
     rows = db.execute(f'''
       SELECT jurisdiction_ref,candidate_json,state FROM (
-        SELECT jurisdiction_ref,candidate_json,url,state,
+        SELECT jurisdiction_ref,candidate_json,url,state,last_attempt_at,
           ROW_NUMBER() OVER (PARTITION BY jurisdiction_ref ORDER BY
+            COALESCE(last_attempt_at,''),
             CASE WHEN lower(url) LIKE '%/minutes/%' THEN 0 ELSE 1 END,
             COALESCE(json_extract(candidate_json,'$.meeting_date'),'') DESC, url DESC) AS turn
         FROM document_candidates WHERE {condition}
-      ) WHERE turn <= ? ORDER BY turn,jurisdiction_ref LIMIT ?
+      ) WHERE turn <= ? ORDER BY turn,COALESCE(last_attempt_at,''),jurisdiction_ref LIMIT ?
     ''', (*parameters, per_place, limit)).fetchall()
     hosts = {urlsplit(json.loads(raw)['url']).hostname for _, raw, _ in rows}
     locks = {host: threading.Lock() for host in hosts}
@@ -1151,11 +1177,11 @@ def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=
     parameters = (limit,) if revalidate else (cutoff, retry_unavailable, limit)
     rows = db.execute(f'''SELECT jurisdiction_ref,url,candidate_json,old_result,old_state FROM (
         SELECT d.jurisdiction_ref,d.url,d.candidate_json,d.state AS old_state,
-          d.result_json AS old_result,
-          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY d.url DESC) AS turn
+          d.result_json AS old_result,o.attempted_at AS last_attempt,
+          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY COALESCE(o.attempted_at,''),d.url DESC) AS turn
         FROM document_candidates d LEFT JOIN ocr_attempts o ON o.jurisdiction_ref=d.jurisdiction_ref AND o.url=d.url
         WHERE {condition}
-      ) ORDER BY turn,jurisdiction_ref LIMIT ?''', parameters).fetchall()
+      ) ORDER BY turn,COALESCE(last_attempt,''),jurisdiction_ref LIMIT ?''', parameters).fetchall()
     latest, available = saved_receipts(data_dir, {url for _, url, _, _, _ in rows})
 
     def retry(ref, url, raw, old_result):
@@ -1262,10 +1288,11 @@ def docx_saved_documents(data_dir, db, limit, workers, revalidate=False):
     parameters = (limit,) if revalidate else (cutoff, limit)
     rows = db.execute(f'''SELECT jurisdiction_ref,url,candidate_json,old_result,old_state FROM (
         SELECT d.jurisdiction_ref,d.url,d.candidate_json,d.result_json AS old_result,d.state AS old_state,
-          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY d.url DESC) AS turn
+          a.attempted_at AS last_attempt,
+          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY COALESCE(a.attempted_at,''),d.url DESC) AS turn
         FROM document_candidates d LEFT JOIN docx_attempts a ON a.jurisdiction_ref=d.jurisdiction_ref AND a.url=d.url
         WHERE {condition}
-      ) ORDER BY turn,jurisdiction_ref LIMIT ?''', parameters).fetchall()
+      ) ORDER BY turn,COALESCE(last_attempt,''),jurisdiction_ref LIMIT ?''', parameters).fetchall()
     latest, available = saved_receipts(data_dir, {url for _, url, _, _, _ in rows})
 
     def attempt(ref, url, raw, old_raw):
@@ -1533,11 +1560,13 @@ def collect_portraits(data_dir, db, limit):
             continue
     budget = DownloadBudget(50 * 1024 * 1024)
     stored = 0
-    for ref, people in sorted(names.items())[:limit]:
-        row = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
-        if not row:
-            continue
+    attempts = dict(db.execute('SELECT jurisdiction_ref,attempted_at FROM portrait_attempts'))
+    ordered = sorted(names.items(), key=lambda item: (attempts.get(item[0], ''), item[0]))
+    for ref, people in ordered[:limit]:
         try:
+            row = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
+            if not row:
+                continue
             host = urlsplit(normalized_home(row[0])).hostname
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
@@ -1588,6 +1617,9 @@ def collect_portraits(data_dir, db, limit):
                 stored += 1
         except (OSError, UnicodeError, ValueError, RuntimeError, json.JSONDecodeError) as error:
             print(f'{ref}: official portrait search incomplete ({str(error)[:100]})', flush=True)
+        finally:
+            with db:
+                db.execute('INSERT OR REPLACE INTO portrait_attempts VALUES (?,?)', (ref, utcnow()))
     print(f'Preserved {stored} identity-labeled official portrait(s)', flush=True)
 
 

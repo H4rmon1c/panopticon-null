@@ -17,7 +17,10 @@ no relevant decision exists.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of
    pages for configured vendor and technology terms. A title match is a lead,
-   not proof of approval or deployment.
+   not proof of approval or deployment. The collector rotates between portals
+   and resumes pagination across runs, resetting after the final page or the
+   100-page safety cap; changing page size also resets the cursor. Results can
+   shift while a portal is being paged, so this is not a complete census.
    For El Paso County, follow the county's own link to the AgendaSuite calendar
    and screen the public meeting pages linked from its recent calendar. That
    portal includes other public bodies, so a match is labeled as a portal
@@ -61,6 +64,9 @@ prior matches if a refresh fails; changed captures retain private history and
 are labeled historical where appropriate. A failed website rediscovery also
 preserves earlier portal proofs and reports the latest attempt as unavailable;
 an earlier portal proof establishes a past link, not that the link is current.
+Bounded document retries, action checks, and portrait lookups prioritize
+unchecked and oldest work so a growing queue does not continually revisit
+the same jurisdictions first.
 These safeguards are not a claim
 that every public source is accessible or every automated match is correct.
 New collection stops if the private volume has under 2 GiB or 4,096 free

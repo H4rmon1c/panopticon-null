@@ -29,7 +29,7 @@ function render(report) {
   const latest = (item) => (item.actions ?? []).reduce((date, action) =>
     /^\d{4}-\d{2}-\d{2}$/.test(action.date) && action.date > date ? action.date : date, '');
   matches.sort((left, right) => latest(right).localeCompare(latest(left)) || left.jurisdiction.localeCompare(right.jurisdiction));
-  count.textContent = `${matches.length.toLocaleString()} matches${recordId ? ' for this reference' : jurisdiction ? ' in this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
+  count.textContent = `${matches.length.toLocaleString()} ${matches.length === 1 ? 'match' : 'matches'}${recordId ? ' for this reference' : jurisdiction ? ' in this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
   results.replaceChildren();
   for (const item of matches.slice(0, 100)) {
     const card = node('article', 'card');
@@ -114,7 +114,10 @@ function render(report) {
       }
       card.append(people);
     }
-    card.append(node('p', 'note', 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
+    const hasRecordedVotes = (item.actions ?? []).some((motion) => motion.votes.length > 0);
+    card.append(node('p', 'note', hasRecordedVotes
+      ? 'Recorded votes are shown with their scope above. A specific contract approval or deployment is not yet established.'
+      : 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
     const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
       item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
