@@ -56,9 +56,9 @@ outcome, within one bounded item section. If the item heading repeats in a
 multi-meeting document, the builder refuses the link. Without it the output
 remains a screening proposal. A `contract_reference`
 only establishes that the cited text mentions a contract. The
-`contract_award_link` output stays
-`not_established` until a separate, purpose-built award or approval chain can
-verify it. Global role, term, and portrait claims are rejected because the
+`contract_award_link` output stays `not_established` unless the narrow
+same-line award-authorization rule below verifies it. Global role, term, and
+portrait claims are rejected because the
 current input has no named official subject; use the named voter fields below.
 
 The `votes` object uses `scope` `not_established`, `direct_item`, or
