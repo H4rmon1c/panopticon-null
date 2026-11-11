@@ -13,6 +13,8 @@
   text-decoration: underline;
 }
 
+.civic-research-link { color: var(--civic-blue); text-underline-offset: 3px; }
+
 .coverage-dialog {
   position: fixed;
   z-index: 1000;

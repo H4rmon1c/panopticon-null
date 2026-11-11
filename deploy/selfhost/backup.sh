@@ -24,7 +24,7 @@ for tree in evidence records; do
     [[ -d "$private_root/$tree" && ! -L "$private_root/$tree" ]] || exit 1
 done
 extra_paths=()
-for tree in discovery-candidates discovery-archives; do
+for tree in discovery-candidates discovery-archives research; do
     if [[ -e "$private_root/$tree" || -L "$private_root/$tree" ]]; then
         [[ -d "$private_root/$tree" && ! -L "$private_root/$tree" ]] || exit 1
         extra_paths+=("$private_root/$tree")

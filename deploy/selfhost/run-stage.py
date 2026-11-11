@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-STAGES = ('collect', 'candidates', 'publish')
+STAGES = ('collect', 'candidates', 'research', 'publish')
 MAX_AGE = 172800
 
 
@@ -127,7 +127,7 @@ def publish_health(state, data_dir, repo_dir):
     public = {'schema_version': 'panopticon-health-v1', 'generated_at': timestamp(moment),
               'state': status, 'stale_after_seconds': MAX_AGE, 'stages': stages,
               'source_reviews': reviews,
-              'freshness_note': 'Publication success does not establish a fresh source fetch. Collection success applies only to the configured reviewed source schedule; coverage is reported separately.'}
+              'freshness_note': 'Publication success does not establish a fresh source fetch. Collection success applies only to its configured schedule; research success does not establish complete coverage.'}
     output = os.environ.get('PNUL_PUBLIC_HEALTH_PATH')
     if output:
         path = Path(output)

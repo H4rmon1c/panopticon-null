@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory() as temporary:
     base=Path(temporary); private=base/'private';private.mkdir()
-    for name in ('evidence','records','discovery-candidates','discovery-archives'): (private/name).mkdir()
+    for name in ('evidence','records','discovery-candidates','discovery-archives','research'): (private/name).mkdir()
     with sqlite3.connect(private/'pnull.db') as c:
         c.execute('CREATE TABLE proof (value TEXT)');c.execute("INSERT INTO proof VALUES ('retained')")
     release=base/'site/releases/one';release.mkdir(parents=True)
@@ -20,6 +20,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert 'never-print-me' not in (result.stdout+result.stderr).decode()
     saved=json.loads((base/'args').read_text())
     assert str(private/'discovery-candidates') in saved and str(private/'discovery-archives') in saved
+    assert str(private/'research') in saved
     env['RESTIC_REPOSITORY']=str(base/'local-backup')
     assert subprocess.run(script,env=env,capture_output=True).returncode!=0
     print('Backup coherent SQLite snapshot, cleanup, and off-server destination checks passed.')

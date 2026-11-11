@@ -1,9 +1,11 @@
 import { lookupPortrait } from "./lookup.js";
+import { denverPortraits } from "./denver-2023.js";
 
 // Officially published portraits identify people named in public roll calls.
 // They do not prove a vote, office term, contract, or appearance on the vote date.
 // Each local image is byte-for-byte verified by scripts/validate.mjs.
 export const votePortraits = Object.freeze({
+  ...denverPortraits,
   "recorded_voter_co_678": {
     "name": "Tom Bailey",
     "src": "./portraits/tom-bailey.jpg",

@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory() as temporary:
         return json.loads(health.read_text())
     run('collect')
     run('candidates')
+    run('research')
     state=run('publish')
     assert state['state']=='ok' and state['stages']['candidates']['state']=='disabled'
     assert 'PRIVATE' not in health.read_text() and str(private) not in health.read_text()
@@ -39,6 +40,9 @@ with tempfile.TemporaryDirectory() as temporary:
     state=run('collect',False)
     assert state['state']=='degraded' and state['stages']['collect']['last_success_at']==success
     run('collect')
+    state=run('research',False)
+    assert state['state']=='degraded' and state['stages']['research']['state']=='failed'
+    run('research')
     review['expires_at']='2020-01-01T00:00:00Z'
     database.execute('UPDATE source_reviews SET review_json=?',(json.dumps(review),));database.commit()
     result=subprocess.run(['python3',str(SCRIPT),'check'],env=env,capture_output=True)

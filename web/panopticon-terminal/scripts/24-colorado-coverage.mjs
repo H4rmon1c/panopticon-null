@@ -187,6 +187,9 @@ export function installColoradoCoverage({ getSnapshot }) {
     }
     detail.append(element("p", "coverage-detail__unknown", "Search coverage: not established. Last searched: not established. Search period: not established."));
     detail.append(element("p", "coverage-detail__caveat", "Published decisions document individual records. They do not establish that every relevant record in this jurisdiction has been searched. The directory and publication counts do not measure completed searches."));
+    const researchLink = element("a", "coverage-decision-link", "Browse preliminary source references →");
+    researchLink.href = `./research.html?jurisdiction=${encodeURIComponent(record.id)}`;
+    detail.append(researchLink);
     if (record.kind === "district_provisional") {
       detail.append(element("p", "coverage-detail__caveat", `DOLA discovery layer · source status code ${record.source_status_code ?? "unknown"} · source update ${record.source_last_update ?? "unknown"}. District identity, current legal status, and boundary need independent checking before a case is attributed.`));
     }

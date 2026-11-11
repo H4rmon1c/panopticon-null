@@ -933,7 +933,10 @@ fn ocr_pdf(
                 tsv_base.as_os_str(),
                 std::ffi::OsStr::new("-l"),
                 std::ffi::OsStr::new(ocr_language),
-                std::ffi::OsStr::new("tsv"),
+                // Avoid relying on a separate tessdata/configs/tsv file:
+                // language-only installations still support this parameter.
+                std::ffi::OsStr::new("-c"),
+                std::ffi::OsStr::new("tessedit_create_tsv=1"),
             ],
             &[image],
         )?;

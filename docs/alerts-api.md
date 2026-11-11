@@ -7,6 +7,7 @@ The self-hosted release builds a read-only API from the same validated public sn
 | `/api/v1/alerts.json` | Current released decisions and retained withdrawal notices, with per-case revision identifiers and exact evidence locators. |
 | `/api/v1/feed.json` | JSON Feed 1.1 representation for news readers; content is plain text. |
 | `/api/v1/coverage.json` | Published case counts by Colorado geography entry, with separate publication and search-coverage states. |
+| `/api/v1/research.json` | Preliminary source references and machine-matched recorded actions and votes, with capture digests and locators. |
 | `/api/v1/health.json` | Independently updated collection, publication, and source-review health. Failed publication can update health while the previous release remains available. |
 
 `alerts.json` uses schema `pnull-alerts-v1`. Each record has a stable `case_id`, its canonical `url`, `state` (`active` or `withdrawn`), a positive `revision`, and a `revision_id`. The content digest binds the public summary, evidence references, source digests, gaps, and release binding. A repeat export of identical data retains the revision ID and change time. A changed summary or evidence binding advances the revision; a later return to previous content still receives a new revision. Consumers should persist each case's latest revision ID, rather than treating every poll or build as new news.
@@ -45,3 +46,20 @@ node --test web/panopticon-terminal/scripts/test-alert-api.mjs
 Omit the last argument only for the first API release or migration from a release that has no API. Supplying a missing, malformed, duplicate, future-dated, wrong-origin, or inconsistent previous API fails publication. Preview/demo snapshots, missing case release bindings, unsafe URLs, duplicate decision slugs, text control characters, silent active-case removal, oversized fields, symlink inputs, and existing output paths are rejected. Input reads are bounded to 32 MiB through an open file descriptor; output is limited to 32 MiB and 10,000 records, including tombstones. Exceeding a bound fails instead of truncating evidence or deleting old notices; introduce versioned shards before that limit is reached.
 
 The regression suite checks unchanged exports, revisions and reversions, withdrawal retention, reinstatement, failed-motion wording, explicit gaps, private-field exclusion, malicious markup, preview/demo rejection, canonical URLs, tampered prior records, bounded reads, and symlink rejection. The API generator is removed from the public release after staging.
+# Preliminary research references
+
+`GET /api/v1/research.json` is a separate static, read-only discovery dataset.
+Every entry is `unconfirmed_source_reference`: a public-source keyword match,
+not a verified decision, contract execution, or deployment. Some matter entries
+also include source-matched recorded actions and individual vote rows. Each
+action has separate history, meeting-item, and votes URLs and digests; each
+vote has its exact array locator. `vote_scope` distinguishes an item vote,
+a separate consent-block vote, a consent-designated item whose precise vote
+scope is uncertain, and a missing vote. Failed outcomes remain failed. Older
+captures are labeled when the source history changes.
+Records include a stable source-based ID, exact capture URL, digest, locator,
+timestamp, and relevant terms. `lookback_period` is null; do not infer complete
+jurisdiction coverage from an empty result. OCR-derived text is labeled. This
+dataset is not automatically added to the verified alerts/feed and must not be
+treated as an authorized posting queue. Raw documents and receipts are kept in
+private research state and rechecked during export.

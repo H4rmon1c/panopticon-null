@@ -58,6 +58,9 @@ grep -Fq 'name="robots" content="index,follow"' "$spring_page"
 grep -Fq 'name="robots" content="noindex,follow"' "$PNUL_CURRENT_LINK/decision.html"
 ! grep -Fq 'Colorado Springs police technology surcharge vote' "$PNUL_CURRENT_LINK/decision.html"
 [[ -f "$PNUL_CURRENT_LINK/portraits/tom-bailey.jpg" ]]
+for portrait in flor-alvidrez kevin-flynn stacie-gilmore serena-gonzales-gutierrez chris-hinds paul-kashmann shontel-lewis sarah-parady diana-romero-campbell amanda-sandoval amanda-sawyer jamie-torres darrell-watson; do
+    [[ -f "$PNUL_CURRENT_LINK/portraits/denver-$portrait-original.jpg" ]]
+done
 for portrait in susan-noble joanna-sandoval craig-kim charles-dukes stefanie-trujillo lori-young steve-douglas jose-guardiola rocky-teter; do
     [[ -f "$PNUL_CURRENT_LINK/portraits/$portrait-original.png" ]]
 done
@@ -80,6 +83,8 @@ grep -q 'recorded_voter_co_castle_rock' "$PNUL_CURRENT_LINK/portraits/portraits.
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/build-decision-pages.mjs" ]]
 first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 [[ -f "$PNUL_CURRENT_LINK/api/v1/alerts.json" && -f "$PNUL_CURRENT_LINK/api/v1/feed.json" && -f "$PNUL_CURRENT_LINK/api/v1/coverage.json" ]]
+[[ -f "$PNUL_CURRENT_LINK/research.html" && -f "$PNUL_CURRENT_LINK/api/v1/research.json" ]]
+cmp -s "$PNUL_CURRENT_LINK/public/research-signals.json" "$PNUL_CURRENT_LINK/api/v1/research.json"
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/build-alert-api.mjs" ]]
 
 # Withdrawn rows are checked after the active set exists, and retain their CLI args.

@@ -34,6 +34,6 @@ panopticon.fail {
     @api path /api/v1/*
     header @api Access-Control-Allow-Origin "*"
 
-    @public_snapshot path /public/public-snapshot.json /api/v1/alerts.json /api/v1/feed.json /api/v1/coverage.json
+    @public_snapshot path /public/public-snapshot.json /public/research-signals.json /api/v1/alerts.json /api/v1/feed.json /api/v1/coverage.json /api/v1/research.json
     header @public_snapshot Cache-Control "public, max-age=60, must-revalidate"
 }

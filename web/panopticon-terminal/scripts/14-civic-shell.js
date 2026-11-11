@@ -63,6 +63,7 @@ function applyCivicShell() {
         <button type="button" data-civic-action="building">WHAT IS BEING BUILT?</button>
       </div>
       <p class="civic-place-privacy">Manual place search. No device-location access.</p>
+      <p class="civic-place-privacy"><a class="civic-research-link" href="./research.html">BROWSE PRELIMINARY COLORADO REFERENCES ↗</a></p>
     </section>
   `);
 

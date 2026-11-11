@@ -1,0 +1,34 @@
+:root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #071019; color: #e5eded; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.page { max-width: 1000px; margin: auto; padding: 36px 24px 80px; }
+.back, .source { color: #70deec; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.back { font-size: 11px; font-weight: 700; }
+.eyebrow { margin: 64px 0 12px; color: #70deec; font-size: 10px; letter-spacing: .16em; font-weight: 700; }
+h1 { margin: 0; font-size: clamp(32px, 6vw, 60px); letter-spacing: -.06em; }
+.intro { max-width: 68ch; color: #a8bbc2; line-height: 1.7; font-size: 13px; }
+.coverage { border-left: 3px solid #dfaa4d; padding: 14px; background: #14242a; color: #f5d6a1; font-size: 12px; line-height: 1.5; }
+label { display: block; margin: 30px 0 8px; color: #9ab2bb; font-size: 10px; letter-spacing: .12em; }
+input { width: 100%; padding: 14px; border: 1px solid #4d737e; background: #081a23; color: #f4f8f7; font: inherit; }
+.count { color: #9ab2bb; font-size: 11px; }
+.results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { min-width: 0; border: 1px solid #29444b; background: #0a1a22; padding: 20px; }
+.label { color: #e8b65f; font-size: 9px; letter-spacing: .12em; font-weight: 700; }
+.card h2 { font-size: 18px; margin: 12px 0 4px; }
+.file, .meta, .note, .proof, .footer { color: #a3b4b9; font-size: 11px; line-height: 1.6; }
+.title { font-size: 13px; line-height: 1.6; }
+.signals { color: #f3c478; font-size: 11px; }
+.note { border-left: 2px solid #d9a44f; padding-left: 10px; }
+.source { display: inline-block; margin: 8px 14px 8px 0; font-size: 11px; }
+.proof { margin-top: 10px; }
+.proof summary { cursor: pointer; color: #b9d4da; }
+.digest { overflow-wrap: anywhere; }
+.people { margin: 18px 0; border-top: 1px solid #29444b; padding-top: 4px; }
+.person { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0; }
+.person__photo { width: 66px; height: 66px; object-fit: cover; border: 1px solid #4d737e; }
+.person__details { min-width: 0; font-size: 12px; }
+.person__details p { margin: 4px 0; }
+.motion { margin: 18px 0; padding: 12px; border: 1px solid #36545b; background: #0e222a; }
+.motion h3 { margin: 0; font-size: 12px; color: #e5eded; }
+.footer { margin-top: 40px; }
+@media (max-width: 700px) { .page { padding: 24px 16px 60px; } .results { grid-template-columns: 1fr; } .eyebrow { margin-top: 48px; } }

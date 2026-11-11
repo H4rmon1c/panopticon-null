@@ -1,0 +1,10 @@
+[Unit]
+Description=Regular bounded Colorado public-record discovery
+
+[Timer]
+OnBootSec=15min
+OnUnitInactiveSec=6h
+Unit=panopticon-research.service
+
+[Install]
+WantedBy=timers.target

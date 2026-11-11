@@ -4,6 +4,8 @@ import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
+import { matchesDenverGallery } from "../portraits/lookup.js";
+import { validateResearch } from "../research-api.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(process.env.PNUL_PORTRAIT_PROOF_ROOT ?? join(root, "..", ".."));
@@ -25,17 +27,38 @@ const styles = [
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
 for (const path of required) {
   try {
+    if (path === "public/research-signals.json" && (await lstat(join(root, path))).size > 8 * 1024 * 1024) throw new Error("research report exceeds byte limit");
     contents.set(path, await readFile(join(root, path), "utf8"));
   } catch (error) {
     failures.push(`${path}: cannot read (${error.message})`);
   }
 }
+
+try {
+  const research = validateResearch(JSON.parse(contents.get("public/research-signals.json") ?? ""));
+  const people = research.records.flatMap((item) => [
+    ...(item.people_context ?? []),
+    ...(item.actions ?? []).flatMap((motion) => motion.votes),
+  ]);
+  const portraits = new Map(people.filter((person) => person.portrait).map((person) => [person.portrait.src, person.portrait]));
+  for (const [path, portrait] of portraits) {
+    const meta = await lstat(join(root, path));
+    if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 2_000_000) throw new Error("research portrait is not a bounded regular file");
+    const bytes = await readFile(join(root, path));
+    if (createHash("sha256").update(bytes).digest("hex") !== portrait.sha256) throw new Error("research portrait digest mismatch");
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const webp = bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+    if (!((path.endsWith(".jpg") && jpeg) || (path.endsWith(".png") && png) || (path.endsWith(".webp") && webp))) throw new Error("research portrait file type mismatch");
+  }
+}
+catch (error) { failures.push(`preliminary research: ${error.message}`); }
 
 const index = contents.get("index.html") ?? "";
 for (const asset of ["./styles.css", "./app.js"]) {
@@ -220,7 +243,7 @@ try {
     if (voter?.identity_scope) {
       const captureKind = portrait.source_capture_kind ?? "raw_html";
       const expectedExtension = captureKind === "browser_dom_extract" ? "json" : "html";
-      if (!["browser_dom_extract", "raw_html"].includes(captureKind) ||
+      if (!["browser_dom_extract", "raw_html", "official_gallery"].includes(captureKind) ||
           !new RegExp(`^fixtures/atlas/portrait-sources/[a-z0-9-]+\\.${expectedExtension}$`).test(portrait.source_page_fixture ?? "") ||
           !/^[a-f0-9]{64}$/.test(portrait.source_page_sha256 ?? "") ||
           portrait.verification_state !== "SOURCE_BYTES_VERIFIED" ||
@@ -236,7 +259,11 @@ try {
         const bytes = await readFile(pagePath);
         if (createHash("sha256").update(bytes).digest("hex") !== portrait.source_page_sha256) failures.push(`portrait: source page digest mismatch for ${id}`);
         let profileEmails = [];
-        if (captureKind === "browser_dom_extract") {
+        if (captureKind === "official_gallery") {
+          if (!matchesDenverGallery(portrait, voter, bytes.toString("utf8"))) {
+            failures.push(`portrait: official gallery does not bind voter and image for ${id}`);
+          }
+        } else if (captureKind === "browser_dom_extract") {
           const capture = JSON.parse(bytes.toString("utf8"));
           const headingSelector = "h2.directory-page-title .fw-bold";
           const imageSelector = '.directory-staff-container img[src*="ImageRepository/Document"]';

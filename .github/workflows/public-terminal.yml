@@ -39,6 +39,12 @@ jobs:
         run: node web/panopticon-terminal/scripts/validate.mjs
       - name: Verify public launch evidence card
         run: node web/panopticon-terminal/scripts/check-commerce-launch-card.mjs
+      - name: Verify Denver official portrait bindings
+        run: node --test web/panopticon-terminal/scripts/test-denver-portraits.mjs
+      - name: Test preliminary research provenance and public API
+        run: |
+          python3 scripts/test-colorado-research.py
+          node --test web/panopticon-terminal/scripts/test-research-api.mjs
       - name: Test public coverage accounting
         run: node --test web/panopticon-terminal/scripts/test-coverage-api.mjs
       - name: Test alerts API revisions and withdrawals
