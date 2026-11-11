@@ -6,10 +6,12 @@ The self-hosted release builds a read-only API from the same validated public sn
 | --- | --- |
 | `/api/v1/alerts.json` | Current released decisions and retained withdrawal notices, with per-case revision identifiers and exact evidence locators. |
 | `/api/v1/feed.json` | JSON Feed 1.1 representation for news readers; content is plain text. |
-| `/api/v1/coverage.json` | Published case counts by indexed Colorado jurisdiction, including explicit records-not-indexed states. |
+| `/api/v1/coverage.json` | Published case counts by Colorado geography entry, with separate publication and search-coverage states. |
 | `/api/v1/health.json` | Independently updated collection, publication, and source-review health. Failed publication can update health while the previous release remains available. |
 
 `alerts.json` uses schema `pnull-alerts-v1`. Each record has a stable `case_id`, its canonical `url`, `state` (`active` or `withdrawn`), a positive `revision`, and a `revision_id`. The content digest binds the public summary, evidence references, source digests, gaps, and release binding. A repeat export of identical data retains the revision ID and change time. A changed summary or evidence binding advances the revision; a later return to previous content still receives a new revision. Consumers should persist each case's latest revision ID, rather than treating every poll or build as new news.
+
+The coverage endpoint's `publication_state` describes whether a geography entry has released decisions. Its older `coverage_state` field remains a compatibility alias for publication state. The separate `search_coverage` object describes what the public inputs establish about jurisdiction searches. The current snapshot and geography roster contain no verified search ledger, so `state` is `not_established` and `last_searched_at`, `lookback_period`, `source_count`, `document_count`, and `receipt_count` are null, including for places with published cases. The total `jurisdictions_with_established_search_coverage` is also null. These are unknown values, not zero historical searches or findings of no relevant contracts. The directory size and number of places without published decisions must never be reported as jurisdictions searched.
 
 The `change` field identifies the latest transition: `published`, `updated`, `withdrawn`, or `reinstated`. It does not mean that the transition happened during the reader's most recent poll. The API contains current state and the latest change per case, not a complete event history. A consumer that needs a historical audit trail must retain its own received versions. There is no pagination or server-side query API in v1; filter the bounded dataset locally.
 

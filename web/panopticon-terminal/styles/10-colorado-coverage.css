@@ -186,10 +186,10 @@
 }
 
 .coverage-result {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 10px;
+  gap: 4px 10px;
   width: 100%;
   border: 0;
   border-bottom: 1px solid rgba(147, 190, 210, .12);
@@ -207,13 +207,18 @@
 }
 
 .coverage-result strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font: 600 10px var(--mono);
 }
 
 .coverage-result span {
-  flex: none;
   color: #8da7b5;
   font: 500 8px var(--mono);
+}
+
+.coverage-result .coverage-result__search {
+  grid-column: 1 / -1;
 }
 
 .coverage-result span.coverage-result__published {

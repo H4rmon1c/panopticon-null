@@ -38,6 +38,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
+      - name: Cross-check checked document proposals through atlas, coverage, and alerts
+        run: nix develop --command node --test web/panopticon-terminal/scripts/test-proposal-bridge.mjs
       - name: Cross-check combined Rust preview in browser validator
         shell: bash
         run: |

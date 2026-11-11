@@ -702,8 +702,16 @@ fn checked_votes(
                     }
                 }
                 let proof = checked_proof(&row.proof, sources)?;
-                if !atomic_named_vote(&proof.quote, &row.name, &row.position) {
-                    bail!("named vote row quote must bind one exact name to one position");
+                let whole_line = sources
+                    .get(motion_ref)
+                    .and_then(|source| {
+                        line_index(&proof.locator).and_then(|index| source.text.lines().nth(index))
+                    })
+                    .is_some_and(|line| line.trim() == proof.quote.trim());
+                if !whole_line || !atomic_named_vote(&proof.quote, &row.name, &row.position) {
+                    bail!(
+                        "named vote must bind one exact name and position on the complete extracted line"
+                    );
                 }
                 rows.push(VoteRow {
                     id: stable_id(

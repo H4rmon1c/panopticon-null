@@ -626,6 +626,15 @@ pub fn append_verified_proposal_snapshot(
                 .as_str()
                 .ok_or_else(|| AtlasError::Manifest(format!("proposal {key} lacks id")))?;
             if !ids.insert(id.to_owned()) {
+                // Independently rebuilt proposals may cite the same preserved
+                // document or geography identity. Only identical objects may
+                // be shared; this never merges conflicting claims or people.
+                if target
+                    .iter()
+                    .any(|existing| existing["id"] == id && existing == item)
+                {
+                    continue;
+                }
                 return Err(AtlasError::Manifest(format!(
                     "proposal {key} ID collides: {id}"
                 )));
