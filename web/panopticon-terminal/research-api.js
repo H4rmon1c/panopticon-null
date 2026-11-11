@@ -6,6 +6,8 @@ const digest = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(val
 const safeText = (value, maximum) => typeof value === 'string' && value.length <= maximum &&
   !/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u.test(value);
 const locator = (value) => typeof value === 'string' && /^\$\[\d+\]$/.test(value);
+const COUNTY_DOCUMENT_SCOPE_NOTICE = 'The county website links this document. The link alone does not establish the responsible public body or whose technology the document discusses; it may refer to another jurisdiction.';
+
 function publicResearchUrl(value) {
   if (typeof value !== 'string' || value.length > 4000) throw new Error('Invalid research source URL');
   let url;
@@ -15,6 +17,18 @@ function publicResearchUrl(value) {
     throw new Error('Unsafe research source URL');
   }
   return url;
+}
+
+// A county-hosted link alone does not identify the body that made a decision
+// or the jurisdiction whose technology is discussed in the linked document.
+export function researchReferenceScope(item) {
+  if (item.kind === 'meeting_document' && item.jurisdiction_ref.startsWith('us-co-county-')) {
+    return {
+      heading: `${item.jurisdiction} · county-linked source`,
+      notice: COUNTY_DOCUMENT_SCOPE_NOTICE,
+    };
+  }
+  return { heading: item.jurisdiction, notice: '' };
 }
 
 export function matchesResearchQuery(item, value) {

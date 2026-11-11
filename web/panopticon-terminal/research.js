@@ -1,4 +1,4 @@
-import { matchesResearchQuery, readBoundedResearchResponse, validResearchJurisdiction } from './research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=county-scope-1';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 
@@ -29,16 +29,18 @@ function render(report) {
   const latest = (item) => (item.actions ?? []).reduce((date, action) =>
     /^\d{4}-\d{2}-\d{2}$/.test(action.date) && action.date > date ? action.date : date, '');
   matches.sort((left, right) => latest(right).localeCompare(latest(left)) || left.jurisdiction.localeCompare(right.jurisdiction));
-  count.textContent = `${matches.length.toLocaleString()} ${matches.length === 1 ? 'match' : 'matches'}${recordId ? ' for this reference' : jurisdiction ? ' in this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
+  count.textContent = `${matches.length.toLocaleString()} ${matches.length === 1 ? 'match' : 'matches'}${recordId ? ' for this reference' : jurisdiction ? ' linked to this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
   results.replaceChildren();
   for (const item of matches.slice(0, 100)) {
     const card = node('article', 'card');
     card.id = item.id;
     card.append(node('p', 'label', item.kind === 'official_page_context' ? (item.context_state === 'withdrawn' ? 'CONTEXT WITHDRAWN · NO DECISION ESTABLISHED' : 'OFFICIAL AGENCY CONTEXT · NO DECISION ESTABLISHED') : 'PRELIMINARY SOURCE REFERENCE'));
-    card.append(node('h2', '', item.jurisdiction));
+    const sourceScope = researchReferenceScope(item);
+    card.append(node('h2', '', sourceScope.heading));
     if (item.file) card.append(node('p', 'file', item.file));
     card.append(node('p', 'title', item.title || 'A relevant term was found in this source.'));
     card.append(node('p', 'signals', item.signals.join(' · ')));
+    if (sourceScope.notice) card.append(node('p', 'meta', sourceScope.notice));
     if (item.source_status) card.append(node('p', 'meta', `The source lists its status as “${item.source_status}.” This is not an individual roll call.`));
     if (item.historical) card.append(node('p', 'meta', 'Historical capture: a later source check changed this record or no longer found the same reference.'));
     if (item.ocr) card.append(node('p', 'meta', 'Text was read with OCR and may contain errors.'));
@@ -154,7 +156,7 @@ function render(report) {
       ? 'Recorded votes are shown with their scope above. A specific contract approval or deployment is not yet established.'
       : 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
-    if (item.kind === 'meeting_document' && new URL(item.indexed_source_url ?? item.source_url).hostname === 'towncloud.io') {
+    if (!sourceScope.notice && item.kind === 'meeting_document' && new URL(item.indexed_source_url ?? item.source_url).hostname === 'towncloud.io') {
       card.append(node('p', 'meta', 'The government website links this meeting document; the responsible public body is not established.'));
     }
     const sourceLabel = item.kind === 'meeting_document' ? `Open live ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
@@ -203,7 +205,7 @@ try {
     `${report.coverage.ocr_revalidation_pending.toLocaleString()} older scans awaiting OCR recheck`;
   const activeReferences = report.records.filter((item) => item.context_state !== 'withdrawn').length;
   const withdrawnContexts = report.records.length - activeReferences;
-  summary.textContent = `${activeReferences.toLocaleString()} preliminary references${withdrawnContexts ? ` · ${withdrawnContexts} withdrawn context${withdrawnContexts === 1 ? '' : 's'}` : ''} · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
+  summary.textContent = `${activeReferences.toLocaleString()} preliminary references${withdrawnContexts ? ` · ${withdrawnContexts} withdrawn context${withdrawnContexts === 1 ? '' : 's'}` : ''} · ${report.coverage.jurisdictions_with_mentions} jurisdictions with linked references · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
   if (jurisdiction) {
     const attempt = report.coverage.search_attempts?.find((item) => item.jurisdiction_ref === jurisdiction);
     scope.hidden = false;

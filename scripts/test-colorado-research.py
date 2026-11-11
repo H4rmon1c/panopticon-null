@@ -44,6 +44,45 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_county_clerk_lead_also_searches_same_host_county_root(self):
+        root = 'https://county.example.org/'
+        clerk = root + 'clerk-and-recorder'
+        pages = {
+            clerk: b'<h1>County clerk</h1>',
+            root: b'<h1>County government</h1><a href="/county-commissioners">County Commissioners</a>',
+            root + 'county-commissioners': b'<a href="/meetings/commission-minutes.pdf">Commission minutes</a>',
+        }
+        calls = []
+        def fetch(url, hosts, **_kwargs):
+            calls.append(url)
+            self.assertTrue(all(host in ('county.example.org', 'www.county.example.org') for host in hosts))
+            body = pages.get(url, b''); meta = receipt(url, body)
+            meta.update(content_type='text/html', status=200 if url in pages else 404)
+            return [(meta, body)]
+        robots = receipt(root + 'robots.txt', b'')
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp); db = module.root_store(data)
+            try:
+                with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), patch.object(module, 'get', side_effect=fetch):
+                    result, observations = module.discover_one('us-co-county-08051', 'Fixture County', clerk, module.DownloadBudget(30_000_000), county_root_recon=True)
+                self.assertEqual(result['website_lead'], clerk)
+                self.assertIn(root, calls)
+                self.assertLessEqual(result['pages_attempted'], module.MAX_DISCOVERY_PAGES)
+                doc = next(x for x in result['documents'] if x['url'].endswith('/commission-minutes.pdf'))
+                self.assertEqual(doc['index_url'], root + 'county-commissioners')
+                module.archive(data, observations)
+                module.checked_document_candidate(data, doc['url'], doc)
+            finally:
+                db.close()
+        calls.clear()
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), patch.object(module, 'get', side_effect=fetch):
+            module.discover_one('us-co-place-0800001', 'Fixture town', clerk, module.DownloadBudget(30_000_000), county_root_recon=True)
+        self.assertNotIn(root, calls)
+        calls.clear()
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), patch.object(module, 'get', side_effect=fetch):
+            module.discover_one('us-co-county-08051', 'Fixture County', clerk, module.DownloadBudget(30_000_000))
+        self.assertNotIn(root, calls)
+
     def test_springs_download_without_filename_keyword_requires_complete_original_source_chain(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); db = module.root_store(root)
@@ -2348,6 +2387,9 @@ class ResearchTests(unittest.TestCase):
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 self.assertEqual(len(json.loads(output.read_text())['records']), 1)
+                report = json.loads(output.read_text())
+                self.assertIn('A county-linked document does not establish the responsible public body', report['notice'])
+                self.assertNotIn('source_scope_notice', report['records'][0])
                 result['extraction_status'] = 'complete_with_ocr'
                 db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
                 db.commit()
