@@ -2898,6 +2898,56 @@ def commerce_report_portrait(data_dir, receipts, ref, client, vote, assets_dir):
             'portrait_date': 'not_established'}
 
 
+def denver_2020_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
+    """Bind the exact voter to a lossless display copy of the city's image."""
+    if (assets_dir is None or ref != 'us-co-place-0820000' or client != 'denver'
+            or vote['person_id'] != 472 or vote['name'] != 'Candi CdeBaca'):
+        return None
+    url = 'https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2020/2020BudgetVolume1.pdf'
+    source_digest = 'dae887ea080560ece3eae5430dbe80918b2befc548b3aa291f480acdbfe6e7e1'
+    fixture = 'fixtures/atlas/portrait-sources/denver-2020-budget-page.pdf'
+    fixture_digest = '4dc327169778d106dc9f88c2902aacbe69740bf7dd564b2cbef96942fa06368e'
+    original_digest = 'ae31c6ea93f266454d497e25c390bc4c8e34a09a1df9fcab06cb97e53086d9d0'
+    proof = json.loads(read_blob(ROOT / 'fixtures/atlas/portrait-sources/denver-2020-budget-proof.json', 100_000))
+    item = proof['portrait']
+    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != 6
+            or proof['page_fixture'] != fixture or proof['page_fixture_sha256'] != fixture_digest
+            or sha(read_blob(ROOT / fixture, 2_000_000)) != fixture_digest
+            or item['name'] != vote['name'] or item['person_id'] != vote['person_id']
+            or item['source_label'] != 'Candi CdeBaca' or item['image_index'] != 14
+            or item['original_sha256'] != original_digest):
+        raise ValueError('Denver 2020 budget portrait proof differs')
+    if (url, source_digest) not in receipts:
+        raise ValueError('Denver 2020 budget portrait source receipt is missing')
+    source_blob(data_dir, source_digest, 20 * 1024 * 1024)
+    digest = item['sha256']
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('invalid Denver 2020 portrait identity')
+    image = read_blob(ROOT / 'web/panopticon-terminal/research-portraits' / f'{digest}.png', 2_000_000)
+    if not image.startswith(b'\x89PNG\r\n\x1a\n') or sha(image) != digest:
+        raise ValueError('Denver 2020 budget portrait bytes differ')
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_dir.is_symlink() or not assets_dir.is_dir():
+        raise ValueError('portrait output directory is unsafe')
+    target = assets_dir / f'{digest}.png'
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        if sha(read_blob(target, 2_000_000)) != digest:
+            raise ValueError('existing portrait output differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(image)
+            handle.flush()
+            os.fsync(handle.fileno())
+    return {'src': f'./research-portraits/{digest}.png', 'sha256': digest,
+            'source_kind': 'embedded_pdf', 'source_url': url, 'source_document_sha256': source_digest,
+            'source_page': 6, 'embedded_image_index': 14, 'embedded_original_sha256': original_digest,
+            'image_transform': 'lossless_png_from_jpeg2000',
+            'caption': '2020 Denver budget; source labels this portrait Candi CdeBaca.',
+            'portrait_date': 'not_established'}
+
+
 def denver_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
     """Bind an exact Denver portal voter to a labeled original budget image."""
     if assets_dir is None or ref != 'us-co-place-0820000' or client != 'denver':
@@ -3162,6 +3212,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                                 portrait = commerce_report_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if not portrait:
                                 portrait = denver_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
+                            if not portrait:
+                                portrait = denver_2020_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):

@@ -1797,6 +1797,20 @@ class ResearchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.denver_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', chris, root / 'assets')
 
+    def test_denver_2020_portrait_requires_source_and_exact_voter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/denver-2020-budget-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Candi CdeBaca', 'person_id': 472}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.denver_2020_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (6, 14))
+                self.assertEqual(result['embedded_original_sha256'], proof['portrait']['original_sha256'])
+                self.assertIsNone(module.denver_2020_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', {**vote, 'person_id': 999}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.denver_2020_budget_portrait(root, set(), 'us-co-place-0820000', 'denver', vote, root / 'assets')
+
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'
                   b'<img alt="Commissioner Abe Laydon" srcset="https://www.douglasco.gov/a-small.jpg 480w, '

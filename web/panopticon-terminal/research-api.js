@@ -48,6 +48,20 @@ function validatePortrait(portrait, context = null) {
     throw new Error('Unsafe portrait source URL');
   }
   if (portrait.source_kind === 'embedded_pdf') {
+    if (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000' && context.personId === 472) {
+      const expected = 'd81c9f4e4d3af48a6629196c5693a8a8a6b3f2a2362336a4c46c1994e68c771e';
+      if (context.name !== 'Candi CdeBaca' || portrait.embedded_image_index !== 14 || portrait.sha256 !== expected ||
+          portrait.src !== `./research-portraits/${expected}.png` ||
+          portrait.caption !== '2020 Denver budget; source labels this portrait Candi CdeBaca.' ||
+          portrait.image_url !== undefined || portrait.source_page !== 6 ||
+          portrait.embedded_original_sha256 !== 'ae31c6ea93f266454d497e25c390bc4c8e34a09a1df9fcab06cb97e53086d9d0' ||
+          portrait.image_transform !== 'lossless_png_from_jpeg2000' ||
+          portrait.source_document_sha256 !== 'dae887ea080560ece3eae5430dbe80918b2befc548b3aa291f480acdbfe6e7e1' ||
+          portrait.source_url !== 'https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2020/2020BudgetVolume1.pdf') {
+        throw new Error('Embedded portrait does not match the recorded voter and source');
+      }
+      return;
+    }
     if (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000') {
       const expected = new Map([
         [280, ['Jolon Clark', 0, '0727c6f5be8eac62e77cebc8205ef0cce1ce135ff97660a4b2c56203a9c11cab', 'Jolon Clark, President']],

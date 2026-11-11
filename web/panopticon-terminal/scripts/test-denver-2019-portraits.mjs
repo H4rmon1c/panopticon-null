@@ -43,3 +43,23 @@ test('Denver budget portraits bind to exact portal voters and original image str
     portrait_date: 'not_established', identity_source_url: 'https://example.com/wrong' };
   assert.throws(() => validateResearch(alteredAlias), /portrait/i);
 });
+
+test('Denver 2020 portrait binds a lossless display image to Candi CdeBaca', async () => {
+  const source = JSON.parse(await readFile(new URL('fixtures/atlas/portrait-sources/denver-2020-budget-proof.json', root), 'utf8'));
+  const item = source.portrait;
+  assert.equal(hash(await readFile(new URL(source.page_fixture, root))), source.page_fixture_sha256);
+  assert.equal(hash(await readFile(new URL(`../research-portraits/${item.sha256}.png`, import.meta.url))), item.sha256);
+  const changed = structuredClone(report);
+  const matches = votes(changed).filter((vote) => vote.person_id === item.person_id && vote.name === item.name);
+  assert.ok(matches.length);
+  for (const vote of matches) vote.portrait = {
+    src: `./research-portraits/${item.sha256}.png`, sha256: item.sha256, source_kind: 'embedded_pdf',
+    source_url: source.source_url, source_document_sha256: source.source_sha256, source_page: 6,
+    embedded_image_index: item.image_index, embedded_original_sha256: item.original_sha256,
+    image_transform: 'lossless_png_from_jpeg2000',
+    caption: '2020 Denver budget; source labels this portrait Candi CdeBaca.', portrait_date: 'not_established',
+  };
+  validateResearch(changed);
+  matches[0].portrait.embedded_original_sha256 = '0'.repeat(64);
+  assert.throws(() => validateResearch(changed), /portrait/i);
+});

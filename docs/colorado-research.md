@@ -94,6 +94,8 @@ no relevant decision exists.
    The pinned proof binds each Denver portal person ID and name to the budget's
    label, page position, original embedded image index, and digest. A sandboxed
    test rechecks both the page fixture and the complete archived source.
+   Candi CdeBaca's portrait is bound separately to the 2020 city budget; its
+   browser PNG preserves every decoded pixel of the original JPEG 2000 image.
    Five Arapahoe County research voters also reuse the original JPEG streams
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture

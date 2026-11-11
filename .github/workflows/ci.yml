@@ -105,5 +105,7 @@ jobs:
         run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-commerce-portraits.py'
       - name: Verify Denver 2019 portrait positions and original JPEGs
         run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-denver-2019-portraits.py'
+      - name: Verify Denver 2020 portrait position and lossless display image
+        run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-denver-2020-portraits.py'
       - name: Dependency policy
         run: nix develop --command cargo deny check
