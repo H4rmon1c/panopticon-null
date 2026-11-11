@@ -2540,6 +2540,53 @@ def littleton_report_portrait(data_dir, receipts, ref, client, vote, assets_dir)
     return result
 
 
+def commerce_report_portrait(data_dir, receipts, ref, client, vote, assets_dir):
+    """Bind a portal voter to a labeled original image in the city's report."""
+    if assets_dir is None or ref != 'us-co-place-0816495' or client != 'commerce':
+        return None
+    url = 'https://www.c3gov.com/files/assets/city/v/1/fd-finance-department/documents/popular-annual-financial-report/22commpafrbookletr5.pdf'
+    source_digest = '142eb3b0f056a0a6d4fd82113052e5c0b081d800e76a9507c926a877bdb510be'
+    fixture = 'fixtures/atlas/portrait-sources/commerce-city-2022-report-page.pdf'
+    fixture_digest = '25d3ae7b31b296a2ac1530d80b0be33c174d91899ae6f8b5efd755a4e4c22ce6'
+    proof = json.loads(read_blob(ROOT / 'fixtures/atlas/portrait-sources/commerce-city-2022-report-proof.json', 100_000))
+    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != 2
+            or proof['page_fixture'] != fixture or proof['page_fixture_sha256'] != fixture_digest
+            or sha(read_blob(ROOT / fixture, 2_000_000)) != fixture_digest):
+        raise ValueError('Commerce City portrait proof differs')
+    matches = [item for item in proof['portraits'] if item['name'] == vote['name'] and item['person_id'] == vote['person_id']]
+    if len(matches) != 1:
+        return None
+    if (url, source_digest) not in receipts:
+        raise ValueError('Commerce City portrait source receipt is missing')
+    source_blob(data_dir, source_digest, 20 * 1024 * 1024)
+    item = matches[0]
+    digest = item['sha256']
+    if not re.fullmatch(r'[0-9a-f]{64}', digest) or type(item['image_index']) is not int:
+        raise ValueError('invalid Commerce City portrait identity')
+    image = read_blob(ROOT / 'web/panopticon-terminal/research-portraits' / f'{digest}.jpg', 2_000_000)
+    if not image.startswith(b'\xff\xd8\xff') or sha(image) != digest:
+        raise ValueError('Commerce City portrait bytes differ')
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_dir.is_symlink() or not assets_dir.is_dir():
+        raise ValueError('portrait output directory is unsafe')
+    target = assets_dir / f'{digest}.jpg'
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        if sha(read_blob(target, 2_000_000)) != digest:
+            raise ValueError('existing portrait output differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(image)
+            handle.flush()
+            os.fsync(handle.fileno())
+    return {'src': f'./research-portraits/{digest}.jpg', 'sha256': digest,
+            'source_kind': 'embedded_pdf', 'source_url': url, 'source_document_sha256': source_digest,
+            'source_page': 2, 'embedded_image_index': item['image_index'],
+            'caption': f"2022 city council; source labels this portrait {item['name']}.",
+            'portrait_date': 'not_established'}
+
+
 def materialize_action(data_dir, receipts, client, matter, history_id, raw):
     """Reopen every exact source before associating a recorded vote with a matter."""
     captures = json.loads(raw)
@@ -2708,11 +2755,14 @@ def export_report(data_dir, db, output, assets_dir=None):
             terms = matching_terms(title, query_terms(*query_signature)) if isinstance(title, str) else []
             if item.get('MatterId') != matter or record.get('title') != title:
                 raise ValueError('source row no longer binds the matter and title')
-            if not terms and isinstance(title, str) and 'motorola solutions' in title.casefold():
+            if not terms and isinstance(title, str) and not matching_terms(title):
+                # Older substring-only searches could return unrelated names
+                # such as Faxon for Axon. A bound but irrelevant source is a
+                # filtered mention, not a provenance failure.
                 non_surveillance_withheld += 1
                 continue
             if not terms:
-                raise ValueError('source row no longer binds the matter and title')
+                raise ValueError('archived query terms do not match this source title')
             entry = {'id': identifier, 'kind': 'matter_reference', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
                 'jurisdiction': jurisdiction_name(geography[ref]), 'file': public_text(item.get('MatterFile'), 100),
                 'title': reference_title(title, terms), 'signals': terms, 'source_status': public_text(item.get('MatterStatusName'), 100),
@@ -2732,6 +2782,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                                 portrait = arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if not portrait:
                                 portrait = littleton_report_portrait(data_dir, receipts, ref, client, vote, assets_dir)
+                            if not portrait:
+                                portrait = commerce_report_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):

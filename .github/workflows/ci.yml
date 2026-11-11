@@ -101,5 +101,7 @@ jobs:
         run: |
           nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-littleton-portraits.py'
           nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-littleton-2024-portraits.py'
+      - name: Verify Commerce City portrait positions and original JPEGs
+        run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-commerce-portraits.py'
       - name: Dependency policy
         run: nix develop --command cargo deny check

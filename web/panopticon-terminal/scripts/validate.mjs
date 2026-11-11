@@ -102,14 +102,27 @@ try {
       createHash("sha256").update(await readFile(laterPage)).digest("hex") !== later.page_fixture_sha256) {
     throw new Error("2024 Littleton source page digest mismatch");
   }
+  const commerce = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/commerce-city-2022-report-proof.json"), "utf8"));
+  if (commerce.source_url !== "https://www.c3gov.com/files/assets/city/v/1/fd-finance-department/documents/popular-annual-financial-report/22commpafrbookletr5.pdf" ||
+      commerce.source_page !== 2 || commerce.source_sha256 !== "142eb3b0f056a0a6d4fd82113052e5c0b081d800e76a9507c926a877bdb510be" ||
+      commerce.page_fixture !== "fixtures/atlas/portrait-sources/commerce-city-2022-report-page.pdf" ||
+      commerce.page_fixture_sha256 !== "25d3ae7b31b296a2ac1530d80b0be33c174d91899ae6f8b5efd755a4e4c22ce6" ||
+      !Array.isArray(commerce.portraits) || commerce.portraits.length !== 5) throw new Error("invalid Commerce City portrait proof");
+  const commercePage = join(repositoryRoot, commerce.page_fixture);
+  const commerceMeta = await lstat(commercePage);
+  if (!commerceMeta.isFile() || commerceMeta.isSymbolicLink() || commerceMeta.size > 2_000_000 ||
+      createHash("sha256").update(await readFile(commercePage)).digest("hex") !== commerce.page_fixture_sha256) {
+    throw new Error("Commerce City source page digest mismatch");
+  }
   for (const record of research.records) for (const motion of record.actions ?? []) for (const vote of motion.votes) {
     if (vote.portrait?.source_kind !== "embedded_pdf") continue;
     const isLittleton = record.jurisdiction_ref === "us-co-place-0845255";
+    const isCommerce = record.jurisdiction_ref === "us-co-place-0816495";
     const isLater = isLittleton && vote.portrait.source_document_sha256 === later.source_sha256;
-    const selected = isLittleton ? (isLater ? later : littleton) :
+    const selected = isCommerce ? commerce : isLittleton ? (isLater ? later : littleton) :
       (vote.portrait.source_document_sha256 === arapahoe2024.source_sha256 ? arapahoe2024 : proof);
     const source = selected.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
-    if (!source || (!isLittleton && record.jurisdiction_ref !== "us-co-county-08005") ||
+    if (!source || (!isLittleton && !isCommerce && record.jurisdiction_ref !== "us-co-county-08005") ||
         vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||
         vote.portrait.source_url !== selected.source_url || vote.portrait.source_document_sha256 !== selected.source_sha256 ||
         vote.portrait.source_page !== selected.source_page ||

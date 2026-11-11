@@ -1,0 +1,50 @@
+{
+  "source_url": "https://www.c3gov.com/files/assets/city/v/1/fd-finance-department/documents/popular-annual-financial-report/22commpafrbookletr5.pdf",
+  "source_sha256": "142eb3b0f056a0a6d4fd82113052e5c0b081d800e76a9507c926a877bdb510be",
+  "source_page": 2,
+  "page_fixture": "fixtures/atlas/portrait-sources/commerce-city-2022-report-page.pdf",
+  "page_fixture_sha256": "25d3ae7b31b296a2ac1530d80b0be33c174d91899ae6f8b5efd755a4e4c22ce6",
+  "page_fixture_note": "One-page derivative of the official source. The complete PDF and network receipt remain in the private archive. Public JPEGs are the original embedded image streams.",
+  "portraits": [
+    {
+      "name": "Benjamin Huseman",
+      "person_id": 402,
+      "image_index": 0,
+      "row": 0,
+      "column": 0,
+      "sha256": "8e5dcdeeb2c2f3888626d2e57ac2a9ae14ef69e688ea546ce77164f13683ee1e"
+    },
+    {
+      "name": "Oscar Madera",
+      "person_id": 401,
+      "image_index": 5,
+      "row": 0,
+      "column": 2,
+      "sha256": "d2f23f0633479fb607b05d60f155e00ce166afef4adecee7535314be1821b9f5"
+    },
+    {
+      "name": "Craig Hurst",
+      "person_id": 491,
+      "image_index": 1,
+      "row": 1,
+      "column": 2,
+      "sha256": "cd742e3f608e141afa7caafa5becd9df356b3df1c7b8c0184a709525bc8e5bb6"
+    },
+    {
+      "name": "Sean Ford",
+      "person_id": 201,
+      "image_index": 7,
+      "row": 2,
+      "column": 0,
+      "sha256": "9f4489f00c0a87dab7be3a6a92bc5f2a9786cd64735f57316fd1502e134000fb"
+    },
+    {
+      "name": "Kristi Douglas",
+      "person_id": 239,
+      "image_index": 4,
+      "row": 2,
+      "column": 1,
+      "sha256": "adc50f6895df1c0cd7e19743922c2433349feda39c8bda6c3219f5cf4127b9e2"
+    }
+  ]
+}

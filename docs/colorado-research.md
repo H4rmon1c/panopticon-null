@@ -89,6 +89,9 @@ no relevant decision exists.
    by `scripts/test-littleton-portraits.py`.
    The remaining two Littleton voters use original JPEG streams from the
    labeled 2024 newsletter page, verified by `scripts/test-littleton-2024-portraits.py`.
+   Five Commerce City voters use original JPEG streams from the labeled 2022
+   city financial report. Their row and column positions and embedded streams
+   are independently verified by `scripts/test-commerce-portraits.py`.
 6. Export a strict, sanitized static JSON snapshot. Every entry is labeled
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and

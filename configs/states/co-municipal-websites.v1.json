@@ -6,13 +6,20 @@
     "sha256": "eb6e541a9e14b100db8b5d46fc628bbdfd9ff554a76858bb8f9e5cbc37e4f9ec",
     "archived_on": "2026-11-10"
   },
+  "supplemental_sources": {
+    "cml_directory_2026": {
+      "url": "https://www.cml.org/docs/default-source/municipal-directory/2026-municipal-directory.pdf?sfvrsn=ef58ed61_2",
+      "sha256": "78a598cb922f82bb7a40f7d33a89006d37b4b7dd299319d22b0cd55bef365d19",
+      "archived_on": "2026-11-11"
+    }
+  },
   "counts": {
     "census_municipalities": 273,
     "listed": 269,
-    "with_website": 241,
-    "without_website": 28,
+    "with_website": 245,
+    "without_website": 24,
     "http_leads": 142,
-    "https_leads": 99,
+    "https_leads": 103,
     "not_listed": 4
   },
   "municipalities": [
@@ -769,8 +776,9 @@
     {
       "jurisdiction_ref": "us-co-place-0838590",
       "listing_name": "Iliff",
-      "website_url": null,
-      "source_locator": "Links to Colorado cities and towns > Iliff"
+      "website_url": "https://www.townofiliff.com/",
+      "source_locator": "2026 municipal directory, PDF page 164",
+      "website_source": "cml_directory_2026"
     },
     {
       "jurisdiction_ref": "us-co-place-0839195",
@@ -979,8 +987,9 @@
     {
       "jurisdiction_ref": "us-co-place-0848500",
       "listing_name": "Manzanola",
-      "website_url": null,
-      "source_locator": "Links to Colorado cities and towns > Manzanola"
+      "website_url": "https://townofmanzanola.colorado.gov/",
+      "source_locator": "2026 municipal directory, PDF page 206",
+      "website_source": "cml_directory_2026"
     },
     {
       "jurisdiction_ref": "us-co-place-0848555",
@@ -1003,8 +1012,9 @@
     {
       "jurisdiction_ref": "us-co-place-0850040",
       "listing_name": "Merino",
-      "website_url": null,
-      "source_locator": "Links to Colorado cities and towns > Merino"
+      "website_url": "https://townofmerino.colorado.gov/",
+      "source_locator": "2026 municipal directory, PDF page 211",
+      "website_source": "cml_directory_2026"
     },
     {
       "jurisdiction_ref": "us-co-place-0850480",
@@ -1531,8 +1541,9 @@
     {
       "jurisdiction_ref": "us-co-place-0882130",
       "listing_name": "Walden",
-      "website_url": null,
-      "source_locator": "Links to Colorado cities and towns > Walden"
+      "website_url": "https://townofwaldenco.com/",
+      "source_locator": "2026 municipal directory, PDF page 314",
+      "website_source": "cml_directory_2026"
     },
     {
       "jurisdiction_ref": "us-co-place-0882350",

@@ -47,6 +47,25 @@ function validatePortrait(portrait, context = null) {
     throw new Error('Unsafe portrait source URL');
   }
   if (portrait.source_kind === 'embedded_pdf') {
+    if (context?.client === 'commerce' && context.jurisdiction === 'us-co-place-0816495') {
+      const expected = new Map([
+        [402, ['Benjamin Huseman', 0, '8e5dcdeeb2c2f3888626d2e57ac2a9ae14ef69e688ea546ce77164f13683ee1e']],
+        [401, ['Oscar Madera', 5, 'd2f23f0633479fb607b05d60f155e00ce166afef4adecee7535314be1821b9f5']],
+        [491, ['Craig Hurst', 1, 'cd742e3f608e141afa7caafa5becd9df356b3df1c7b8c0184a709525bc8e5bb6']],
+        [201, ['Sean Ford', 7, '9f4489f00c0a87dab7be3a6a92bc5f2a9786cd64735f57316fd1502e134000fb']],
+        [239, ['Kristi Douglas', 4, 'adc50f6895df1c0cd7e19743922c2433349feda39c8bda6c3219f5cf4127b9e2']],
+      ]).get(context.personId);
+      if (!expected || context.name !== expected[0] || portrait.embedded_image_index !== expected[1] ||
+          portrait.sha256 !== expected[2] || portrait.src !== `./research-portraits/${expected[2]}.jpg` ||
+          portrait.caption !== `2022 city council; source labels this portrait ${expected[0]}.` ||
+          portrait.image_url !== undefined || portrait.embedded_original_sha256 !== undefined ||
+          portrait.image_transform !== undefined || portrait.source_page !== 2 ||
+          portrait.source_document_sha256 !== '142eb3b0f056a0a6d4fd82113052e5c0b081d800e76a9507c926a877bdb510be' ||
+          portrait.source_url !== 'https://www.c3gov.com/files/assets/city/v/1/fd-finance-department/documents/popular-annual-financial-report/22commpafrbookletr5.pdf') {
+        throw new Error('Embedded portrait does not match the recorded voter and source');
+      }
+      return;
+    }
     if (context?.client === 'littletongov' && context.jurisdiction === 'us-co-place-0845255') {
       if ([502, 503].includes(context.personId)) {
         const later = new Map([
