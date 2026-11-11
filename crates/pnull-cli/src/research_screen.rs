@@ -84,26 +84,6 @@ fn read_input(
     Ok(bytes)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::valid_jurisdiction_ref;
-
-    #[test]
-    fn accepts_only_five_digit_dola_district_identifiers() {
-        assert!(valid_jurisdiction_ref("dola-district-01006"));
-        assert!(valid_jurisdiction_ref("us-co-county-08001"));
-        for invalid in [
-            "dola-district-1006",
-            "dola-district-010060",
-            "dola-district-01a06",
-            "dola-district-01006/../other",
-            "DOLA-district-01006",
-        ] {
-            assert!(!valid_jurisdiction_ref(invalid), "{invalid}");
-        }
-    }
-}
-
 pub(super) fn screen_pdf(
     data_dir: &Path,
     rules_path: &Path,
@@ -220,4 +200,24 @@ fn preserve_extraction(data_dir: &Path, text: &str) -> Result<String> {
         Err(error) => return Err(error.into()),
     }
     Ok(text_digest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_jurisdiction_ref;
+
+    #[test]
+    fn accepts_only_five_digit_dola_district_identifiers() {
+        assert!(valid_jurisdiction_ref("dola-district-01006"));
+        assert!(valid_jurisdiction_ref("us-co-county-08001"));
+        for invalid in [
+            "dola-district-1006",
+            "dola-district-010060",
+            "dola-district-01a06",
+            "dola-district-01006/../other",
+            "DOLA-district-01006",
+        ] {
+            assert!(!valid_jurisdiction_ref(invalid), "{invalid}");
+        }
+    }
 }
