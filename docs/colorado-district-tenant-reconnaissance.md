@@ -53,3 +53,24 @@ extractor uses an internal shared-site sentinel, not a real jurisdiction;
 neither the lead nor its screen establishes district ownership, a vote or a
 decision, and neither command publishes anything. Further source-specific
 attribution is required before public use.
+
+To screen shared-site document indexes one level deeper, run:
+
+```sh
+python3 scripts/colorado_shared_followup.py \
+  --data-dir /absolute/private/path --pnull-bin /absolute/path/to/pnull --offset 0
+```
+
+This consumes the corresponding `shared-host-leads-OFFSET.json` and rechecks
+the pinned directory, original homepage receipt, exact district name on the
+homepage, and the actual labeled navigation anchor. It follows only direct
+same-host HTTPS pages and requires an exact district heading on the linked
+page. Before screening each direct document, it reopens both archived pages,
+rechecks their receipts and parent anchor, and validates the document anchor.
+All screens use the internal shared-site sentinel and remain private; even an
+exact heading does not prove who owns a linked document. The command refuses
+to overwrite `shared-followup-OFFSET-PAGEOFFSET-DOCUMENTOFFSET.json`; use
+`--page-offset` and `--document-offset` to continue across a batch or a fresh
+archive for a new capture. A later capture may observe changed pages or failed
+fetches, so offsets are partial-search hints rather than a completeness proof.
+`--max-pages`, `--max-docs`, and `--workers` bound each run.
