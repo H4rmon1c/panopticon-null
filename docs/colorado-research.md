@@ -59,6 +59,8 @@ no relevant decision exists.
    Its embedded JPEG 2000 streams are retained in the source PDF; lossless PNG
    display copies and their original-stream digests are independently verified
    by `scripts/test-littleton-portraits.py`.
+   The remaining two Littleton voters use original JPEG streams from the
+   labeled 2024 newsletter page, verified by `scripts/test-littleton-2024-portraits.py`.
 6. Export a strict, sanitized static JSON snapshot. Every entry is labeled
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and

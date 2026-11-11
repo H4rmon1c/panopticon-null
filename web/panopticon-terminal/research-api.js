@@ -34,6 +34,22 @@ function validatePortrait(portrait, context = null) {
   }
   if (portrait.source_kind === 'embedded_pdf') {
     if (context?.client === 'littletongov' && context.jurisdiction === 'us-co-place-0845255') {
+      if ([502, 503].includes(context.personId)) {
+        const later = new Map([
+          [503, ['Andrea Peters', 2, 'cc93be470bce7757dad036ca4316b13818a4094cde002376b7e3aacffb2cf701']],
+          [502, ['Robert Reichardt', 3, 'b154471db023063b8c63b7d4cefa0dfb55c0772e2e5e61ce35913a0ca098eee6']],
+        ]).get(context.personId);
+        if (!later || context.name !== later[0] || portrait.embedded_image_index !== later[1] ||
+            portrait.sha256 !== later[2] || portrait.src !== `./research-portraits/${later[2]}.jpg` ||
+            portrait.embedded_original_sha256 !== undefined || portrait.image_transform !== undefined ||
+            portrait.caption !== `2024 city council; source labels this portrait ${later[0]}.` ||
+            portrait.image_url !== undefined || portrait.source_page !== 3 ||
+            portrait.source_document_sha256 !== 'f8264f7fc25a40afdc6c34ba41ea1864bbc5ac219f2485f91bf2c6ae9ba7e394' ||
+            portrait.source_url !== 'https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2024-littleton-reports/2024-12-dec-jan-littleton-report.pdf') {
+          throw new Error('Embedded portrait does not match the recorded voter and source');
+        }
+        return;
+      }
       const identities = new Map([
         [333, ['Kyle Schlachter', 4, '4c8e72d6b9a00294f00614e0d030fc82623036e02d15d0afb203ed01c9f72d13', '0ae1bb1e3a43bf42fc30b6c05f11e718db02a7cb0f214888b8f61f3ad50b49b1']],
         [434, ['Stephen Barr', 8, 'fb3d52ef289ce7f52fd4b64a7d1783357cbb25e516fd0c7a57a9a95be0414d7e', '3c58613ff481ebfbe0009eab2c7642c2c28deac56104643532320878316966ca']],

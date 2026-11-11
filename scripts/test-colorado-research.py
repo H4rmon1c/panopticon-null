@@ -594,6 +594,21 @@ class ResearchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.littleton_report_portrait(root, set(), 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
 
+    def test_littleton_2024_portraits_require_the_later_city_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/littleton-2024-report-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Andrea Peters', 'person_id': 503}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (3, 2))
+                self.assertTrue(result['src'].endswith('.jpg'))
+                self.assertNotIn('image_transform', result)
+                self.assertIsNone(module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', {**vote, 'name': 'Robert Reichardt'}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.littleton_report_portrait(root, set(), 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'
                   b'<img alt="Commissioner Abe Laydon" srcset="https://www.douglasco.gov/a-small.jpg 480w, '

@@ -96,6 +96,8 @@ jobs:
       - name: Verify county budget portrait streams
         run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-arapahoe-portraits.py'
       - name: Verify Littleton source portraits and lossless display copies
-        run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-littleton-portraits.py'
+        run: |
+          nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-littleton-portraits.py'
+          nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-littleton-2024-portraits.py'
       - name: Dependency policy
         run: nix develop --command cargo deny check

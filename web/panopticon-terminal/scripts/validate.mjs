@@ -76,16 +76,29 @@ try {
       createHash("sha256").update(await readFile(littletonPage)).digest("hex") !== littleton.page_fixture_sha256) {
     throw new Error("Littleton source page digest mismatch");
   }
+  const later = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/littleton-2024-report-proof.json"), "utf8"));
+  if (later.source_url !== "https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2024-littleton-reports/2024-12-dec-jan-littleton-report.pdf" ||
+      later.source_page !== 3 || later.source_sha256 !== "f8264f7fc25a40afdc6c34ba41ea1864bbc5ac219f2485f91bf2c6ae9ba7e394" ||
+      later.page_fixture !== "fixtures/atlas/portrait-sources/littleton-2024-report-page.pdf" ||
+      later.page_fixture_sha256 !== "0bb29b5d44dae80db18632b843b3f97f71a32f525d34df84f072088385ecdf50" ||
+      !Array.isArray(later.portraits) || later.portraits.length !== 2) throw new Error("invalid 2024 Littleton portrait proof");
+  const laterPage = join(repositoryRoot, later.page_fixture);
+  const laterMeta = await lstat(laterPage);
+  if (!laterMeta.isFile() || laterMeta.isSymbolicLink() || laterMeta.size > 2_000_000 ||
+      createHash("sha256").update(await readFile(laterPage)).digest("hex") !== later.page_fixture_sha256) {
+    throw new Error("2024 Littleton source page digest mismatch");
+  }
   for (const record of research.records) for (const motion of record.actions ?? []) for (const vote of motion.votes) {
     if (vote.portrait?.source_kind !== "embedded_pdf") continue;
     const isLittleton = record.jurisdiction_ref === "us-co-place-0845255";
-    const selected = isLittleton ? littleton : proof;
+    const isLater = isLittleton && vote.portrait.source_document_sha256 === later.source_sha256;
+    const selected = isLittleton ? (isLater ? later : littleton) : proof;
     const source = selected.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
     if (!source || (!isLittleton && record.jurisdiction_ref !== "us-co-county-08005") ||
         vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||
         vote.portrait.source_url !== selected.source_url || vote.portrait.source_document_sha256 !== selected.source_sha256 ||
         vote.portrait.source_page !== selected.source_page ||
-        (isLittleton && vote.portrait.embedded_original_sha256 !== source.original_sha256)) {
+        (isLittleton && !isLater && vote.portrait.embedded_original_sha256 !== source.original_sha256)) {
       throw new Error("Embedded portrait identity does not match its source proof");
     }
   }
