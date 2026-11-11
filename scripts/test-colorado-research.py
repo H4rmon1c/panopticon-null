@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Offline source-bound discovery and preliminary-export regressions."""
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
+import zipfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('colorado_research', ROOT / 'scripts/colorado-research.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+docx_spec = importlib.util.spec_from_file_location('extract_docx', ROOT / 'scripts/extract-docx.py')
+docx_module = importlib.util.module_from_spec(docx_spec)
+docx_spec.loader.exec_module(docx_module)
 from public_http import checked_url, get, public_ip  # noqa: E402
 
 
@@ -20,6 +26,14 @@ def receipt(url, body):
     return {'url': url, 'retrieved_at': '2026-11-11T00:00:00+00:00', 'status': 200,
             'resolved_ips': ['8.8.8.8'], 'connected_ip': '8.8.8.8',
             'content_type': 'application/json', 'sha256': module.sha(body), 'bytes': len(body)}
+
+
+def word_fixture(xml):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('[Content_Types].xml', '<Types/>')
+        archive.writestr('word/document.xml', xml)
+    return output.getvalue()
 
 
 class ResearchTests(unittest.TestCase):
@@ -36,15 +50,148 @@ class ResearchTests(unittest.TestCase):
             with self.assertRaises(ValueError): get('https://example.org/', {'example.org'}, interval=0)
             connect.assert_not_called()
 
+    def test_low_storage_stops_new_collection_before_it_fills_the_disk(self):
+        with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=100, f_frsize=4096, f_favail=100000)):
+            with self.assertRaises(ValueError): module.require_storage_headroom(Path('/tmp'))
+        with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=1000000, f_frsize=4096, f_favail=10)):
+            with self.assertRaises(ValueError): module.require_storage_headroom(Path('/tmp'))
+        with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=1000000, f_frsize=4096, f_favail=100000)):
+            module.require_storage_headroom(Path('/tmp'))
+
+    def test_partial_jurisdiction_counts_do_not_claim_complete_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref = 'us-co-county-08051'
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)',
+                               (ref, 'https://example.org/', '2026-11-11T00:00:00+00:00',
+                                json.dumps({'jurisdiction_ref': ref, 'state': 'directory_site_checked'})))
+                    for number, state in enumerate(['no_match', 'no_match', 'error', 'pending']):
+                        db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                      VALUES (?,?,?,?,?)''', (ref, f'https://example.org/{number}.pdf', '{}', state, '2026-11-11T00:00:00+00:00'))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
+                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 1))
+                self.assertIsNone(attempt['lookback_period'])
+            finally:
+                db.close()
+
+    def test_legacy_result_keeps_its_index_binding_before_rediscovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            url = 'https://example.org/meeting.pdf'
+            candidate = {'url': url, 'index_sha256': 'a' * 64, 'anchor_index': 2}
+            db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at)
+                          VALUES (?,?,?,?,?,?,?)''', ('us-co-county-08051', url, json.dumps(candidate), 'no_match', 0,
+                          json.dumps({'state': 'no_match'}), module.utcnow()))
+            db.commit()
+            db.close()
+            db = module.root_store(root)
+            try:
+                db.execute('UPDATE document_candidates SET candidate_json=?', (json.dumps({**candidate, 'index_sha256': 'b' * 64}),))
+                saved = json.loads(db.execute('SELECT result_json FROM document_candidates').fetchone()[0])
+                self.assertEqual(saved['candidate'], candidate)
+            finally:
+                db.close()
+
+    def test_failed_discovery_preserves_previous_evidence_and_reports_latest_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref = 'us-co-county-08051'
+                original = {'jurisdiction_ref': ref, 'website_lead': 'https://example.org/',
+                            'checked_at': '2026-11-10T00:00:00+00:00', 'state': 'directory_site_checked',
+                            'portals': [{'client': 'example'}], 'documents': []}
+                module.record_discovery(db, original)
+                failed = {**original, 'checked_at': '2026-11-11T00:00:00+00:00', 'state': 'failed',
+                          'portals': [], 'documents': [], 'error': 'timeout'}
+                module.record_discovery(db, failed)
+                self.assertEqual(json.loads(db.execute('SELECT result_json FROM discovery').fetchone()[0]), original)
+                self.assertEqual(db.execute('SELECT client FROM portals').fetchone()[0], 'example')
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
+                self.assertEqual((attempt['website_check'], attempt['checked_at']),
+                                 ('unavailable', failed['checked_at']))
+                recovered = {**original, 'checked_at': '2026-11-12T00:00:00+00:00', 'portals': []}
+                module.record_discovery(db, recovered)
+                self.assertEqual(db.execute('SELECT client FROM portals').fetchone()[0], 'example')
+                module.export_report(root, db, output)
+                attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
+                self.assertEqual((attempt['website_check'], attempt['checked_at']),
+                                 ('site_checked', recovered['checked_at']))
+            finally:
+                db.close()
+
     def test_candidate_document_scope(self):
         index = 'https://city.example.org/agenda'
         good = 'https://city.example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
         self.assertEqual(module.candidate_kind(good, index, ''), ('minutes', '2026-09-15'))
         self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council-minutes.pdf', index, 'Minutes')[0], 'minutes')
+        self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council-minutes.docx', index, 'Minutes')[0], 'minutes')
         for bad in ['http://city.example.org/uploads/agenda.pdf', 'https://evil.example/uploads/agenda.pdf',
                     'https://city.example.org/uploads/agenda.pdf?token=x', 'https://city.example.org/uploads/%2e%2e/agenda.pdf',
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
+
+    def test_word_extraction_rejects_entities_and_ignores_deleted_text(self):
+        xml = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+               b'<w:body><w:p><w:r><w:t>Flock Safety</w:t></w:r><w:del><w:r><w:t> deleted</w:t></w:r></w:del>'
+               b'</w:p></w:body></w:document>')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'meeting.docx'
+            path.write_bytes(word_fixture(xml))
+            self.assertEqual(docx_module.extract(path), b'Flock Safety\n')
+            deleted = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                       b'<w:body><w:del><w:p><w:r><w:t>Flock Safety</w:t></w:r></w:p></w:del>'
+                       b'<w:p><w:r><w:t>Budget hearing</w:t></w:r></w:p></w:body></w:document>')
+            path.write_bytes(word_fixture(deleted))
+            self.assertEqual(docx_module.extract(path), b'Budget hearing\n')
+            path.write_bytes(word_fixture(b'<!DOCTYPE x [<!ENTITY x "bad">]><x>&x;</x>'))
+            with self.assertRaises(ValueError): docx_module.extract(path)
+            path.write_bytes(word_fixture(b'<x>' + b'A' * 2_000_000 + b'</x>'))
+            with self.assertRaises(ValueError): docx_module.extract(path)
+
+    def test_word_screening_binds_source_and_runs_without_network_in_sandbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page, document = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>', b'PK\x03\x04fixture'
+                page_obs, document_obs = receipt(index, page), receipt(url, document)
+                module.archive(root, [(page_obs, page), (document_obs, document)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0, 'label': 'Minutes'}
+                response = SimpleNamespace(returncode=0, stdout=b'Flock Safety discussion\n', stderr=b'')
+                with patch.object(module.shutil, 'which', side_effect=lambda name, **_: '/usr/bin/' + name), \
+                     patch.object(module.subprocess, 'run', return_value=response) as run:
+                    result = module.extract_saved_docx(root, ref, candidate, document_obs)
+                self.assertEqual((result['state'], result['document_format']), ('matched', 'docx'))
+                self.assertTrue(result['docx_deleted_text_excluded'])
+                self.assertIn('--unshare-net', run.call_args.args[0])
+                self.assertEqual(result['finding']['citations'][0]['quote'], 'Flock Safety discussion')
+                old_result = {key: value for key, value in result.items() if key != 'docx_deleted_text_excluded'}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at)
+                                  VALUES (?,?,?,?,?,?,?)''', (ref, url, json.dumps(candidate), 'matched', 0, json.dumps(old_result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['records'], [])
+                with patch.object(module, 'extract_saved_docx', return_value=result) as extract:
+                    module.docx_saved_documents(root, db, 1, 1, revalidate=True)
+                self.assertEqual(extract.call_args.args[3]['sha256'], module.sha(document))
+                self.assertEqual(db.execute('SELECT count(*) FROM docx_history').fetchone()[0], 1)
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['records'][0]['document_format'], 'docx')
+            finally:
+                db.close()
 
     def test_public_excerpt_does_not_repeat_private_contact_context(self):
         title = module.reference_title('Resident Jane Doe discussed Flock at 123 Main Street', ['Flock'])
@@ -53,6 +200,13 @@ class ResearchTests(unittest.TestCase):
         self.assertIn('Flock', title)
         self.assertNotIn('123 Main', module.public_text('Contract at 123 Main Street'))
         self.assertNotIn('jane@example.org', module.public_text('Email jane@example.org'))
+
+    def test_document_signal_labels_must_occur_at_the_cited_line(self):
+        ids = ['vendor.flock-safety', 'vendor.axon']
+        self.assertEqual(module.labels_at_quote(ids, 'Flock Safety contract discussion'), ['Flock Safety'])
+        self.assertEqual(module.labels_at_quote(ids, 'Axon body cameras'), ['Axon'])
+        self.assertEqual(module.labels_at_quote(ids, 'A flock of birds flew overhead'), [])
+        self.assertEqual(module.labels_at_quote(['vendor.soundthinking-shotspotter'], 'ShotSpotter project'), ['ShotSpotter'])
 
     def test_robots_404_is_cached_within_a_single_bounded_run(self):
         cache = {}
@@ -80,6 +234,29 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_fresh_word_document_is_screened_on_initial_and_refresh_fetch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index = 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                document = b'PK\x03\x04word-document'
+                module.archive(root, [(receipt(index, page), page)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                obs = receipt(url, document)
+                with patch.object(module, 'cached_robots', return_value=(None, [])), \
+                     patch.object(module, 'get', return_value=[(obs, document)]), \
+                     patch.object(module, 'extract_saved_docx', return_value={'state': 'no_match', 'document_format': 'docx'}) as extract:
+                    result, _ = module.screen_one(root, 'us-co-county-08051', candidate, '/bin/true',
+                                                  threading.Lock(), module.DownloadBudget(2_000_000), False, {})
+                self.assertEqual(result['document_format'], 'docx')
+                self.assertEqual(extract.call_args.args[3]['sha256'], module.sha(document))
+                self.assertEqual((root / 'content' / module.sha(document)).read_bytes(), document)
+            finally:
+                db.close()
+
     def test_saved_ocr_reuses_archived_bytes_and_never_fetches(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -104,6 +281,47 @@ class ResearchTests(unittest.TestCase):
                 self.assertIs(args[5], True)
                 self.assertEqual(db.execute('SELECT state FROM document_candidates').fetchone()[0], 'no_match')
                 self.assertEqual(db.execute('SELECT status FROM ocr_attempts').fetchone()[0], 'ok')
+            finally:
+                db.close()
+
+    def test_older_ocr_no_match_is_not_counted_until_page_set_is_revalidated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page, pdf = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>', b'%PDF-scan'
+                page_obs, pdf_obs = receipt(index, page), receipt(url, pdf)
+                module.archive(root, [(page_obs, page), (pdf_obs, pdf)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                old = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'receipt': pdf_obs}
+                newer_pdf = b'%PDF-a-newer-version'
+                newer_obs = receipt(url, newer_pdf)
+                newer_obs['retrieved_at'] = '2026-11-11T00:05:00+00:00'
+                module.archive(root, [(newer_obs, newer_pdf)])
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, index, module.utcnow(),
+                               json.dumps({'jurisdiction_ref': ref, 'state': 'directory_site_checked'})))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at)
+                                  VALUES (?,?,?,?,?,?,?)''', (ref, url, json.dumps(candidate), 'no_match', 0, json.dumps(old), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'error': 1})
+                result = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'ocr_page_set_validated': True}
+                with patch.object(module, 'extract_captured_pdf', return_value=result) as extract, patch.object(module, 'get', side_effect=AssertionError('no network')):
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, revalidate=True)
+                self.assertEqual(extract.call_args.args[4]['sha256'], module.sha(pdf))
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'no_match': 1})
+                self.assertEqual(db.execute('SELECT count(*) FROM ocr_history').fetchone()[0], 1)
+                old['state'] = 'matched'
+                db.execute('UPDATE document_candidates SET state=?,result_json=?', ('matched', json.dumps(old)))
+                db.commit()
+                with patch.object(module, 'extract_captured_pdf', side_effect=ValueError('OCR failed')):
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, revalidate=True)
+                self.assertEqual(db.execute('SELECT state FROM document_candidates').fetchone()[0], 'error')
+                self.assertEqual(db.execute('SELECT count(*) FROM ocr_history').fetchone()[0], 2)
             finally:
                 db.close()
 
@@ -309,6 +527,16 @@ class ResearchTests(unittest.TestCase):
                     db.execute('INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at) VALUES (?,?,?,?,?,?,?)',
                                (ref, url, json.dumps(candidate), 'matched', 1, json.dumps(result), '2026-11-11T00:00:00+00:00'))
                 output = root / 'public.json'
+                module.export_report(root, db, output)
+                self.assertEqual(len(json.loads(output.read_text())['records']), 1)
+                result['extraction_status'] = 'complete_with_ocr'
+                db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
+                db.commit()
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['records'], [])
+                result['ocr_page_set_validated'] = True
+                db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
+                db.commit()
                 module.export_report(root, db, output)
                 self.assertEqual(len(json.loads(output.read_text())['records']), 1)
                 result['finding']['citations'][0]['quote'] = 'Flock was approved'

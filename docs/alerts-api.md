@@ -59,7 +59,11 @@ scope is uncertain, and a missing vote. Failed outcomes remain failed. Older
 captures are labeled when the source history changes.
 Records include a stable source-based ID, exact capture URL, digest, locator,
 timestamp, and relevant terms. `lookback_period` is null; do not infer complete
-jurisdiction coverage from an empty result. OCR-derived text is labeled. This
+jurisdiction coverage from an empty result. `coverage.search_attempts` records
+the last website-discovery attempt and counts of completed, failed, and queued
+document screens and checked portal pages by jurisdiction. These are partial
+operational counts, not an exhaustive search or a statement that no relevant
+record exists. OCR-derived text is labeled. This
 dataset is not automatically added to the verified alerts/feed and must not be
 treated as an authorized posting queue. Raw documents and receipts are kept in
 private research state and rechecked during export.

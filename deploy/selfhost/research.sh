@@ -21,6 +21,9 @@ python3 scripts/colorado-research.py --data-dir "$data" actions --limit 100 || s
 python3 scripts/colorado-research.py --data-dir "$data" agendasuite --limit 60 --pages 3 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" screen-documents --pnull-bin "$binary" --limit 300 --per-place 30 --workers 4 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" screen-documents --pnull-bin "$binary" --refresh-existing --limit 50 --per-place 2 --workers 4 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" docx-saved --revalidate-docx --limit 50 --workers 2 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" docx-saved --limit 50 --workers 2 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" ocr-saved --pnull-bin "$binary" --revalidate-ocr --limit 30 --workers 2 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" ocr-saved --pnull-bin "$binary" --limit 30 --workers 2 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" screen-documents --pnull-bin "$binary" --retry-errors --ocr --limit 30 --per-place 3 --workers 2 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" portraits --limit 32 || status=1

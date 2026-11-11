@@ -40,7 +40,7 @@ The health endpoint includes the research stage's last run and failure state.
 A successful stage does not mean every site or PDF succeeded; individual
 screening errors and pending work are counted in the preliminary dataset.
 
-`backup.sh` uses SQLite's online backup API while holding the collection/publication lock, then invokes encrypted restic storage for the database snapshot, evidence, canonical records, discovery candidate/archive artifacts, configured private proposal inputs, and current public release including API history. Configure an actual off-server backend and password file before enabling the optional backup timer. The accepted backend prefix is not proof of physical separation; verify the storage account and restoration independently. Retention deletion is deliberately an operator action. Original secrets and deployment environment files require their own encrypted recovery copy.
+`backup.sh` uses SQLite's online backup API while holding the collection/publication lock, then invokes encrypted restic storage for coherent copies of both databases, evidence, canonical records, discovery and research archives, configured private proposal inputs, and the current public release including API history. Configure an actual off-server backend and password file before enabling the optional backup timer. The accepted backend prefix is not proof of physical separation; verify the storage account and restoration independently. Retention deletion is deliberately an operator action. Original secrets and deployment environment files require their own encrypted recovery copy.
 
 ## Verification
 

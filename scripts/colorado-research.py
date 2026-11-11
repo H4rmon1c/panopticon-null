@@ -9,12 +9,14 @@ import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
+from functools import lru_cache
 import hashlib
 from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -53,6 +55,12 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def require_storage_headroom(path):
+    capacity = os.statvfs(path)
+    if capacity.f_bavail * capacity.f_frsize < 2 * 1024**3 or capacity.f_favail < 4096:
+        raise ValueError('research paused: private storage has less than 2 GiB or 4096 free inodes')
+
+
 def root_store(path):
     if not path.is_absolute():
         raise ValueError('private data directory must be absolute')
@@ -77,6 +85,10 @@ def root_store(path):
       CREATE TABLE IF NOT EXISTS discovery (
         jurisdiction_ref TEXT PRIMARY KEY, source_url TEXT NOT NULL,
         checked_at TEXT NOT NULL, result_json TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS discovery_attempts (
+        jurisdiction_ref TEXT PRIMARY KEY, attempted_at TEXT NOT NULL,
+        state TEXT NOT NULL, error TEXT
       );
       CREATE TABLE IF NOT EXISTS portals (
         jurisdiction_ref TEXT NOT NULL, client TEXT NOT NULL, proof_json TEXT NOT NULL,
@@ -137,11 +149,40 @@ def root_store(path):
         jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, attempted_at TEXT NOT NULL, status TEXT NOT NULL,
         PRIMARY KEY(jurisdiction_ref,url)
       );
+      CREATE TABLE IF NOT EXISTS ocr_history (
+        jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, attempted_at TEXT NOT NULL,
+        prior_result_json TEXT NOT NULL, outcome TEXT NOT NULL,
+        PRIMARY KEY(jurisdiction_ref,url,attempted_at)
+      );
+      CREATE TABLE IF NOT EXISTS docx_attempts (
+        jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, attempted_at TEXT NOT NULL, status TEXT NOT NULL,
+        PRIMARY KEY(jurisdiction_ref,url)
+      );
+      CREATE TABLE IF NOT EXISTS docx_history (
+        jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, attempted_at TEXT NOT NULL,
+        prior_result_json TEXT NOT NULL, outcome TEXT NOT NULL,
+        PRIMARY KEY(jurisdiction_ref,url,attempted_at)
+      );
     ''')
     columns = {row[1] for row in db.execute('PRAGMA table_info(document_candidates)')}
     for name in ('last_attempt_at', 'last_error'):
         if name not in columns:
             db.execute(f'ALTER TABLE document_candidates ADD COLUMN {name} TEXT')
+    # Older successful screens predate the embedded anchor proof. Preserve
+    # their current source-index binding before later discovery refreshes it.
+    legacy = db.execute('''SELECT jurisdiction_ref,url,candidate_json,result_json FROM document_candidates
+        WHERE state IN ('matched','no_match') AND CASE WHEN json_valid(result_json)
+          THEN json_type(result_json,'$.candidate') END IS NULL''').fetchall()
+    for ref, url, candidate_raw, result_raw in legacy:
+        try:
+            candidate, result = json.loads(candidate_raw), json.loads(result_raw)
+            if not isinstance(result, dict) or not isinstance(candidate, dict) or candidate.get('url') != url:
+                continue
+            result['candidate'] = candidate
+            db.execute('UPDATE document_candidates SET result_json=? WHERE jurisdiction_ref=? AND url=?',
+                       (json.dumps(result), ref, url))
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            continue
     if 'history_sha256' not in {row[1] for row in db.execute('PRAGMA table_info(matter_action_checks)')}:
         db.execute('ALTER TABLE matter_action_checks ADD COLUMN history_sha256 TEXT')
     for client, matter, raw in db.execute('''SELECT a.client,a.matter_id,a.captures_json FROM matter_actions a
@@ -389,7 +430,7 @@ def candidate_kind(url, index_url, label):
     # Small towns often link agenda/minutes PDFs directly from their own site.
     # A keyword match only schedules screening; it creates no decision claim.
     context = (parsed.path + ' ' + label).lower()
-    if parsed.path.lower().endswith('.pdf') and re.search(r'agenda|minutes|meeting|packet', context):
+    if parsed.path.lower().endswith(('.pdf', '.docx')) and re.search(r'agenda|minutes|meeting|packet', context):
         kind = 'minutes' if 'minute' in context else 'agenda'
         return kind, None
     return None
@@ -497,6 +538,32 @@ def discover_one(ref, name, website, budget):
     return result, observations
 
 
+def record_discovery(db, result):
+    """Keep the last usable discovery when a later request fails."""
+    ref = result['jurisdiction_ref']
+    previous = db.execute('SELECT result_json FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
+    with db:
+        db.execute('INSERT OR REPLACE INTO discovery_attempts VALUES (?,?,?,?)',
+                   (ref, result['checked_at'], result['state'], result.get('error')))
+        if result['state'] == 'failed' and previous:
+            try:
+                if json.loads(previous[0]).get('state') == 'directory_site_checked':
+                    return
+            except (TypeError, json.JSONDecodeError):
+                pass
+        db.execute('INSERT OR REPLACE INTO discovery VALUES (?,?,?,?)',
+                   (ref, result['website_lead'], result['checked_at'], json.dumps(result)))
+        # Archived first-party proofs remain useful even if an index page
+        # temporarily stops linking a portal or a deeper page fails to load.
+        for portal in result['portals']:
+            db.execute('INSERT OR REPLACE INTO portals VALUES (?,?,?)', (ref, portal['client'], json.dumps(portal)))
+        for item in result['documents']:
+            db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                          VALUES (?,?,?,'pending',?) ON CONFLICT(jurisdiction_ref,url)
+                          DO UPDATE SET candidate_json=excluded.candidate_json''',
+                       (ref, item['url'], json.dumps(item), utcnow()))
+
+
 def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_failed=False):
     budget = DownloadBudget(300 * 1024 * 1024)
     county = bootstrap_counties(data_dir, db, budget)
@@ -508,12 +575,15 @@ def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_fail
                   if json.loads(raw).get('state') == 'directory_site_checked'}
         leads = [item for item in leads if item[0] in usable]
     if only_failed:
-        failed = {ref for ref, raw in db.execute('SELECT jurisdiction_ref,result_json FROM discovery')
-                  if json.loads(raw).get('state') == 'failed'}
+        failed = {ref for ref, raw, attempt in db.execute('''SELECT d.jurisdiction_ref,d.result_json,a.state
+                  FROM discovery d LEFT JOIN discovery_attempts a USING(jurisdiction_ref)''')
+                  if (attempt or json.loads(raw).get('state')) == 'failed'}
         leads = [item for item in leads if item[0] in failed]
     if not refresh:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        already = {row[0] for row in db.execute('SELECT jurisdiction_ref FROM discovery WHERE checked_at >= ?', (cutoff,))}
+        already = {row[0] for row in db.execute('''SELECT d.jurisdiction_ref FROM discovery d
+                   LEFT JOIN discovery_attempts a USING(jurisdiction_ref)
+                   WHERE COALESCE(a.attempted_at,d.checked_at) >= ?''', (cutoff,))}
         leads = [item for item in leads if item[0] not in already]
     leads = leads[:limit]
     print(f'Checking {len(leads)} county/municipal website leads with {workers} workers', flush=True)
@@ -524,18 +594,7 @@ def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_fail
             archive(data_dir, observations)
             if result['state'] == 'deferred':
                 continue
-            ref = result['jurisdiction_ref']
-            with db:
-                db.execute('INSERT OR REPLACE INTO discovery VALUES (?,?,?,?)',
-                           (ref, result['website_lead'], result['checked_at'], json.dumps(result)))
-                db.execute('DELETE FROM portals WHERE jurisdiction_ref=?', (ref,))
-                for portal in result['portals']:
-                    db.execute('INSERT OR REPLACE INTO portals VALUES (?,?,?)', (ref, portal['client'], json.dumps(portal)))
-                for item in result['documents']:
-                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
-                                  VALUES (?,?,?,'pending',?) ON CONFLICT(jurisdiction_ref,url)
-                                  DO UPDATE SET candidate_json=excluded.candidate_json''',
-                               (ref, item['url'], json.dumps(item), utcnow()))
+            record_discovery(db, result)
             if count % 10 == 0 or count == len(jobs):
                 print(f'Discovery {count}/{len(jobs)}; linked portals '
                       f"{db.execute('SELECT count(*) FROM portals').fetchone()[0]}, document candidates "
@@ -940,23 +999,22 @@ def extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr):
     return result
 
 
+def checked_document_candidate(data_dir, url, candidate):
+    index_url = candidate['index_url']
+    links = parse_links(source_blob(data_dir, candidate['index_sha256']))
+    anchor = candidate['anchor_index']
+    if (candidate['url'] != url or type(anchor) is not int or not 0 <= anchor < len(links)
+            or urljoin(index_url, links[anchor][0]) != url or not candidate_kind(url, index_url, links[anchor][1])):
+        raise ValueError('document is not bound to its preserved source index')
+
+
 def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_cache):
-    """Rebind the index anchor, then fetch and sandbox-extract one PDF."""
+    """Rebind the index anchor, then fetch and sandbox-extract one document."""
     observations = []
     try:
         url = candidate['url']
-        index_url = candidate['index_url']
-        index_hash = candidate['index_sha256']
-        if not re.fullmatch(r'[0-9a-f]{64}', index_hash):
-            raise ValueError('invalid preserved index digest')
-        content = source_blob(data_dir, index_hash)
-        links = parse_links(content)
-        anchor = candidate['anchor_index']
-        if type(anchor) is not int or not 0 <= anchor < len(links) or urljoin(index_url, links[anchor][0]) != url:
-            raise ValueError('document differs from preserved index anchor')
+        checked_document_candidate(data_dir, url, candidate)
         parsed = urlsplit(url)
-        if not candidate_kind(url, index_url, links[anchor][1]):
-            raise ValueError('document is outside the same-host agenda path')
         host = parsed.hostname
         # Serialize calls for the same host, including its robots check.
         with host_lock:
@@ -971,10 +1029,16 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
             observations.extend(rows)
         receipt, pdf = rows[-1]
         budget.release_unused(reserved - len(pdf))
-        if receipt['status'] != 200 or not pdf.startswith(b'%PDF-'):
+        if receipt['status'] != 200:
             raise ValueError(f"not a PDF (HTTP {receipt['status']})")
         archive(data_dir, observations)
-        result = extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr)
+        observations = []
+        if pdf.startswith(b'%PDF-'):
+            result = extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr)
+        elif pdf.startswith(b'PK\x03\x04'):
+            result = extract_saved_docx(data_dir, ref, candidate, receipt)
+        else:
+            raise ValueError('not a PDF (HTTP 200)')
         return result, []
     except RobotsDenied as error:
         observations.extend(error.observations)
@@ -1008,7 +1072,7 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     locks = {host: threading.Lock() for host in hosts}
     robots_cache = {}
     budget = DownloadBudget(200 * 1024 * 1024)
-    print(f'Screening up to {len(rows)} official agenda/minutes PDFs across '
+    print(f'Screening up to {len(rows)} official agenda/minutes documents across '
           f'{len({ref for ref, _, _ in rows})} jurisdictions', flush=True)
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1047,22 +1111,11 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
                       f'elapsed {int(time.monotonic()-started)}s', flush=True)
 
 
-def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=False):
-    """Retry already archived scanned PDFs without making another network request."""
-    if not Path(binary).is_absolute() or not Path(binary).is_file():
-        raise ValueError('pnull binary must be an absolute path to an existing file')
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    rows = db.execute('''SELECT jurisdiction_ref,url,candidate_json FROM (
-        SELECT d.jurisdiction_ref,d.url,d.candidate_json,
-          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY d.url DESC) AS turn
-        FROM document_candidates d LEFT JOIN ocr_attempts o ON o.jurisdiction_ref=d.jurisdiction_ref AND o.url=d.url
-        WHERE d.state='error' AND d.result_json LIKE '%scanned_pdf_ocr_disabled%'
-          AND (o.attempted_at IS NULL OR o.attempted_at<=?
-               OR (? AND (lower(o.status) LIKE '%could not initialize tesseract%'
-                          OR lower(o.status) LIKE '%sandbox_output%')))
-      ) ORDER BY turn,jurisdiction_ref LIMIT ?''', (cutoff, retry_unavailable, limit)).fetchall()
-    wanted = {url for _, url, _ in rows}
+def saved_receipts(data_dir, wanted):
     latest = {}
+    available = set()
+    if not wanted:
+        return latest, available
     directory = data_dir / 'observations'
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError('unsafe observation directory')
@@ -1076,41 +1129,180 @@ def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=
             receipt = json.loads(raw)
             url = receipt.get('url')
             if (url in wanted and receipt_valid(receipt, url, receipt.get('sha256'))
-                    and receipt['retrieved_at'] > latest.get(url, {}).get('retrieved_at', '')):
-                latest[url] = receipt
+                    and receipt.get('sha256')):
+                available.add((url, receipt['sha256'], receipt['retrieved_at']))
+                if receipt['retrieved_at'] > latest.get(url, {}).get('retrieved_at', ''):
+                    latest[url] = receipt
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             continue
+    return latest, available
 
-    def retry(ref, url, raw):
+
+def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=False, revalidate=False):
+    """Retry already archived scanned PDFs without making another network request."""
+    if not Path(binary).is_absolute() or not Path(binary).is_file():
+        raise ValueError('pnull binary must be an absolute path to an existing file')
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    condition = ("d.state IN ('matched','no_match') AND json_extract(d.result_json,'$.extraction_status')='complete_with_ocr' "
+                 "AND COALESCE(json_extract(d.result_json,'$.ocr_page_set_validated'),0)!=1") if revalidate else (
+                 "d.state='error' AND d.result_json LIKE '%scanned_pdf_ocr_disabled%' "
+                 "AND (o.attempted_at IS NULL OR o.attempted_at<=? "
+                 "OR (? AND (lower(o.status) LIKE '%could not initialize tesseract%' OR lower(o.status) LIKE '%sandbox_output%')))" )
+    parameters = (limit,) if revalidate else (cutoff, retry_unavailable, limit)
+    rows = db.execute(f'''SELECT jurisdiction_ref,url,candidate_json,old_result,old_state FROM (
+        SELECT d.jurisdiction_ref,d.url,d.candidate_json,d.state AS old_state,
+          d.result_json AS old_result,
+          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY d.url DESC) AS turn
+        FROM document_candidates d LEFT JOIN ocr_attempts o ON o.jurisdiction_ref=d.jurisdiction_ref AND o.url=d.url
+        WHERE {condition}
+      ) ORDER BY turn,jurisdiction_ref LIMIT ?''', parameters).fetchall()
+    latest, available = saved_receipts(data_dir, {url for _, url, _, _, _ in rows})
+
+    def retry(ref, url, raw, old_result):
         try:
-            candidate = json.loads(raw)
-            index_url = candidate['index_url']
-            links = parse_links(source_blob(data_dir, candidate['index_sha256']))
-            anchor = candidate['anchor_index']
-            if (candidate['url'] != url or type(anchor) is not int or not 0 <= anchor < len(links)
-                    or urljoin(index_url, links[anchor][0]) != url or not candidate_kind(url, index_url, links[anchor][1])):
-                raise ValueError('saved PDF is not bound to its source index')
-            if url not in latest:
+            old = json.loads(old_result) if revalidate else {}
+            candidate = old.get('candidate', json.loads(raw))
+            checked_document_candidate(data_dir, url, candidate)
+            captured = old.get('receipt') if revalidate else latest.get(url)
+            if (not captured or not receipt_valid(captured, url, captured.get('sha256'))
+                    or (url, captured['sha256'], captured['retrieved_at']) not in available):
                 raise ValueError('saved PDF capture receipt not found')
-            return extract_captured_pdf(data_dir, ref, candidate, binary, latest[url], True), None
+            return extract_captured_pdf(data_dir, ref, candidate, binary, captured, True), None
         except (OSError, UnicodeError, ValueError, RuntimeError, subprocess.TimeoutExpired, KeyError, json.JSONDecodeError) as error:
             return None, str(error)[:180]
 
     print(f'OCR retry of up to {len(rows)} already archived scanned PDFs', flush=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        jobs = {pool.submit(retry, ref, url, raw): (ref, url) for ref, url, raw in rows}
+        jobs = {pool.submit(retry, ref, url, raw, old_result): (ref, url, old_result, old_state)
+                for ref, url, raw, old_result, old_state in rows}
         for count, job in enumerate(as_completed(jobs), 1):
-            ref, url = jobs[job]
+            ref, url, old_result, old_state = jobs[job]
             result, error = job.result()
             with db:
+                if revalidate:
+                    db.execute('INSERT INTO ocr_history VALUES (?,?,?,?,?)',
+                               (ref, url, utcnow(), old_result, 'ok' if result else error))
                 db.execute('INSERT OR REPLACE INTO ocr_attempts VALUES (?,?,?,?)',
                            (ref, url, utcnow(), 'ok' if result else error))
                 if result:
                     db.execute('''UPDATE document_candidates SET state=?,result_json=?,updated_at=?,last_error=NULL
-                                  WHERE jurisdiction_ref=? AND url=? AND state='error' ''',
-                               (result['state'], json.dumps(result), utcnow(), ref, url))
+                                  WHERE jurisdiction_ref=? AND url=? AND state=?''',
+                               (result['state'], json.dumps(result), utcnow(), ref, url, old_state))
+                elif revalidate:
+                    failed = {'state': 'error', 'error': 'scanned_pdf_ocr_disabled; OCR page recheck failed: ' + error}
+                    db.execute('''UPDATE document_candidates SET state='error',result_json=?,updated_at=?,last_error=?
+                                  WHERE jurisdiction_ref=? AND url=? AND state=?''',
+                               (json.dumps(failed), utcnow(), error, ref, url, old_state))
             if count % 10 == 0 or count == len(jobs):
                 print(f'Saved OCR attempts {count}/{len(jobs)}', flush=True)
+
+
+def extract_saved_docx(data_dir, ref, candidate, receipt):
+    url, digest = candidate['url'], receipt['sha256']
+    checked_document_candidate(data_dir, url, candidate)
+    if not receipt_valid(receipt, url, digest) or not source_blob(data_dir, digest, 20 * 1024 * 1024).startswith(b'PK\x03\x04'):
+        raise ValueError('archived response is not a DOCX candidate')
+    path = os.environ.get('PNUL_EXTRACTOR_PATH', '/usr/bin:/bin')
+    bwrap, prlimit = shutil.which('bwrap', path=path), shutil.which('prlimit', path=path)
+    script = ROOT / 'scripts/extract-docx.py'
+    read_blob(script, 100_000)
+    if not bwrap or not prlimit or not Path('/usr/bin/python3').is_file():
+        raise ValueError('DOCX sandbox tools are unavailable')
+    command = [prlimit, '--as=805306368', '--cpu=30', '--fsize=10485760', '--', bwrap]
+    for runtime in ('/usr', '/bin', '/lib', '/lib64', '/nix/store'):
+        if Path(runtime).exists():
+            command.extend(['--ro-bind', runtime, runtime])
+    command.extend(['--ro-bind', str(script), '/extract.py', '--ro-bind', str(data_dir / 'content' / digest), '/input.docx',
+                    '--dev', '/dev', '--proc', '/proc', '--tmpfs', '/tmp', '--unshare-net', '--unshare-pid',
+                    '--unshare-ipc', '--unshare-uts', '--new-session', '--clearenv', '--setenv', 'LANG', 'C.UTF-8',
+                    '--', '/usr/bin/python3', '-I', '-S', '/extract.py', '/input.docx'])
+    execution = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45, check=False,
+                               env={'PATH': path, 'LANG': 'C.UTF-8', 'TMPDIR': '/tmp'})
+    if execution.returncode or not execution.stdout or len(execution.stdout) > 5 * 1024 * 1024:
+        raise ValueError('sandboxed DOCX extraction failed or exceeded its bounds')
+    text = execution.stdout.decode('utf8')
+    text_digest = sha(execution.stdout)
+    extracted = data_dir / 'extracted'
+    extracted.mkdir(mode=0o700, exist_ok=True)
+    if extracted.is_symlink() or not extracted.is_dir():
+        raise ValueError('unsafe extracted text directory')
+    target = extracted / text_digest
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        if read_blob(target, 5 * 1024 * 1024) != execution.stdout:
+            raise ValueError('preserved DOCX extraction differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(execution.stdout)
+            handle.flush()
+            os.fsync(handle.fileno())
+    evidence = 'docx:' + digest
+    finding = None
+    for number, line in enumerate(text.splitlines(), 1):
+        labels = labels_at_quote(RULE_LABELS, line)
+        if labels:
+            rule_ids = [rule for rule in RULE_LABELS if labels_at_quote([rule], line)]
+            finding = {'evidence_id': evidence, 'matched_rule_ids': rule_ids,
+                       'citations': [{'evidence_id': evidence, 'locator': {'kind': 'line', 'start': number}, 'quote': line}]}
+            break
+    return {'state': 'matched' if finding else 'no_match', 'document_format': 'docx', 'document_sha256': digest,
+            'extracted_sha256': text_digest, 'evidence_id': evidence, 'finding': finding, 'extraction_status': 'complete',
+            'docx_deleted_text_excluded': True,
+            'rules_digest': sha(read_blob(ROOT / 'rules/surveillance.yml', 1_000_000)), 'rule_engine': 'docx-inline-v1',
+            'receipt': receipt, 'candidate': candidate}
+
+
+def docx_saved_documents(data_dir, db, limit, workers, revalidate=False):
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    condition = ("d.state IN ('matched','no_match') AND json_extract(d.result_json,'$.document_format')='docx' "
+                 "AND COALESCE(json_extract(d.result_json,'$.docx_deleted_text_excluded'),0)!=1") if revalidate else (
+                 "d.state='error' AND d.result_json LIKE '%not a PDF (HTTP 200)%' "
+                 "AND (a.attempted_at IS NULL OR a.attempted_at<=?)")
+    parameters = (limit,) if revalidate else (cutoff, limit)
+    rows = db.execute(f'''SELECT jurisdiction_ref,url,candidate_json,old_result,old_state FROM (
+        SELECT d.jurisdiction_ref,d.url,d.candidate_json,d.result_json AS old_result,d.state AS old_state,
+          ROW_NUMBER() OVER (PARTITION BY d.jurisdiction_ref ORDER BY d.url DESC) AS turn
+        FROM document_candidates d LEFT JOIN docx_attempts a ON a.jurisdiction_ref=d.jurisdiction_ref AND a.url=d.url
+        WHERE {condition}
+      ) ORDER BY turn,jurisdiction_ref LIMIT ?''', parameters).fetchall()
+    latest, available = saved_receipts(data_dir, {url for _, url, _, _, _ in rows})
+
+    def attempt(ref, url, raw, old_raw):
+        try:
+            old = json.loads(old_raw) if revalidate else {}
+            candidate = old.get('candidate', json.loads(raw))
+            captured = old.get('receipt') if revalidate else latest.get(url)
+            if (not captured or not receipt_valid(captured, url, captured.get('sha256'))
+                    or (url, captured['sha256'], captured['retrieved_at']) not in available):
+                raise ValueError('saved DOCX capture receipt not found')
+            return extract_saved_docx(data_dir, ref, candidate, captured), None
+        except (OSError, UnicodeError, ValueError, RuntimeError, subprocess.TimeoutExpired, KeyError, json.JSONDecodeError) as error:
+            return None, str(error)[:180]
+
+    print(f'Screening up to {len(rows)} archived Word-document candidates', flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        jobs = {pool.submit(attempt, ref, url, raw, old_result): (ref, url, old_result, old_state)
+                for ref, url, raw, old_result, old_state in rows}
+        for count, job in enumerate(as_completed(jobs), 1):
+            ref, url, old_result, old_state = jobs[job]
+            result, error = job.result()
+            with db:
+                if revalidate:
+                    db.execute('INSERT INTO docx_history VALUES (?,?,?,?,?)',
+                               (ref, url, utcnow(), old_result, 'ok' if result else error))
+                db.execute('INSERT OR REPLACE INTO docx_attempts VALUES (?,?,?,?)', (ref, url, utcnow(), 'ok' if result else error))
+                if result:
+                    db.execute('''UPDATE document_candidates SET state=?,result_json=?,updated_at=?,last_error=NULL
+                                  WHERE jurisdiction_ref=? AND url=? AND state=?''',
+                               (result['state'], json.dumps(result), utcnow(), ref, url, old_state))
+                elif revalidate:
+                    failed = {'state': 'error', 'error': 'not a PDF (HTTP 200); DOCX recheck failed: ' + error}
+                    db.execute('''UPDATE document_candidates SET state='error',result_json=?,updated_at=?,last_error=?
+                                  WHERE jurisdiction_ref=? AND url=? AND state=?''',
+                               (json.dumps(failed), utcnow(), error, ref, url, old_state))
+            if count % 10 == 0 or count == len(jobs):
+                print(f'Word-document attempts {count}/{len(jobs)}', flush=True)
 
 
 def read_blob(path, maximum):
@@ -1180,6 +1372,43 @@ RULE_LABELS = {
     'practice.geofence-warrant': 'Geofence warrants', 'technology.drone-surveillance': 'Drone surveillance',
     'industry.data-broker': 'Data brokers', 'technology.investigative-platform': 'Investigative platforms',
 }
+
+
+@lru_cache(maxsize=1)
+def public_rule_terms():
+    """Read the repository's bounded inline term arrays without a YAML dependency."""
+    rules = {}
+    current = None
+    for line in read_blob(ROOT / 'rules/surveillance.yml', 1_000_000).decode('utf8').splitlines():
+        match = re.fullmatch(r'  - id: ([a-z0-9.-]+)', line)
+        if match:
+            current = match.group(1)
+            if current in rules:
+                raise ValueError('duplicate research rule')
+            rules[current] = {}
+        elif current:
+            match = re.fullmatch(r'    (terms|false_positive_phrases): (\[.*\])', line)
+            if match:
+                values = json.loads(match.group(2))
+                if not isinstance(values, list) or any(not isinstance(value, str) or len(value) > 200 for value in values):
+                    raise ValueError('invalid research rule terms')
+                rules[current][match.group(1)] = values
+    return rules
+
+
+def labels_at_quote(rule_ids, quote):
+    rules = public_rule_terms()
+    labels = set()
+    for rule_id in rule_ids:
+        rule = rules.get(rule_id, {})
+        if (rule_id in RULE_LABELS and 'terms' in rule and 'false_positive_phrases' in rule
+                and not any(phrase.casefold() in quote.casefold() for phrase in rule['false_positive_phrases'])
+                and any(re.search(r'(?<!\w)' + re.escape(term) + r'(?!\w)', quote, re.I) for term in rule['terms'])):
+            if rule_id == 'vendor.soundthinking-shotspotter':
+                labels.update(term for term in rule['terms'] if re.search(r'(?<!\w)' + re.escape(term) + r'(?!\w)', quote, re.I))
+            else:
+                labels.add(RULE_LABELS[rule_id])
+    return sorted(labels)
 
 
 def officials_near_reference(lines, number):
@@ -1632,12 +1861,18 @@ def export_report(data_dir, db, output, assets_dir=None):
             if ref not in geography:
                 raise ValueError('unknown geography')
             result = json.loads(result_raw)
+            if result.get('extraction_status') == 'complete_with_ocr' and result.get('ocr_page_set_validated') is not True:
+                raise ValueError('OCR page set has not been validated')
+            if result.get('document_format') == 'docx' and result.get('docx_deleted_text_excluded') is not True:
+                raise ValueError('Word document deleted text has not been excluded')
             candidate = result.get('candidate', json.loads(candidate_raw))
             if candidate.get('url') != url:
                 raise ValueError('document URL differs from the captured index candidate')
             receipt = result['receipt']
             doc_digest = result['document_sha256']
-            if not receipt_valid(receipt, url, doc_digest) or not source_blob(data_dir, doc_digest, 20 * 1024 * 1024).startswith(b'%PDF-'):
+            format_name = result.get('document_format', 'pdf')
+            prefix = {'pdf': b'%PDF-', 'docx': b'PK\x03\x04'}.get(format_name)
+            if not prefix or not receipt_valid(receipt, url, doc_digest) or not source_blob(data_dir, doc_digest, 20 * 1024 * 1024).startswith(prefix):
                 raise ValueError('document receipt mismatch')
             proof = source_blob(data_dir, candidate['index_sha256'])
             if (candidate['index_url'], candidate['index_sha256']) not in receipts:
@@ -1653,9 +1888,6 @@ def export_report(data_dir, db, output, assets_dir=None):
             if not directory_host or directory_host != urlsplit(url).hostname.removeprefix('www.'):
                 raise ValueError('document is not attached to its directory website lead')
             finding = result['finding']
-            labels = sorted({RULE_LABELS[item] for item in finding['matched_rule_ids'] if item in RULE_LABELS})
-            if not labels:
-                raise ValueError('no supported research rules')
             text_digest = result['extracted_sha256']
             if not re.fullmatch(r'[0-9a-f]{64}', text_digest):
                 raise ValueError('invalid extracted text digest')
@@ -1669,6 +1901,9 @@ def export_report(data_dir, db, output, assets_dir=None):
                     or citation['quote'] != lines[number - 1]
                     or citation['evidence_id'] != result['evidence_id'] or finding['evidence_id'] != result['evidence_id']):
                 raise ValueError('finding does not bind to its extracted line')
+            labels = labels_at_quote(finding['matched_rule_ids'], citation['quote'])
+            if not labels:
+                raise ValueError('no supported rule is present at the cited line')
             key = (ref, doc_digest)
             if key in seen_documents:
                 continue
@@ -1693,6 +1928,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                 'source_sha256': doc_digest, 'locator': f'extracted line {number}',
                 'captured_at': receipt['retrieved_at'], 'last_screened_at': updated,
                 'people_context': people,
+                'document_format': format_name,
                 'historical': bool(historical),
                 'ocr': result.get('extraction_status') == 'complete_with_ocr'})
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
@@ -1714,7 +1950,43 @@ def export_report(data_dir, db, output, assets_dir=None):
     if len(records) > MAX_RESULTS:
         raise ValueError('research report exceeds record limit')
     records.sort(key=lambda item: (item['jurisdiction'], item['id']))
-    status = dict(db.execute('SELECT state,count(*) FROM document_candidates GROUP BY state').fetchall())
+    reported_state = """CASE WHEN state IN ('matched','no_match') AND (
+        (json_extract(result_json,'$.extraction_status')='complete_with_ocr'
+         AND COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1)
+        OR (json_extract(result_json,'$.document_format')='docx'
+         AND COALESCE(json_extract(result_json,'$.docx_deleted_text_excluded'),0)!=1))
+        THEN 'error' ELSE state END"""
+    status = dict(db.execute(f'SELECT {reported_state} AS reported,count(*) FROM document_candidates GROUP BY reported').fetchall())
+    document_counts = {}
+    for ref, state, count in db.execute(f'SELECT jurisdiction_ref,{reported_state} AS reported,count(*) FROM document_candidates GROUP BY jurisdiction_ref,reported'):
+        document_counts.setdefault(ref, {})[state] = count
+    portal_counts = Counter()
+    for client, count in db.execute('SELECT client,count(*) FROM scans GROUP BY client'):
+        if client in clients:
+            portal_counts[clients[client]] += count
+    suite_screened = db.execute("SELECT count(*) FROM suite_meetings WHERE state IN ('matched','no_match')").fetchone()[0]
+    attempts = []
+    for ref, checked, raw, attempted, attempt_state in db.execute('''SELECT d.jurisdiction_ref,d.checked_at,
+            d.result_json,a.attempted_at,a.state FROM discovery d LEFT JOIN discovery_attempts a USING(jurisdiction_ref)
+            ORDER BY d.jurisdiction_ref'''):
+        try:
+            entry = json.loads(raw)
+            if ref not in geography or entry['jurisdiction_ref'] != ref:
+                continue
+            checked = attempted or checked
+            datetime.fromisoformat(checked)
+            if entry['state'] not in ('directory_site_checked', 'failed'):
+                continue
+            counts = document_counts.get(ref, {})
+            attempts.append({'jurisdiction_ref': ref, 'checked_at': checked,
+                             'website_check': 'site_checked' if (attempt_state or entry['state']) == 'directory_site_checked' else 'unavailable',
+                             'documents_screened': counts.get('matched', 0) + counts.get('no_match', 0),
+                             'documents_failed': counts.get('error', 0), 'documents_queued': counts.get('pending', 0),
+                             'portal_pages_checked': portal_counts[ref],
+                             'agenda_meeting_pages_screened': suite_screened if ref == SUITE_REF else 0,
+                             'lookback_period': None})
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            continue
     report = {'schema_version': 'pnull-research-v1', 'state': 'preliminary', 'generated_at': utcnow(),
               'notice': 'Possible references from public sources. A mention does not establish an approval, individual vote, contract execution, or deployment.',
               'coverage': {'lookback_period': None, 'jurisdictions_with_mentions': len({x['jurisdiction_ref'] for x in records}),
@@ -1722,6 +1994,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                            'document_references': sum(x['kind'] == 'meeting_document' for x in records),
                            'agenda_portal_references': sum(x['kind'] == 'agenda_portal_reference' for x in records),
                            'agenda_portal_screening': dict(db.execute('SELECT state,count(*) FROM suite_meetings GROUP BY state').fetchall()),
+                           'search_attempts': attempts,
                            'recorded_actions': sum(len(x.get('actions', [])) for x in records),
                            'recorded_vote_entries': sum(len(motion['votes']) for x in records for motion in x.get('actions', [])),
                            'document_screening': status,
@@ -1779,6 +2052,11 @@ def main():
     ocr.add_argument('--limit', type=int, default=30)
     ocr.add_argument('--workers', type=int, default=2)
     ocr.add_argument('--retry-unavailable', action='store_true', help='retry immediately after repairing OCR data or sandbox output')
+    ocr.add_argument('--revalidate-ocr', action='store_true', help='recheck older OCR results without validated page sets')
+    docx = subs.add_parser('docx-saved')
+    docx.add_argument('--limit', type=int, default=50)
+    docx.add_argument('--workers', type=int, default=2)
+    docx.add_argument('--revalidate-docx', action='store_true', help='recheck earlier Word extractions without deleted-text validation')
     portraits = subs.add_parser('portraits')
     portraits.add_argument('--limit', type=int, default=32, help='maximum jurisdictions with named official context')
     e = subs.add_parser('export')
@@ -1799,11 +2077,17 @@ def main():
         parser.error('choose either error retries or existing-document refreshes')
     if args.command == 'ocr-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 4):
         parser.error('saved OCR bounds exceeded')
+    if args.command == 'ocr-saved' and args.retry_unavailable and args.revalidate_ocr:
+        parser.error('choose either OCR revalidation or retrying unavailable data')
+    if args.command == 'docx-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 4):
+        parser.error('saved Word-document bounds exceeded')
     if args.command == 'portraits' and not 1 <= args.limit <= 100:
         parser.error('portrait search bounds exceeded')
     os.umask(0o077)
     db = root_store(args.data_dir)
     try:
+        if args.command != 'export':
+            require_storage_headroom(args.data_dir)
         if args.command == 'discover':
             discover(args.data_dir, db, args.limit, args.workers, args.refresh, args.only_usable, args.only_failed)
         elif args.command == 'scan':
@@ -1816,7 +2100,9 @@ def main():
             screen_documents(args.data_dir, db, args.pnull_bin, args.limit, args.per_place, args.workers,
                              args.retry_errors, args.ocr, args.refresh_existing)
         elif args.command == 'ocr-saved':
-            ocr_saved_documents(args.data_dir, db, args.pnull_bin, args.limit, args.workers, args.retry_unavailable)
+            ocr_saved_documents(args.data_dir, db, args.pnull_bin, args.limit, args.workers, args.retry_unavailable, args.revalidate_ocr)
+        elif args.command == 'docx-saved':
+            docx_saved_documents(args.data_dir, db, args.limit, args.workers, args.revalidate_docx)
         elif args.command == 'portraits':
             collect_portraits(args.data_dir, db, args.limit)
         elif args.command == 'export':

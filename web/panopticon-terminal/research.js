@@ -1,13 +1,16 @@
-import { readBoundedResearchResponse } from './research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse } from './research-api.js';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 
 const summary = document.querySelector('#research-summary');
+const scope = document.querySelector('#research-scope');
 const search = document.querySelector('#research-search');
 const count = document.querySelector('#research-count');
 const results = document.querySelector('#research-results');
 const selected = new URLSearchParams(location.search).get('jurisdiction');
 const jurisdiction = /^us-co-[a-z0-9-]{1,100}$/.test(selected ?? '') ? selected : null;
+const selectedRecord = new URLSearchParams(location.search).get('record');
+const recordId = /^co-[a-z0-9-]{1,150}$/.test(selectedRecord ?? '') ? selectedRecord : null;
 const node = (tag, name, value) => {
   const element = document.createElement(tag);
   if (name) element.className = name;
@@ -21,17 +24,16 @@ const external = (url, text) => {
 };
 
 function render(report) {
-  const query = search.value.trim().toLocaleLowerCase();
-  const matches = report.records.filter((item) =>
-    (!jurisdiction || item.jurisdiction_ref === jurisdiction) &&
-    `${item.jurisdiction} ${item.file} ${item.title} ${item.signals.join(' ')}`.toLocaleLowerCase().includes(query));
+  const matches = report.records.filter((item) => (!jurisdiction || item.jurisdiction_ref === jurisdiction) &&
+    (!recordId || item.id === recordId) && matchesResearchQuery(item, search.value));
   const latest = (item) => (item.actions ?? []).reduce((date, action) =>
     /^\d{4}-\d{2}-\d{2}$/.test(action.date) && action.date > date ? action.date : date, '');
   matches.sort((left, right) => latest(right).localeCompare(latest(left)) || left.jurisdiction.localeCompare(right.jurisdiction));
-  count.textContent = `${matches.length.toLocaleString()} matches${jurisdiction ? ' in this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
+  count.textContent = `${matches.length.toLocaleString()} matches${recordId ? ' for this reference' : jurisdiction ? ' in this jurisdiction' : ''}${matches.length > 100 ? ' · showing the first 100' : ''}`;
   results.replaceChildren();
   for (const item of matches.slice(0, 100)) {
     const card = node('article', 'card');
+    card.id = item.id;
     card.append(node('p', 'label', 'PRELIMINARY SOURCE REFERENCE'));
     card.append(node('h2', '', item.jurisdiction));
     if (item.file) card.append(node('p', 'file', item.file));
@@ -69,7 +71,8 @@ function render(report) {
           if (portrait) {
             detail.append(external(portrait.source_url, 'Portrait source ↗'));
             detail.append(node('p', 'meta', 'Portrait date not established.'));
-          }
+            if (portrait.source_conflict?.public_note) detail.append(node('p', 'meta', portrait.source_conflict.public_note));
+          } else detail.append(node('p', 'meta', 'Portrait not yet established.'));
           entry.append(detail); people.append(entry);
         }
         section.append(people);
@@ -105,7 +108,7 @@ function render(report) {
         if (person.portrait) {
           detail.append(external(person.portrait.image_url, 'Open official image ↗'));
           detail.append(external(person.portrait.source_url, 'Portrait source ↗'));
-        }
+        } else detail.append(node('p', 'meta', 'Portrait not yet established.'));
         entry.append(detail);
         people.append(entry);
       }
@@ -113,10 +116,15 @@ function render(report) {
     }
     card.append(node('p', 'note', 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
-    const sourceLabel = item.kind === 'meeting_document' ? 'Open captured meeting document ↗' :
+    const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
       item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
     card.append(external(item.source_url, sourceLabel));
     if (item.matter_url) card.append(external(item.matter_url, 'Open official matter ↗'));
+    const permalink = node('a', 'source', 'Link to this reference ↗');
+    const referenceUrl = new URL('./research.html', location.href);
+    referenceUrl.searchParams.set('record', item.id);
+    permalink.href = referenceUrl.href;
+    card.append(permalink);
     const detail = node('details', 'proof');
     detail.append(node('summary', '', 'Capture details'));
     detail.append(node('p', '', `Locator: ${item.locator}`));
@@ -131,6 +139,16 @@ try {
   const response = await fetch('./public/research-signals.json', { cache: 'no-store' });
   const report = await readBoundedResearchResponse(response);
   summary.textContent = `${report.records.length.toLocaleString()} preliminary references · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · complete search coverage is not established`;
+  if (jurisdiction) {
+    const attempt = report.coverage.search_attempts?.find((item) => item.jurisdiction_ref === jurisdiction);
+    scope.hidden = false;
+    scope.textContent = attempt ?
+      `Website discovery ${attempt.website_check === 'site_checked' ? 'reached the site' : 'was unavailable'} on ${attempt.checked_at.slice(0, 10)}. ` +
+        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} failed · ${attempt.documents_queued} queued · ` +
+        `${attempt.portal_pages_checked} portal query pages checked · ${attempt.agenda_meeting_pages_screened} agenda-platform meeting pages screened. ` +
+        'These are partial source checks; the dates covered are not established.' :
+      'No website discovery attempt is recorded for this jurisdiction. Its search coverage is not established.';
+  }
   search.addEventListener('input', () => render(report));
   render(report);
 } catch {

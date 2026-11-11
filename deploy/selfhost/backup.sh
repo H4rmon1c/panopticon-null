@@ -53,6 +53,20 @@ with sqlite3.connect(f'file:{source}?mode=ro',uri=True) as original:
         if backup.execute('PRAGMA integrity_check').fetchone()[0]!='ok': raise ValueError('database integrity failure')
 os.chmod(target,0o600)
 PY
+if [[ -e "$private_root/research/research.sqlite3" || -L "$private_root/research/research.sqlite3" ]]; then
+    [[ -f "$private_root/research/research.sqlite3" && ! -L "$private_root/research/research.sqlite3" ]] || exit 1
+    python3 - "$private_root/research/research.sqlite3" "$stage/research.sqlite3" <<'PY'
+import os,sqlite3,sys
+from pathlib import Path
+source,target=map(Path,sys.argv[1:])
+with sqlite3.connect(f'file:{source}?mode=ro',uri=True) as original:
+    with sqlite3.connect(target) as backup:
+        original.backup(backup)
+        if backup.execute('PRAGMA integrity_check').fetchone()[0]!='ok': raise ValueError('research database integrity failure')
+os.chmod(target,0o600)
+PY
+    extra_paths+=("$stage/research.sqlite3")
+fi
 # Stable archive path names make documented restores independent of temporary names.
 # Source blobs are immutable, but remain locked through upload for a coherent set.
 restic backup --tag panopticon --tag colorado-production \

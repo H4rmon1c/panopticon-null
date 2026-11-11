@@ -8,6 +8,7 @@ body { margin: 0; }
 h1 { margin: 0; font-size: clamp(32px, 6vw, 60px); letter-spacing: -.06em; }
 .intro { max-width: 68ch; color: #a8bbc2; line-height: 1.7; font-size: 13px; }
 .coverage { border-left: 3px solid #dfaa4d; padding: 14px; background: #14242a; color: #f5d6a1; font-size: 12px; line-height: 1.5; }
+.scope { color: #a8bbc2; font-size: 11px; line-height: 1.6; }
 label { display: block; margin: 30px 0 8px; color: #9ab2bb; font-size: 10px; letter-spacing: .12em; }
 input { width: 100%; padding: 14px; border: 1px solid #4d737e; background: #081a23; color: #f4f8f7; font: inherit; }
 .count { color: #9ab2bb; font-size: 11px; }

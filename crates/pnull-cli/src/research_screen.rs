@@ -150,7 +150,9 @@ pub(super) fn screen_pdf(
             "state": if finding.is_some() { "matched" } else { "no_match" },
             "evidence_id": result.record.id, "document_sha256": digest,
             "extracted_sha256": text_digest, "rules_digest": rule_digest,
-            "extraction_status": result.record.extraction_status, "finding": finding,
+            "extraction_status": result.record.extraction_status,
+            "ocr_page_set_validated": result.record.extraction_status == ExtractionStatus::CompleteWithOcr,
+            "finding": finding,
         }))?
     );
     Ok(())

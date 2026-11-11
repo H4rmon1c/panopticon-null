@@ -13,7 +13,7 @@ no relevant decision exists.
 1. Seed municipality websites from the existing Colorado Municipal League
    directory and county sites from an archived county-clerks directory. Visit
    bounded pages on each site, find linked official meeting portals and
-   same-host agenda/minutes PDFs, and retain the exact index page and link.
+   same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of
    pages for configured vendor and technology terms. A title match is a lead,
@@ -23,11 +23,13 @@ no relevant decision exists.
    portal includes other public bodies, so a match is labeled as a portal
    reference until the responsible body is established. The calendar's recent
    window does not establish historical coverage.
-3. Fetch discovered meeting PDFs within per-file and per-run byte budgets.
+3. Fetch discovered meeting documents within per-file and per-run byte budgets.
    The Rust worker verifies their SHA-256 digests, extracts text with the
    existing sandboxed Poppler path, and applies the repository's detection
    rules. Failures remain errors; they are never counted as no-match results.
-   OCR retries are bounded and marked as OCR when exported.
+   OCR retries are bounded and marked as OCR when exported. DOCX files are
+   parsed in a separate network-isolated sandbox with ZIP, XML, memory, CPU,
+   and output limits; embedded links and files are never followed.
 4. For matched Legistar matters, capture the matter history, corresponding
    meeting item, recorded votes, and any separate consent-agenda item. The
    exporter reopens every raw capture and verifies client, matter, meeting,
@@ -43,7 +45,10 @@ no relevant decision exists.
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and
    `/api/v1/research.json` use this snapshot. Raw documents, raw responses,
-   network receipts, extracted text, and the SQLite queue remain private.
+   network receipts, extracted text, and the SQLite queue remain private. For
+   each jurisdiction with a recorded website attempt, the snapshot reports
+   partial screening, failure, and queue counts without asserting a complete
+   date window.
 
 The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release
@@ -53,8 +58,14 @@ The collector uses TLS verification, public-IP-only DNS checks with connection
 pinning, bounded reads, per-host pacing, and restricted redirects. Archive
 bytes are content-addressed. The document queue is resumable and retains
 prior matches if a refresh fails; changed captures retain private history and
-are labeled historical where appropriate. These safeguards are not a claim
+are labeled historical where appropriate. A failed website rediscovery also
+preserves earlier portal proofs and reports the latest attempt as unavailable;
+an earlier portal proof establishes a past link, not that the link is current.
+These safeguards are not a claim
 that every public source is accessible or every automated match is correct.
+New collection stops if the private volume has under 2 GiB or 4,096 free
+inodes; publication can still export a previous snapshot. Monitor archive
+growth and maintain off-server backups rather than deleting source evidence.
 
 ## Running locally
 
@@ -67,6 +78,7 @@ python3 scripts/colorado-research.py --data-dir /private/panopticon-research sca
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research actions --limit 100
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research agendasuite --limit 60 --pages 3
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research screen-documents --pnull-bin /absolute/path/to/pnull --limit 300 --per-place 30 --workers 4
+python3 scripts/colorado-research.py --data-dir /private/panopticon-research docx-saved --limit 50 --workers 2
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research ocr-saved --pnull-bin /absolute/path/to/pnull --limit 30 --workers 2
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research portraits --limit 32
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research export --output /absolute/staging/public/research-signals.json --assets-dir /absolute/staging/research-portraits
@@ -79,6 +91,11 @@ after repairing unavailable OCR data, `--retry-unavailable` retries those
 specific failures immediately. Install English Tesseract data at the system
 default or set `PNUL_TESSDATA_DIR` to a directory under `/usr` or `/nix/store`.
 Only that validated read-only directory is passed into the sandbox.
+The `--revalidate-ocr` mode rechecks earlier OCR results that lack a validated
+complete page set; until then, they count as errors rather than completed
+screens. `docx-saved --revalidate-docx` similarly rechecks older Word
+extractions that did not establish that deleted text was excluded. The earlier
+result remains in private history.
 Do not run collectors concurrently against the same hosts:
 the self-hosted wrapper holds the shared collection lock for the complete job.
 Use the deployment publisher for an atomic staged release rather than writing
@@ -96,7 +113,7 @@ those sites have been examined. Some document extraction attempts fail, some
 sources restrict automated access, and many queued documents remain to be
 processed. The title screen is keyword-based and can miss relevant matters or
 produce unrelated matches. The public snapshot reports no complete lookback
-period.
+period. Older binary `.doc` files are not yet supported.
 
 The next major expansion is additional document/portal adapters and audited
 date-window coverage, followed by stronger identity/term resolution, more

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { readBoundedResearchResponse, validateResearch } from '../research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse, validateResearch } from '../research-api.js';
 
 const original = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(original);
@@ -13,6 +13,13 @@ test('real research output remains explicitly preliminary and counts source refe
   assert.ok(report.records.length > 0);
   assert.ok(report.records.every((record) => record.confidence === 'unconfirmed_source_reference'));
   assert.equal(new Set(report.records.map((record) => record.id)).size, report.records.length);
+});
+
+test('research search includes people named in recorded votes', () => {
+  const item = original.records.find((record) => record.actions?.some((action) => action.votes.length));
+  const name = item.actions.find((action) => action.votes.length).votes[0].name;
+  assert.equal(matchesResearchQuery(item, name.toUpperCase()), true);
+  assert.equal(matchesResearchQuery(item, 'unrelated-nonexistent-person-name'), false);
 });
 
 test('invalid confidence, source URL, identifiers, counts and text are rejected', () => {
@@ -92,6 +99,24 @@ test('county-linked agenda references remain scoped to their exact meeting and d
   ]) {
     const changed = structuredClone(base);
     change(changed.records.at(-1));
+    assert.throws(() => validateResearch(changed));
+  }
+});
+
+test('partial jurisdiction attempts cannot claim a complete time window', () => {
+  const base = copy();
+  base.coverage.search_attempts = [{ jurisdiction_ref: 'us-co-county-08041', checked_at: '2026-11-11T00:00:00Z',
+    website_check: 'site_checked', documents_screened: 12, documents_failed: 2, documents_queued: 5, portal_pages_checked: 0,
+    agenda_meeting_pages_screened: 104, lookback_period: null }];
+  validateResearch(base);
+  for (const change of [
+    (report) => { report.coverage.search_attempts[0].lookback_period = 'all time'; },
+    (report) => { report.coverage.search_attempts[0].documents_screened = -1; },
+    (report) => { report.coverage.search_attempts[0].private_note = 'not for publication'; },
+    (report) => { report.coverage.search_attempts.push(report.coverage.search_attempts[0]); },
+  ]) {
+    const changed = structuredClone(base);
+    change(changed);
     assert.throws(() => validateResearch(changed));
   }
 });

@@ -7,6 +7,15 @@ const safeText = (value, maximum) => typeof value === 'string' && value.length <
   !/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u.test(value);
 const locator = (value) => typeof value === 'string' && /^\$\[\d+\]$/.test(value);
 
+export function matchesResearchQuery(item, value) {
+  const query = value.trim().toLocaleLowerCase();
+  const people = [
+    ...(item.people_context ?? []).map((person) => person.name),
+    ...(item.actions ?? []).flatMap((action) => action.votes.map((vote) => vote.name)),
+  ];
+  return `${item.jurisdiction} ${item.file} ${item.title} ${item.signals.join(' ')} ${people.join(' ')}`.toLocaleLowerCase().includes(query);
+}
+
 function validatePortrait(portrait) {
   if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date']) ||
       !digest(portrait.sha256) ||
@@ -28,7 +37,7 @@ export function validateResearch(report) {
       report.schema_version !== 'pnull-research-v1' || report.state !== 'preliminary' ||
       !Array.isArray(report.records) || report.records.length > 50000 ||
       !onlyKeys(report.coverage, ['lookback_period', 'jurisdictions_with_mentions', 'matter_references',
-        'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
+        'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
         'refresh_failures_preserving_prior_results', 'omitted_failed_provenance']) ||
       report.coverage.lookback_period !== null ||
       !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match']) ||
@@ -45,10 +54,24 @@ export function validateResearch(report) {
     throw new Error('Invalid preliminary research report');
   }
   const seen = new Set();
+  if (report.coverage.search_attempts !== undefined) {
+    if (!Array.isArray(report.coverage.search_attempts) || report.coverage.search_attempts.length > 5000) throw new Error('Invalid research attempts');
+    const places = new Set();
+    for (const attempt of report.coverage.search_attempts) {
+      if (!onlyKeys(attempt, ['jurisdiction_ref', 'checked_at', 'website_check', 'documents_screened', 'documents_failed',
+        'documents_queued', 'portal_pages_checked', 'agenda_meeting_pages_screened', 'lookback_period']) ||
+          !/^us-co-[a-z0-9-]{1,100}$/.test(attempt.jurisdiction_ref) || places.has(attempt.jurisdiction_ref) ||
+          typeof attempt.checked_at !== 'string' || !Number.isFinite(Date.parse(attempt.checked_at)) ||
+          !['site_checked', 'unavailable'].includes(attempt.website_check) || attempt.lookback_period !== null ||
+          ![attempt.documents_screened, attempt.documents_failed, attempt.documents_queued, attempt.portal_pages_checked,
+            attempt.agenda_meeting_pages_screened].every(nonnegative)) throw new Error('Invalid research attempt');
+      places.add(attempt.jurisdiction_ref);
+    }
+  }
   for (const record of report.records) {
     if (!onlyKeys(record, ['id', 'kind', 'confidence', 'jurisdiction_ref', 'jurisdiction', 'file', 'title', 'signals',
       'source_status', 'source_url', 'matter_url', 'source_sha256', 'locator', 'captured_at', 'last_screened_at',
-      'people_context', 'historical', 'ocr', 'actions']) ||
+      'people_context', 'historical', 'ocr', 'actions', 'document_format']) ||
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
         !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
@@ -91,7 +114,7 @@ export function validateResearch(report) {
           record.id !== `co-legistar-${matter[1]}-${matter[2]}`) throw new Error('Matter identity is inconsistent');
     } else if (record.kind === 'meeting_document' && (!/^co-document-[a-f0-9]{24}$/.test(record.id) || parsedUrls[0].search ||
         !(/\/AgendaCenter\/ViewFile\/(?:Agenda|Minutes)\/_[0-9]{8}-[0-9]{1,12}$/i.test(parsedUrls[0].pathname) ||
-          /\.pdf$/i.test(parsedUrls[0].pathname)))) throw new Error('Meeting document URL is inconsistent');
+          /\.(?:pdf|docx)$/i.test(parsedUrls[0].pathname)))) throw new Error('Meeting document URL is inconsistent');
     else if (record.kind === 'agenda_portal_reference') {
       const meeting = /^\/iip\/elpaso\/meeting\/details\/([1-9]\d*)$/.exec(parsedUrls[0].pathname);
       if (parsedUrls[0].hostname !== 'www.agendasuite.org' || parsedUrls[0].search || !meeting ||
@@ -100,6 +123,9 @@ export function validateResearch(report) {
     }
     if (record.kind !== 'matter_reference' && record.matter_url !== undefined) throw new Error('Unexpected matter URL');
     if (record.kind === 'meeting_document' && record.ocr !== undefined && typeof record.ocr !== 'boolean') throw new Error('Invalid OCR label');
+    if (record.document_format !== undefined && (record.kind !== 'meeting_document' || !['pdf', 'docx'].includes(record.document_format))) throw new Error('Invalid document format');
+    if (record.kind === 'meeting_document' && ((/\.docx$/i.test(parsedUrls[0].pathname) && record.document_format !== 'docx') ||
+        (/\.pdf$/i.test(parsedUrls[0].pathname) && record.document_format === 'docx'))) throw new Error('Document format conflicts with its URL');
     if (record.historical !== undefined && typeof record.historical !== 'boolean') throw new Error('Invalid historical label');
     if (record.actions !== undefined) {
       if (record.kind !== 'matter_reference' || !Array.isArray(record.actions) || record.actions.length > 10) throw new Error('Invalid matter actions');
