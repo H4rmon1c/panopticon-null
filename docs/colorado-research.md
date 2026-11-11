@@ -22,6 +22,10 @@ no relevant decision exists.
    same path without a numeric timestamp when source policy permits. The
    original index and link remain visible, and the page states that the
    captured document may be a different version.
+   When a directory website has moved, discovery can follow a bounded HTTPS
+   redirect to a `.gov` domain carrying the complete jurisdiction name.
+   The original redirect and final page must both remain in the private archive
+   before the new host can be attributed to that jurisdiction.
    For captured CivicPlus agenda indexes, the collector also reads published
    year/category selectors without executing their JavaScript and requests a
    bounded number of older official indexes. It rotates between jurisdictions,
@@ -32,8 +36,11 @@ no relevant decision exists.
    its public API as an additional matter-title index. Query a bounded number of
    pages for configured vendor and technology terms. A title match is a lead,
    not proof of approval or deployment. The collector rotates between portals
-   and resumes pagination across runs, resetting after the final page or the
-   100-page safety cap; changing page size also resets the cursor. Results can
+   and searches the expanded term list in bounded batches; the scheduler runs
+   two passes so each portal can advance through both. It resumes pagination
+   across runs, resetting after the final page or the 100-page safety cap;
+   changing the term version or page size also resets the relevant cursor.
+   Captured queries from the previous term version remain verifiable. Results can
    shift while a portal is being paged, so this is not a complete census.
    For El Paso County, follow the county's own link to the AgendaSuite calendar
    and screen the public meeting pages linked from its recent calendar. That

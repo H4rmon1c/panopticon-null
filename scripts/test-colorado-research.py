@@ -109,6 +109,119 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(len(observations), 2)
         self.assertEqual(aliases, {'town.example.org', 'www.town.example.org'})
 
+    def test_canonical_gov_redirect_requires_the_full_jurisdiction_in_the_registered_domain(self):
+        self.assertTrue(module.canonical_gov_host('Arvada city', 'www.arvadaco.gov'))
+        self.assertTrue(module.canonical_gov_host('Arapahoe County', 'files.arapahoeco.gov'))
+        self.assertTrue(module.canonical_gov_host('Crested Butte town', 'townofcrestedbutte.colorado.gov'))
+        for host in ('arvada.attacker.gov', 'arvadaco.gov.attacker.example', 'other.gov', 'arvadaco.com'):
+            self.assertFalse(module.canonical_gov_host('Arvada city', host))
+        original = 'https://www.arvada.org/robots.txt'
+        target = 'https://www.arvadaco.gov/robots.txt'
+        first = receipt(original, b'')
+        first.update(status=301, redirect_target=target)
+        body = b'User-agent: *\nDisallow: /private\n'
+        final = receipt(target, body)
+        final['content_type'] = 'text/plain'
+        def fetch(url, _hosts, **_kwargs):
+            return [(first, b'')] if url == original else [(final, body)]
+        hosts = {'www.arvada.org', 'arvada.org'}
+        with patch.object(module, 'get', side_effect=fetch):
+            rules, rows = module.get_robots('www.arvada.org', hosts,
+                                            canonical_redirect=lambda host: module.canonical_gov_host('Arvada', host))
+        self.assertIn('www.arvadaco.gov', hosts)
+        self.assertEqual(len(rows), 2)
+        self.assertFalse(module.allowed(rules, 'https://www.arvada.org/private'))
+        first['redirect_target'] = 'https://arvada.attacker.gov/robots.txt'
+        with patch.object(module, 'get', return_value=[(first, b'')]):
+            with self.assertRaises(module.RobotsDenied):
+                module.get_robots('www.arvada.org', {'www.arvada.org'},
+                                  canonical_redirect=lambda host: module.canonical_gov_host('Arvada', host))
+
+    def test_canonical_government_sources_require_both_archived_redirect_and_final_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, home, final_url = 'us-co-place-0803455', 'https://www.arvada.org/', 'https://www.arvadaco.gov/'
+                redirect = receipt(home, b'')
+                redirect.update(status=301, redirect_target=final_url)
+                body = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                final = receipt(final_url, body)
+                final['content_type'] = 'text/html'
+                module.archive(root, [(redirect, b''), (final, body)])
+                entry = {'jurisdiction_ref': ref, 'name': 'Arvada', 'website_lead': home,
+                         'checked_at': module.utcnow(), 'state': 'directory_site_checked', 'portals': [], 'documents': [],
+                         'canonical_url': final_url, 'canonical_receipt': final, 'canonical_redirects': [redirect]}
+                module.record_discovery(db, entry)
+                self.assertEqual(module.discovery_hosts(root, db, ref), {'arvada.org', 'arvadaco.gov'})
+                document_url = final_url + 'AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                document = b'PK\x03\x04fixture'
+                capture = receipt(document_url, document)
+                module.archive(root, [(capture, document)])
+                candidate = {'url': document_url, 'index_url': final_url, 'index_sha256': module.sha(body), 'anchor_index': 0}
+                response = SimpleNamespace(returncode=0, stdout=b'Flock Safety discussion\n', stderr=b'')
+                with patch.object(module.shutil, 'which', side_effect=lambda name, **_: '/usr/bin/' + name), \
+                     patch.object(module.subprocess, 'run', return_value=response):
+                    screened = module.extract_saved_docx(root, ref, candidate, capture)
+                with db:
+                    db.execute('''insert into document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  values (?,?,?,'matched',?,?)''', (ref, document_url, json.dumps(candidate), json.dumps(screened), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                self.assertEqual(len(json.loads(output.read_text())['records']), 1)
+                bad = {**entry, 'canonical_url': 'https://attacker.gov/'}
+                with db: db.execute('update discovery set result_json=? where jurisdiction_ref=?', (json.dumps(bad), ref))
+                self.assertEqual(module.discovery_hosts(root, db, ref), {'arvada.org'})
+                module.export_report(root, db, output)
+                self.assertEqual(json.loads(output.read_text())['records'], [])
+                with db: db.execute('update discovery set result_json=? where jurisdiction_ref=?', (json.dumps(entry), ref))
+                encoded = (json.dumps(redirect, sort_keys=True, separators=(',', ':')) + '\n').encode()
+                (root / 'observations' / (module.sha(encoded) + '.json')).unlink()
+                self.assertEqual(module.discovery_hosts(root, db, ref), {'arvada.org'})
+            finally:
+                db.close()
+
+    def test_discovery_preserves_the_full_government_website_move(self):
+        old, new = 'https://www.arvada.org/', 'https://www.arvadaco.gov/'
+        robots_old, robots_new = old + 'robots.txt', new + 'robots.txt'
+        redirect = receipt(old, b'')
+        redirect.update(status=301, redirect_target=new)
+        robot_redirect = receipt(robots_old, b'')
+        robot_redirect.update(status=301, redirect_target=robots_new)
+        robots_body = b'User-agent: *\nAllow: /\n'
+        robot_final = receipt(robots_new, robots_body)
+        robot_final['content_type'] = 'text/plain'
+        body = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+        final = receipt(new, body)
+        final['content_type'] = 'text/html'
+        def fetch(url, hosts, **kwargs):
+            if url == robots_old:
+                return [(robot_redirect, b'')]
+            if url == robots_new:
+                return [(robot_final, robots_body)]
+            if url == old:
+                self.assertIn('www.arvadaco.gov', hosts)
+                self.assertTrue(kwargs['redirect_guard'](new))
+                return [(redirect, b''), (final, body)]
+            missing = receipt(url, b'')
+            missing.update(status=404, content_type='text/html')
+            return [(missing, b'')]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                with patch.object(module, 'get', side_effect=fetch):
+                    result, observations = module.discover_one('us-co-place-0803455', 'Arvada', old,
+                                                               module.DownloadBudget(20_000_000))
+                self.assertEqual(result['state'], 'directory_site_checked')
+                self.assertEqual(result['canonical_url'], new)
+                self.assertEqual(len(result['documents']), 1)
+                module.archive(root, observations)
+                module.record_discovery(db, result)
+                self.assertIn('arvadaco.gov', module.discovery_hosts(root, db, result['jurisdiction_ref']))
+            finally:
+                db.close()
+
     def test_robots_rejects_untrusted_redirects_and_html_homepages(self):
         original = 'https://town.example.org/robots.txt'
         for destination in ('http://cms3.revize.com/revize/town/robots.txt',
@@ -284,6 +397,85 @@ class ResearchTests(unittest.TestCase):
                     module.scan(root, db, 1, 1, 2)
                 self.assertEqual(calls[-1], ('a', 0))
                 self.assertEqual(db.execute("SELECT next_page,page_size FROM scan_progress WHERE client='a'").fetchone(), (0, 2))
+            finally:
+                db.close()
+
+    def test_portal_search_batches_expand_terms_without_losing_legacy_queries(self):
+        self.assertIn('ALPR', module.matching_terms('ALPR camera purchase'))
+        self.assertIn('RTCC', module.matching_terms('RTCC technology agreement'))
+        self.assertNotIn('StingRay', module.matching_terms('Stingray fish exhibit'))
+        self.assertNotIn('Motorola Solutions', module.matching_terms('Motorola Solutions radio replacements'))
+        self.assertIn('Motorola Solutions', module.matching_terms('Motorola Solutions license plate cameras'))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            calls = []
+            def fetch(url, *_args, **_kwargs):
+                calls.append(url)
+                body = b'[]'
+                return [(receipt(url, body), body)]
+            try:
+                with db:
+                    db.execute('insert into scan_progress values (?,?,?,?)', ('a', 9, 50, module.utcnow()))
+                    db.execute('insert into scan_term_versions values (?,?,?)', ('a', module.LEGACY_TERM_VERSION, 0))
+                with patch.object(module, 'clients_from_store', return_value={'a': 'A'}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'archive'), patch.object(module, 'get', side_effect=fetch):
+                    module.scan(root, db, 1, 1, 50)
+                    module.scan(root, db, 1, 1, 50)
+                self.assertEqual(calls, [module.query_url('a', 0, 50, module.TERM_VERSION, 0),
+                                         module.query_url('a', 0, 50, module.TERM_VERSION, 1)])
+                self.assertEqual(db.execute("select version,batch from scan_term_versions where client='a'").fetchone(),
+                                 (module.TERM_VERSION, 0))
+                self.assertNotEqual(module.query_url('a', 0, 50, module.LEGACY_TERM_VERSION), calls[0])
+                with self.assertRaises(ValueError): module.query_url('a', 0, 50, 'unrecognized')
+            finally:
+                db.close()
+
+    def test_legacy_query_receipts_remain_publishable_after_search_terms_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                client, ref = 'denver', 'us-co-place-0820000'
+                url = module.query_url(client, 0, 100, module.LEGACY_TERM_VERSION)
+                source = [{'MatterId': 123, 'MatterTitle': 'Flock camera contract', 'MatterFile': '24-1', 'MatterStatusName': 'Filed'}]
+                body = json.dumps(source).encode()
+                obs = receipt(url, body)
+                module.archive(root, [(obs, body)])
+                with db:
+                    db.execute('insert into scan_history values (?,?,?,?)', (client, 0, obs['sha256'], json.dumps(obs)))
+                    db.execute('insert into leads values (?,?,?,?,?,?,?,?,?)',
+                               ('co-legistar-denver-123', ref, client, 123, 0, 0, obs['sha256'],
+                                json.dumps({'title': source[0]['MatterTitle'], 'rule_version': module.LEGACY_TERM_VERSION}), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                self.assertEqual(len(json.loads(output.read_text())['records']), 1)
+            finally:
+                db.close()
+
+    def test_radio_only_vendor_leads_remain_private_without_surveillance_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                client, ref = 'denver', 'us-co-place-0820000'
+                url = module.query_url(client, 0, 100, module.TERM_VERSION, 1)
+                source = [{'MatterId': 123, 'MatterTitle': 'Motorola Solutions radio replacements', 'MatterFile': '24-1'}]
+                body = json.dumps(source).encode()
+                obs = receipt(url, body)
+                module.archive(root, [(obs, body)])
+                with db:
+                    db.execute('insert into scan_history values (?,?,?,?)', (client, 0, obs['sha256'], json.dumps(obs)))
+                    db.execute('insert into leads values (?,?,?,?,?,?,?,?,?)',
+                               ('co-legistar-denver-123', ref, client, 123, 0, 0, obs['sha256'],
+                                json.dumps({'title': source[0]['MatterTitle']}), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(report['records'], [])
+                self.assertEqual(report['coverage']['non_surveillance_mentions_withheld'], 1)
+                self.assertEqual(report['coverage']['omitted_failed_provenance'], 0)
             finally:
                 db.close()
 

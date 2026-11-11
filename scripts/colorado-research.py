@@ -37,10 +37,16 @@ COUNTY_DIRECTORIES = ('https://dmv.colorado.gov/county-offices',
 # The clerks' directory omitted this county website. The lead is the county's
 # own published government homepage; it still receives the normal source checks.
 COUNTY_FALLBACKS = {'us-co-county-08041': ('El Paso County', 'https://www.elpasoco.com/')}
-TERMS = ('Flock', 'Axon', 'Palantir', 'ShotSpotter', 'SoundThinking', 'Clearview AI',
-         'Cellebrite', 'license plate reader', 'license plate recognition',
-         'facial recognition', 'drone as first responder', 'cell site simulator')
-TERM_VERSION = 'colorado-legistar-title-v1'
+LEGACY_TERMS = ('Flock', 'Axon', 'Palantir', 'ShotSpotter', 'SoundThinking', 'Clearview AI',
+                'Cellebrite', 'license plate reader', 'license plate recognition',
+                'facial recognition', 'drone as first responder', 'cell site simulator')
+TERMS = LEGACY_TERMS + ('ALPR', 'LPR', 'Vigilant Solutions', 'Vigilant LEARN', 'Motorola Solutions',
+                        'real-time crime center', 'real time crime center', 'RTCC', 'predictive policing',
+                        'social media monitoring', 'social media intelligence', 'drone surveillance', 'police drone',
+                        'cell-site simulator', 'StingRay', 'IMSI catcher', 'geofence warrant',
+                        'biometric identification', 'iris recognition', 'investigative data platform')
+LEGACY_TERM_VERSION = 'colorado-legistar-title-v1'
+TERM_VERSION = 'colorado-legistar-title-v2'
 API_HOST = 'webapi.legistar.com'
 MAX_PAGE_BYTES = 2_000_000
 MAX_RESULTS = 50_000
@@ -107,6 +113,9 @@ def root_store(path):
       CREATE TABLE IF NOT EXISTS scan_progress (
         client TEXT PRIMARY KEY, next_page INTEGER NOT NULL,
         page_size INTEGER NOT NULL, attempted_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS scan_term_versions (
+        client TEXT PRIMARY KEY, version TEXT NOT NULL, batch INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS scan_history (
         client TEXT NOT NULL, page INTEGER NOT NULL, source_sha256 TEXT NOT NULL,
@@ -181,6 +190,8 @@ def root_store(path):
     for name in ('last_attempt_at', 'last_error'):
         if name not in columns:
             db.execute(f'ALTER TABLE document_candidates ADD COLUMN {name} TEXT')
+    if 'batch' not in {row[1] for row in db.execute('PRAGMA table_info(scan_term_versions)')}:
+        db.execute('ALTER TABLE scan_term_versions ADD COLUMN batch INTEGER NOT NULL DEFAULT 0')
     # Older successful screens predate the embedded anchor proof. Preserve
     # their current source-index binding before later discovery refreshes it.
     legacy = db.execute('''SELECT jurisdiction_ref,url,candidate_json,result_json FROM document_candidates
@@ -395,7 +406,7 @@ class RobotsPolicy:
         return self.rules.can_fetch(url, user_agent)
 
 
-def get_robots(host, hosts=None, budget=None):
+def get_robots(host, hosts=None, budget=None, canonical_redirect=None):
     # Revize-hosted municipalities sometimes redirect only their robots file
     # to a vendor tenant. Follow that narrow, explicit source response without
     # admitting the vendor as a trusted host for pages, documents, or photos.
@@ -417,10 +428,19 @@ def get_robots(host, hosts=None, budget=None):
                 parsed = urlsplit(target)
                 vendor = revize_host(parsed.hostname)
                 if (hop == 2 or parsed.scheme != 'https' or parsed.port not in (None, 443)
-                        or not parsed.hostname or parsed.username or parsed.password or parsed.fragment
-                        or (parsed.hostname not in aliases and not (vendor and not parsed.query
-                            and parsed.path.lower().endswith('/robots.txt')))):
+                        or not parsed.hostname or parsed.username or parsed.password or parsed.fragment):
                     raise ValueError('untrusted robots redirect')
+                if parsed.hostname not in aliases and not (vendor and not parsed.query
+                        and parsed.path.lower().endswith('/robots.txt')):
+                    # Only source-directed, name-matched .gov destinations can
+                    # extend a discovery host set. Vendor redirects cannot.
+                    if (canonical_redirect is None or urlsplit(current).hostname not in aliases
+                            or not canonical_redirect(parsed.hostname)):
+                        raise ValueError('untrusted robots redirect')
+                    aliases.add(parsed.hostname)
+                    aliases.add(parsed.hostname[4:] if parsed.hostname.startswith('www.') else 'www.' + parsed.hostname)
+                    if hosts is not None:
+                        hosts.update(aliases)
             except ValueError:
                 raise RobotsDenied('redirect rejected', observations) from None
             current = target
@@ -502,6 +522,23 @@ def normalized_home(raw):
     return urlunsplit(('https', value.hostname, value.path or '/', value.query, ''))
 
 
+def canonical_gov_host(name, host):
+    """Require the complete jurisdiction name in a government-domain label."""
+    if not isinstance(name, str) or not isinstance(host, str) or not host.endswith('.gov'):
+        return False
+    name = re.sub(r'\s+(?:city|town|county)$', '', name, flags=re.I)
+    name = re.sub(r'^(?:city|town|county)\s+of\s+', '', name, flags=re.I)
+    identity = re.sub(r'[^a-z0-9]', '', name.lower())
+    labels = host.lower().split('.')
+    if len(labels) < 2:
+        return False
+    # Arbitrary subdomains of another .gov agency do not establish identity.
+    # Colorado.gov is the one statewide hosting exception: the tenant label
+    # immediately before colorado.gov must carry the complete locality name.
+    label = labels[-3] if labels[-2] == 'colorado' and len(labels) >= 3 else labels[-2]
+    return len(identity) >= 4 and identity in re.sub(r'[^a-z0-9]', '', label)
+
+
 def candidate_kind(url, index_url, label):
     parsed, index = urlsplit(url), urlsplit(index_url)
     # Admit ordinary encoded filename spaces without admitting encoded path
@@ -568,6 +605,50 @@ def verified_redirect_receipt(data_dir, receipt, origin, target):
         return False
 
 
+@lru_cache(maxsize=1)
+def geography_names():
+    return {item['id']: item['name'] for item in json.loads(GEOGRAPHY.read_text())['jurisdictions']}
+
+
+def discovery_hosts(data_dir, db, ref):
+    """Revalidate a captured government-domain move before attributing sources."""
+    row = db.execute('SELECT source_url,result_json FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
+    if not row:
+        return set()
+    home = normalized_home(row[0])
+    original = urlsplit(home).hostname.removeprefix('www.')
+    hosts = {original}
+    try:
+        entry = json.loads(row[1])
+        redirects, final = entry.get('canonical_redirects'), entry.get('canonical_receipt')
+        if not isinstance(redirects, list) or not 1 <= len(redirects) <= 2 or not isinstance(final, dict):
+            return hosts
+        name = geography_names()[ref]
+        current = home
+        for receipt in redirects:
+            target = receipt['redirect_target']
+            parsed = urlsplit(target)
+            if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+                    or parsed.port not in (None, 443) or parsed.fragment
+                    or (parsed.hostname.removeprefix('www.') != original and not canonical_gov_host(name, parsed.hostname))
+                    or not verified_redirect_receipt(data_dir, receipt, current, target)):
+                return hosts
+            current = target
+        final_host = urlsplit(current).hostname
+        encoded = (json.dumps(final, sort_keys=True, separators=(',', ':')) + '\n').encode()
+        saved = data_dir / 'observations' / (sha(encoded) + '.json')
+        if (entry.get('canonical_url') != current or not canonical_gov_host(name, final_host)
+                or not receipt_valid(final, current, final.get('sha256'))
+                or 'html' not in final.get('content_type', '').lower()
+                or read_blob(saved, 65_536) != encoded):
+            return hosts
+        source_blob(data_dir, final['sha256'])
+        hosts.add(final_host.removeprefix('www.'))
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        pass
+    return hosts
+
+
 _DEFAULT_BASE = object()
 
 
@@ -614,7 +695,8 @@ def discover_one(ref, name, website, budget):
         def policy_for(target):
             target_host = urlsplit(target).hostname
             if target_host not in policies:
-                rules, rows = get_robots(target_host, hosts, budget)
+                rules, rows = get_robots(target_host, hosts, budget,
+                                         canonical_redirect=lambda candidate: canonical_gov_host(name, candidate))
                 observations.extend(rows)
                 policies[target_host] = rules
                 # A vendor robots file supplies policy for the original site;
@@ -633,9 +715,15 @@ def discover_one(ref, name, website, budget):
             meta, body = rows[-1]
             if meta['status'] != 200 or 'html' not in meta['content_type'].lower():
                 raise ValueError(f"not an HTML page (HTTP {meta['status']})")
-            return meta['url'], body
+            return meta['url'], body, rows
 
-        final_home, body = page_for(home)
+        final_home, body, home_rows = page_for(home)
+        if urlsplit(final_home).hostname.removeprefix('www.') != host.removeprefix('www.'):
+            if not canonical_gov_host(name, urlsplit(final_home).hostname):
+                raise ValueError('canonical website does not match jurisdiction')
+            result['canonical_url'] = final_home
+            result['canonical_receipt'] = home_rows[-1][0]
+            result['canonical_redirects'] = [meta for meta, _ in home_rows[:-1]]
         candidates = [(final_home, body)]
         followed = set()
         for page, content in candidates:
@@ -670,7 +758,7 @@ def discover_one(ref, name, website, budget):
                     continue
                 followed.add(target)
                 try:
-                    final_target, deeper = page_for(target)
+                    final_target, deeper, _ = page_for(target)
                     candidates.append((final_target, deeper))
                 except BudgetExhausted:
                     raise
@@ -803,11 +891,11 @@ def clients_from_store(db, data_dir):
             body = source_blob(data_dir, source_digest)
             links, base = page_links(body, page)
             ordinal = proof['anchor_index']
-            directory = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
-            if (not directory or type(ordinal) is not int or not 0 <= ordinal < len(links)
+            directory_hosts = discovery_hosts(data_dir, db, ref)
+            if (not directory_hosts or type(ordinal) is not int or not 0 <= ordinal < len(links)
                     or resolve_page_link(page, base, links[ordinal][0]) != proof['portal_url']
                     or urlsplit(proof['portal_url']).hostname != f'{client}.legistar.com'
-                    or urlsplit(page).hostname.removeprefix('www.') != urlsplit(normalized_home(directory[0])).hostname.removeprefix('www.')):
+                    or urlsplit(page).hostname.removeprefix('www.') not in directory_hosts):
                 continue
             groups.setdefault(client, set()).add(ref)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
@@ -820,20 +908,34 @@ def clients_from_store(db, data_dir):
     return clients
 
 
-def query_url(client, page, page_size):
+def query_terms(version, batch):
+    if version == LEGACY_TERM_VERSION and batch == 0:
+        return LEGACY_TERMS
+    if version == TERM_VERSION and 0 <= batch < (len(TERMS) + 15) // 16:
+        return TERMS[batch * 16:(batch + 1) * 16]
+    raise ValueError('unknown research query version or batch')
+
+
+def query_url(client, page, page_size, version=TERM_VERSION, batch=0):
     if not re.fullmatch(r'[a-z0-9-]{1,80}', client) or not 0 <= page < 100:
         raise ValueError('invalid bounded client/page')
-    filters = ' or '.join("substringof('" + term + "',MatterTitle)" for term in TERMS)
+    terms = query_terms(version, batch)
+    filters = ' or '.join("substringof('" + term + "',MatterTitle)" for term in terms)
     params = {'$filter': filters, '$select': 'MatterId,MatterFile,MatterTitle,MatterIntroDate,MatterStatusName,MatterGuid',
               '$orderby': 'MatterId asc', '$top': str(page_size), '$skip': str(page * page_size)}
     return f'https://{API_HOST}/v1/{client}/matters?' + urlencode(params)
 
 
-def matching_terms(title):
+def matching_terms(title, terms=TERMS):
     lower = title.casefold()
-    return [term for term in TERMS
+    surveillance_context = bool(re.search(r'\b(?:alpr|lpr|license[ -]plate|licence[ -]plate|cameras?|video|'
+                                          r'facial|face[ -]recognition|surveillance|biometric|vigilant|'
+                                          r'drones?|evidence[ -]management)\b', lower))
+    return [term for term in terms
             if re.search(r'(?<!\w)' + re.escape(term.casefold()) + r'(?!\w)', lower)
-            and not (term == 'Flock' and ('flock of birds' in lower or 'safety of the flock' in lower))]
+            and not (term == 'Flock' and ('flock of birds' in lower or 'safety of the flock' in lower))
+            and not (term == 'StingRay' and 'stingray fish' in lower)
+            and not (term == 'Motorola Solutions' and not surveillance_context)]
 
 
 def scan(data_dir, db, max_clients, pages, page_size, only=None):
@@ -848,14 +950,20 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
     print(f'Screening official matter titles in up to {min(max_clients, len(clients))} linked portals', flush=True)
     attempts = {client: (page, size, at) for client, page, size, at in
                 db.execute('SELECT client,next_page,page_size,attempted_at FROM scan_progress')}
+    versions = {client: (version, batch) for client, version, batch in
+                db.execute('SELECT client,version,batch FROM scan_term_versions')}
     ordered = sorted(clients.items(), key=lambda item: (attempts.get(item[0], (0, 0, ''))[2], item[0]))
     for client, ref in ordered[:max_clients]:
         count = 0
         saved_page, saved_size, _ = attempts.get(client, (0, page_size, ''))
-        next_page = saved_page if saved_size == page_size and 0 <= saved_page < 100 else 0
+        saved_version, saved_batch = versions.get(client, (LEGACY_TERM_VERSION, 0))
+        valid_cursor = (saved_size == page_size and 0 <= saved_page < 100 and saved_version == TERM_VERSION
+                        and 0 <= saved_batch < (len(TERMS) + 15) // 16)
+        next_page = saved_page if valid_cursor else 0
+        batch = saved_batch if valid_cursor else 0
         for _ in range(pages):
             page = next_page
-            url = query_url(client, page, page_size)
+            url = query_url(client, page, page_size, TERM_VERSION, batch)
             if not allowed(rules, url):
                 print(f'{client}: source path blocked by robots policy', flush=True)
                 break
@@ -878,7 +986,7 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
                             continue
                         matter = item.get('MatterId')
                         title = item.get('MatterTitle')
-                        terms = matching_terms(title) if isinstance(title, str) else []
+                        terms = matching_terms(title, query_terms(TERM_VERSION, batch)) if isinstance(title, str) else []
                         if (type(matter) is not int or not 0 < matter < 2**53 or not terms
                                 or len(title) > 20_000):
                             continue
@@ -892,6 +1000,9 @@ def scan(data_dir, db, max_clients, pages, page_size, only=None):
                         count += 1
                     db.execute('INSERT OR REPLACE INTO scan_progress VALUES (?,?,?,?)',
                                (client, next_page, page_size, utcnow()))
+                    if next_page == 0:
+                        batch = (batch + 1) % ((len(TERMS) + 15) // 16)
+                    db.execute('INSERT OR REPLACE INTO scan_term_versions VALUES (?,?,?)', (client, TERM_VERSION, batch))
                 if next_page == 0:
                     break
             except (OSError, UnicodeError, ValueError, RuntimeError, json.JSONDecodeError) as error:
@@ -1418,7 +1529,7 @@ def civic_history(data_dir, db, limit, per_place, workers, only=None, pending_ca
             entry = json.loads(raw)
             if entry.get('state') != 'directory_site_checked':
                 continue
-            directory_host = urlsplit(normalized_home(directory)).hostname.removeprefix('www.')
+            directory_hosts = discovery_hosts(data_dir, db, ref)
             indexes = {}
             for document in entry.get('documents', []):
                 page, digest = document['index_url'], document['index_sha256']
@@ -1426,7 +1537,7 @@ def civic_history(data_dir, db, limit, per_place, workers, only=None, pending_ca
                 if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
                         or parsed.port not in (None, 443) or parsed.query or parsed.fragment
                         or parsed.path.rstrip('/').lower() != '/agendacenter'
-                        or parsed.hostname.removeprefix('www.') != directory_host or (page, digest) not in receipts):
+                        or parsed.hostname.removeprefix('www.') not in directory_hosts or (page, digest) not in receipts):
                     continue
                 indexes[(page, digest)] = parsed.hostname
             for (page, digest), host in indexes.items():
@@ -2000,10 +2111,14 @@ def collect_portraits(data_dir, db, limit):
     ordered = sorted(names.items(), key=lambda item: (attempts.get(item[0], ''), item[0]))
     for ref, people in ordered[:limit]:
         try:
-            row = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
+            row = db.execute('SELECT source_url,result_json FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
             if not row:
                 continue
             host = urlsplit(normalized_home(row[0])).hostname
+            canonical = json.loads(row[1]).get('canonical_url')
+            canonical_host = urlsplit(canonical).hostname if canonical else None
+            if canonical_host and canonical_host.removeprefix('www.') in discovery_hosts(data_dir, db, ref):
+                host = canonical_host
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
@@ -2097,8 +2212,7 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
         if not portrait_name_matches(name, info['caption'], alias_text):
             raise ValueError('portrait caption does not identify the named person')
     host = urlsplit(page_url).hostname
-    directory = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
-    if (not directory or urlsplit(normalized_home(directory[0])).hostname.removeprefix('www.') != host.removeprefix('www.')
+    if (host.removeprefix('www.') not in discovery_hosts(data_dir, db, ref)
             or urlsplit(image_url).hostname != host):
         raise ValueError('portrait source is outside the jurisdiction website')
     image = source_blob(data_dir, image_digest, 2_000_000)
@@ -2409,8 +2523,11 @@ def export_report(data_dir, db, output, assets_dir=None):
             parsed = urlsplit(url)
             params = parse_qs(parsed.query, strict_parsing=True)
             top = int(params['$top'][0])
+            signatures = [(LEGACY_TERM_VERSION, 0)] + [(TERM_VERSION, batch) for batch in range((len(TERMS) + 15) // 16)]
+            query_signature = next(((version, batch) for version, batch in signatures
+                                    if url == query_url(client, page, top, version, batch)), None)
             if (parsed.scheme != 'https' or parsed.hostname != API_HOST or parsed.path != f'/v1/{client}/matters'
-                    or not 1 <= top <= 100 or url != query_url(client, page, top)
+                    or not 1 <= top <= 100 or query_signature is None
                     or not receipt_valid(receipt, url, source_digest)):
                 raise ValueError('source receipt is not the expected official query')
             original = json.loads(source_blob(data_dir, source_digest))
@@ -2418,8 +2535,13 @@ def export_report(data_dir, db, output, assets_dir=None):
                 raise ValueError('source row is missing')
             item = original[row_index]
             title = item.get('MatterTitle')
-            terms = matching_terms(title) if isinstance(title, str) else []
-            if item.get('MatterId') != matter or record.get('title') != title or not terms:
+            terms = matching_terms(title, query_terms(*query_signature)) if isinstance(title, str) else []
+            if item.get('MatterId') != matter or record.get('title') != title:
+                raise ValueError('source row no longer binds the matter and title')
+            if not terms and isinstance(title, str) and 'motorola solutions' in title.casefold():
+                non_surveillance_withheld += 1
+                continue
+            if not terms:
                 raise ValueError('source row no longer binds the matter and title')
             entry = {'id': identifier, 'kind': 'matter_reference', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
                 'jurisdiction': jurisdiction_name(geography[ref]), 'file': public_text(item.get('MatterFile'), 100),
@@ -2481,9 +2603,7 @@ def export_report(data_dir, db, output, assets_dir=None):
             if (candidate['index_url'], candidate['index_sha256']) not in receipts:
                 raise ValueError('missing captured index receipt')
             checked_document_candidate(data_dir, url, candidate)
-            directory_row = db.execute('SELECT source_url FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
-            directory_host = urlsplit(normalized_home(directory_row[0])).hostname.removeprefix('www.') if directory_row else ''
-            if not directory_host or directory_host != urlsplit(candidate['index_url']).hostname.removeprefix('www.'):
+            if urlsplit(candidate['index_url']).hostname.removeprefix('www.') not in discovery_hosts(data_dir, db, ref):
                 raise ValueError('document is not attached to its directory website lead')
             finding = result['finding']
             text_digest = result['extracted_sha256']

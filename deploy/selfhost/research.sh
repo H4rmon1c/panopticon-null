@@ -18,6 +18,7 @@ status=0
 python3 scripts/colorado-research.py --data-dir "$data" discover --limit 320 --workers 8 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" civic-history --limit 20 --per-place 4 --workers 8 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" scan --max-clients 100 --pages 10 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" scan --max-clients 100 --pages 10 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" actions --limit 100 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" agendasuite --limit 60 --pages 3 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" screen-documents --pnull-bin "$binary" --limit 300 --per-place 30 --workers 4 || status=1
