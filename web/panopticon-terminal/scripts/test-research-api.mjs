@@ -186,6 +186,7 @@ test('partial jurisdiction attempts cannot claim a complete time window', () => 
   for (const change of [
     (report) => { report.coverage.search_attempts[0].lookback_period = 'all time'; },
     (report) => { report.coverage.search_attempts[0].documents_screened = -1; },
+    (report) => { report.coverage.search_attempts[0].documents_redirected = -1; },
     (report) => { report.coverage.search_attempts[0].historical_index_pages_checked = -1; },
     (report) => { report.coverage.search_attempts[0].historical_index_errors = -1; },
     (report) => { report.coverage.search_attempts[0].ocr_revalidation_pending = 3; },

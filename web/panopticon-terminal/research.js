@@ -181,7 +181,7 @@ try {
     scope.hidden = false;
     scope.textContent = attempt ?
       `Website discovery ${attempt.website_check === 'site_checked' ? 'reached the site' : 'was unavailable'} on ${attempt.checked_at.slice(0, 10)}. ` +
-        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued · ` +
+        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued${attempt.documents_redirected === undefined ? '' : ` · ${attempt.documents_redirected} source redirects`} · ` +
         `${attempt.portal_pages_checked} portal query pages checked · ` +
         `${attempt.historical_index_pages_checked === undefined ? 'historical index checks not recorded' : `${attempt.historical_index_pages_checked} historical index pages checked`} · ` +
         `${attempt.historical_index_errors === undefined ? 'historical index failures not recorded' : `${attempt.historical_index_errors} historical index checks failed`} · ` +

@@ -276,6 +276,12 @@ class ResearchTests(unittest.TestCase):
                     for number, state in enumerate(['no_match', 'no_match', 'error', 'pending']):
                         db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
                                       VALUES (?,?,?,?,?)''', (ref, f'https://example.org/{number}.pdf', '{}', state, '2026-11-11T00:00:00+00:00'))
+                    redirected = {'error': 'source redirected; alternate document queued',
+                                  'alternate_candidate': {'url': 'https://example.org/alternate.pdf'}}
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'error',?,?)''', (ref, 'https://example.org/redirect.pdf', '{}', json.dumps(redirected), module.utcnow()))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                  VALUES (?,?,?,'pending',?)''', (ref, redirected['alternate_candidate']['url'], '{}', module.utcnow()))
                     db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
                                (ref, 'example.org', 1, 2025, '{}', module.utcnow(), 'ok', None, '{}'))
                     db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
@@ -283,7 +289,8 @@ class ResearchTests(unittest.TestCase):
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
-                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 1))
+                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 2))
+                self.assertEqual(attempt['documents_redirected'], 1)
                 self.assertEqual(attempt['historical_index_pages_checked'], 1)
                 self.assertEqual(attempt['historical_index_errors'], 1)
                 self.assertIsNone(attempt['lookback_period'])

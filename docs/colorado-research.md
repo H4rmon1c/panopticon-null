@@ -103,6 +103,8 @@ no relevant decision exists.
    A text-layer document may show up to five additional, separately located
    formal passages, so an earlier discussion does not hide a later resolution.
    These excerpts are still preliminary mentions and do not create vote claims.
+   Source links whose verified redirect has a queued or screened alternate are
+   counted as redirects rather than failed document extractions.
 
 The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release

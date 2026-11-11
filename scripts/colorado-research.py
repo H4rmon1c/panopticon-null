@@ -2962,7 +2962,13 @@ def export_report(data_dir, db, output, assets_dir=None):
     if len(records) > MAX_RESULTS:
         raise ValueError('research report exceeds record limit')
     records.sort(key=lambda item: (item['jurisdiction'], item['id']))
-    reported_state = """CASE WHEN state IN ('matched','no_match') AND (
+    reported_state = """CASE WHEN state='error'
+        AND json_extract(result_json,'$.error')='source redirected; alternate document queued'
+        AND json_type(result_json,'$.alternate_candidate.url')='text'
+        AND EXISTS (SELECT 1 FROM document_candidates alternate
+                    WHERE alternate.jurisdiction_ref=document_candidates.jurisdiction_ref
+                    AND alternate.url=json_extract(document_candidates.result_json,'$.alternate_candidate.url')) THEN 'redirected'
+        WHEN state IN ('matched','no_match') AND (
         (json_extract(result_json,'$.extraction_status')='complete_with_ocr'
          AND (COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1
               OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2))
@@ -3003,6 +3009,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                              'website_check': 'site_checked' if (attempt_state or entry['state']) == 'directory_site_checked' else 'unavailable',
                              'documents_screened': counts.get('matched', 0) + counts.get('no_match', 0),
                              'documents_failed': counts.get('error', 0), 'documents_queued': counts.get('pending', 0),
+                             'documents_redirected': counts.get('redirected', 0),
                              'ocr_revalidation_pending': ocr_rechecks.get(ref, 0),
                              'portal_pages_checked': portal_counts[ref],
                              'historical_index_pages_checked': history_counts.get(ref, {}).get('ok', 0),
