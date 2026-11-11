@@ -391,15 +391,36 @@ test("case-specific static pages use their own metadata and escape source text",
   assert.throws(() => buildDecisionPages(missingReleases, template, "https://panopticon.fail"), /require per-case release records/);
 });
 
-test("bundled Colorado Springs share page matches the released snapshot", async () => {
+test("bundled decision pages match every released case", async () => {
   const snapshot = JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8"));
   const template = await readFile(join(root, "decision.html"), "utf8");
   const pages = buildDecisionPages(snapshot, template, "https://panopticon.fail");
-  assert.equal(pages.length, 1);
-  const bundled = await readFile(join(root, pages[0].path), "utf8");
-  assert.equal(bundled, pages[0].html);
-  assert.match(bundled, /Colorado Springs police technology surcharge vote/);
-  assert.match(bundled, /A named vendor contract link is not established/);
+  assert.equal(pages.length, 4);
+  for (const page of pages) {
+    const bundled = await readFile(join(root, page.path), "utf8");
+    assert.equal(bundled, page.html);
+  }
+  const springs = pages.find((page) => page.path.includes("colorado-springs"));
+  assert.match(springs.html, /Colorado Springs police technology surcharge vote/);
+  assert.match(springs.html, /A named vendor contract link is not established/);
+  const denver = pages.find((page) => page.path.includes("denver-25-0413"));
+  assert.match(denver.html, /failed/i);
+});
+
+test("withdrawn decisions retain a noindex correction page without private notes", async () => {
+  const snapshot = JSON.parse(await readFile(join(root, "public/public-snapshot.json"), "utf8"));
+  snapshot.withdrawals = [{ case_id: "co-withdrawn-example", state: "withdrawn",
+    bound_digest: `sha256:${"a".repeat(64)}`, review_id: "review:public-proof",
+    decided_at: "2026-11-10T13:00:00Z" }];
+  const template = await readFile(join(root, "decision.html"), "utf8");
+  const pages = buildDecisionPages(snapshot, template, "https://panopticon.fail");
+  const notice = pages.find((page) => page.path === "decisions/co-withdrawn-example.html");
+  assert.match(notice.html, /Record withdrawn pending correction/);
+  assert.match(notice.html, /noindex,follow/);
+  assert.doesNotMatch(notice.html, /review:public-proof/);
+  const overlap = clone(snapshot);
+  overlap.withdrawals[0].case_id = snapshot.case_releases[0].case_id;
+  assert.throws(() => validateSnapshot(overlap), /Withdrawal lacks a distinct reviewed case binding/);
 });
 
 test("atlas dossier routes published cases to their own static pages", async () => {

@@ -1,6 +1,6 @@
 # Operator guide: citation review
 
-Every public citation and image excerpt requires a human review decision before it may be published. The review queue is append-only and each decision is bound to exact content digests.
+This guide covers the procurement site, Atom feed, and X citation queue. Every citation and image excerpt in that pipeline requires a human review decision before publication. The review queue is append-only and each decision is bound to exact content digests. The Colorado atlas has a separate source-policy and case-release gate: source-verified v2 cases and private proposal cases do not require a human decision on each evidence row. See [atlas export](atlas-export.md).
 
 ## States
 

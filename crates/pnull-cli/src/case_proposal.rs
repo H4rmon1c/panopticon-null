@@ -22,6 +22,10 @@ use url::Url;
 
 use crate::{StateConfig, source_config_digest, verify_source_review};
 
+mod release;
+pub(super) use release::checked_snapshot;
+pub(super) use release::release;
+
 const MAX_INPUT_BYTES: u64 = 1_048_576;
 const MAX_PROPOSAL_BYTES: u64 = 4_194_304;
 const MAX_ARCHIVE_BYTES: u64 = 16_384;
@@ -90,6 +94,7 @@ struct ProposalInput {
     technology: Option<ClaimInput>,
     technology_relationship: Option<ClaimInput>,
     contract_reference: Option<ClaimInput>,
+    contract_award_link: Option<ClaimInput>,
     official_role: Option<ClaimInput>,
     office_term: Option<ClaimInput>,
     portrait_reference: Option<ClaimInput>,
@@ -364,6 +369,80 @@ fn compose_proposal(
         checked,
         "contract reference",
     )?;
+    let contract_award_link = checked_claim(
+        input.contract_award_link.as_ref(),
+        checked,
+        "contract award link",
+    )?;
+    if let FactState::Established { value, proof } = &contract_award_link {
+        let (
+            FactState::Established {
+                value: matter,
+                proof: matter_proof,
+            },
+            FactState::Established {
+                value: technology, ..
+            },
+            FactState::Established {
+                proof: technology_proof,
+                ..
+            },
+            FactState::Established {
+                value: contract,
+                proof: contract_proof,
+            },
+            FactState::Established {
+                value: outcome,
+                proof: outcome_proof,
+            },
+            FactState::Established {
+                proof: action_proof,
+                ..
+            },
+        ) = (
+            &decision.matter,
+            &technology,
+            &technology_relationship,
+            &contract_reference,
+            &decision.outcome,
+            &decision.action,
+        )
+        else {
+            bail!("award authorization needs a complete sourced decision and contract reference");
+        };
+        let authorized = matches!(
+            outcome.to_ascii_lowercase().as_str(),
+            "pass" | "passed" | "approved" | "motion carried"
+        );
+        let exact = ["award authorized", "contract approved"]
+            .iter()
+            .any(|ending| value == &format!("{matter} | {contract} | {technology} | {ending}"));
+        let source = checked
+            .get(&proof.source_ref)
+            .context("award source is missing")?;
+        if !authorized
+            || !exact
+            || proof.source_ref != matter_proof.source_ref
+            || proof.source_ref != technology_proof.source_ref
+            || proof.source_ref != contract_proof.source_ref
+            || proof.source_ref != outcome_proof.source_ref
+            || proof.source_ref != action_proof.source_ref
+            || !single_item_context(
+                source,
+                matter,
+                &matter_proof.locator,
+                &[
+                    &contract_proof.locator,
+                    &technology_proof.locator,
+                    &action_proof.locator,
+                    &outcome_proof.locator,
+                    &proof.locator,
+                ],
+            )
+        {
+            bail!("award authorization is not atomically tied to the approved matter and contract");
+        }
+    }
     let official_role = missing("No named subject is bound to a global public role");
     let office_term = missing("No named subject is bound to a global office term");
     let portrait_reference = missing("No named subject is bound to a global portrait");
@@ -396,6 +475,7 @@ fn compose_proposal(
         "technology": &input.technology,
         "technology_relationship": &input.technology_relationship,
         "contract_reference": &input.contract_reference,
+        "contract_award_link": &input.contract_award_link,
         "official_role": &input.official_role,
         "office_term": &input.office_term,
         "portrait_reference": &input.portrait_reference,
@@ -443,9 +523,11 @@ fn compose_proposal(
         technology,
         technology_relationship,
         contract_reference,
-        contract_award_link: missing(
-            "A document mention alone does not establish a contract award or approval link",
-        ),
+        contract_award_link: if input.contract_award_link.is_some() {
+            contract_award_link
+        } else {
+            missing("A document mention alone does not establish a contract award or approval link")
+        },
         official_role,
         office_term,
         portrait_reference,

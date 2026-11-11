@@ -57,21 +57,18 @@ grep -Fq 'name="robots" content="index,follow"' "$spring_page"
 grep -Fq 'name="robots" content="noindex,follow"' "$PNUL_CURRENT_LINK/decision.html"
 ! grep -Fq 'Colorado Springs police technology surcharge vote' "$PNUL_CURRENT_LINK/decision.html"
 [[ -f "$PNUL_CURRENT_LINK/portraits/tom-bailey.jpg" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/susan-noble-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/joanna-sandoval-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/craig-kim-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/charles-dukes-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/stefanie-trujillo-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/lori-young-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/steve-douglas-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/jose-guardiola-original.png" ]]
-[[ ! -e "$PNUL_CURRENT_LINK/portraits/rocky-teter-original.png" ]]
+for portrait in susan-noble joanna-sandoval craig-kim charles-dukes stefanie-trujillo lori-young steve-douglas jose-guardiola rocky-teter; do
+    [[ -f "$PNUL_CURRENT_LINK/portraits/$portrait-original.png" ]]
+done
+[[ -f "$PNUL_CURRENT_LINK/decisions/co-commerce-city-ord-2755-2026-04-06.html" ]]
+[[ -f "$PNUL_CURRENT_LINK/decisions/co-commerce-city-ord-2756-2026-04-06.html" ]]
+grep -Fq 'This proposed amendment failed' "$PNUL_CURRENT_LINK/decisions/co-denver-25-0413-2025-05-05.html"
 for portrait in jason-gray ryan-hollingshead kevin-bracken mark-davis max-brooks tim-dietz laura-cavey; do
     [[ ! -e "$PNUL_CURRENT_LINK/portraits/$portrait-original.jpg" ]]
 done
 [[ -f "$PNUL_CURRENT_LINK/portraits/portraits.js" ]]
 [[ -f "$PNUL_CURRENT_LINK/portraits/lookup.js" ]]
-! grep -q 'recorded_voter_co_commerce_city' "$PNUL_CURRENT_LINK/portraits/portraits.js"
+grep -q 'recorded_voter_co_commerce_city' "$PNUL_CURRENT_LINK/portraits/portraits.js"
 ! grep -q 'recorded_voter_co_castle_rock' "$PNUL_CURRENT_LINK/portraits/portraits.js"
 [[ ! -e "$PNUL_CURRENT_LINK/fixtures" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/preview-snapshot.json" ]]

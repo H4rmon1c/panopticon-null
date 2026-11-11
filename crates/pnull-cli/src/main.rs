@@ -157,6 +157,17 @@ enum AtlasCommand {
     Export {
         #[arg(long, default_value = "fixtures/atlas/colorado-springs-25-93.v1.json")]
         manifest: Vec<PathBuf>,
+        /// A case removed from this release after an exact bound rejection.
+        #[arg(long)]
+        withdrawn_manifest: Vec<PathBuf>,
+        /// Prior released case IDs with exact bound rejection reviews.
+        #[arg(long)]
+        withdrawn_case_id: Vec<String>,
+        #[arg(long)]
+        previous_snapshot: Option<PathBuf>,
+        /// Original private proposal inputs, rebuilt under the active --config.
+        #[arg(long)]
+        proposal_input: Vec<PathBuf>,
         #[arg(long)]
         output: Option<PathBuf>,
         /// Include pending claims only in a separate editorial preview artifact.
@@ -301,6 +312,13 @@ enum CaseCommand {
     Propose {
         #[arg(long)]
         input: PathBuf,
+    },
+    /// Recheck a private proposal and emit a source-verified single-case atlas snapshot.
+    Release {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
     },
 }
 
@@ -636,23 +654,38 @@ fn run(cli: Cli) -> Result<()> {
         Command::Demo { output } => run_demo(&output, &config, &cli.rules),
         Command::Procurement { command } => procurement_command(&cli.data_dir, &config, command),
         Command::Coverage { command } => coverage_command(&cli.data_dir, command),
-        Command::Case { command } => case_command(&cli.data_dir, &cli.config, &config, command),
+        Command::Case { command } => case_command(
+            &cli.data_dir,
+            &cli.config,
+            &config,
+            cli.site_url.as_deref(),
+            command,
+        ),
         Command::Cora { command } => cora_command(&cli.data_dir, command),
         Command::Approval { command } => approval_command(&cli.data_dir, command),
-        Command::Atlas { command } => {
-            atlas_command(&cli.data_dir, &config, cli.site_url.as_deref(), command)
-        }
+        Command::Atlas { command } => atlas_command(
+            &cli.data_dir,
+            &cli.config,
+            &config,
+            cli.site_url.as_deref(),
+            command,
+        ),
     }
 }
 
 #[allow(clippy::too_many_lines)]
 fn atlas_command(
     data_dir: &Path,
+    config_path: &Path,
     config: &StateConfig,
     explicit_site_url: Option<&str>,
     command: AtlasCommand,
 ) -> Result<()> {
-    use pnull_publish::atlas::{AtlasExportMode, export_atlas_bundle, review_requirements};
+    use pnull_publish::atlas::{
+        AtlasExportMode, append_verified_proposal_snapshot,
+        export_atlas_bundle_with_prior_withdrawals, review_requirements,
+        write_verified_atlas_snapshot,
+    };
 
     let store = Store::open(data_dir)?;
     match command {
@@ -756,6 +789,10 @@ fn atlas_command(
         }
         AtlasCommand::Export {
             manifest,
+            withdrawn_manifest,
+            withdrawn_case_id,
+            previous_snapshot,
+            proposal_input,
             output,
             preview,
         } => {
@@ -786,7 +823,47 @@ fn atlas_command(
                     .filter(|host| !host.ends_with(".invalid"))
                     .map(|_| config.canonical_base_url.as_str())
             });
-            export_atlas_bundle(&store, &manifest, &output, mode, site_url)?;
+            if proposal_input.is_empty() {
+                export_atlas_bundle_with_prior_withdrawals(
+                    &store,
+                    &manifest,
+                    &withdrawn_manifest,
+                    &withdrawn_case_id,
+                    previous_snapshot.as_deref(),
+                    &output,
+                    mode,
+                    site_url,
+                )?;
+            } else {
+                if preview || proposal_input.len() > 64 {
+                    bail!("proposal inputs require a bounded production release");
+                }
+                let staging = tempfile::tempdir()?;
+                let staged_path = staging.path().join("base.json");
+                export_atlas_bundle_with_prior_withdrawals(
+                    &store,
+                    &manifest,
+                    &withdrawn_manifest,
+                    &withdrawn_case_id,
+                    previous_snapshot.as_deref(),
+                    &staged_path,
+                    mode,
+                    site_url,
+                )?;
+                let mut combined: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&staged_path)?)?;
+                for input in &proposal_input {
+                    let candidate = case_proposal::checked_snapshot(
+                        &store,
+                        config_path,
+                        config,
+                        site_url,
+                        input,
+                    )?;
+                    append_verified_proposal_snapshot(&mut combined, &candidate)?;
+                }
+                write_verified_atlas_snapshot(&combined, &output)?;
+            }
             println!("wrote {}", output.display());
             Ok(())
         }
@@ -915,6 +992,7 @@ fn case_command(
     data_dir: &Path,
     config_path: &Path,
     config: &StateConfig,
+    site_url: Option<&str>,
     command: CaseCommand,
 ) -> Result<()> {
     let store = Store::open(data_dir)?;
@@ -924,6 +1002,9 @@ fn case_command(
         }
         CaseCommand::Propose { input } => {
             case_proposal::propose(&store, config_path, config, &input)
+        }
+        CaseCommand::Release { input, output } => {
+            case_proposal::release(&store, config_path, config, site_url, &input, &output)
         }
     }
 }

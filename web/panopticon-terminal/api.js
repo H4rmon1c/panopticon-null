@@ -144,6 +144,19 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     const aggregate = snapshot.case_releases.some((item) => item.release.state === "SOURCE_VERIFIED") ? "SOURCE_VERIFIED" : "APPROVED";
     if (snapshot.release_review?.state !== aggregate) throw new Error("Aggregate case release state is inconsistent");
   }
+  if (!demo && !preview && snapshot.withdrawals !== undefined) {
+    if (!Array.isArray(snapshot.withdrawals)) throw new Error("Withdrawals must be a list");
+    const active = new Set(snapshot.entities.filter((entity) => entity.type === "DECISION").map((entity) => entity.slug));
+    const seen = new Set();
+    for (const item of snapshot.withdrawals) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(item?.case_id ?? "") || active.has(item.case_id) || seen.has(item.case_id) ||
+          item.state !== "withdrawn" || !/^sha256:[a-f0-9]{64}$/.test(item.bound_digest ?? "") ||
+          typeof item.decided_at !== "string" || !item.decided_at || typeof item.review_id !== "string" || !item.review_id) {
+        throw new Error("Withdrawal lacks a distinct reviewed case binding");
+      }
+      seen.add(item.case_id);
+    }
+  }
 
   const entities = new Map(snapshot.entities.map((entity) => [entity.id, entity]));
   const sources = new Map(snapshot.sources.map((source) => [source.id, source]));

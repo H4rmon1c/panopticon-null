@@ -344,6 +344,346 @@ pub fn export_atlas_bundle(
     write_snapshot(&output, output_path)
 }
 
+/// Publish active cases while retaining a minimal, review-bound notice at
+/// each withdrawn case's former share URL. Reviewer notes stay private.
+pub fn export_atlas_bundle_with_withdrawals(
+    store: &Store,
+    manifests: &[std::path::PathBuf],
+    withdrawn: &[std::path::PathBuf],
+    output_path: &Path,
+    mode: AtlasExportMode,
+    site_url: Option<&str>,
+) -> Result<(), AtlasError> {
+    if withdrawn.is_empty() {
+        return export_atlas_bundle(store, manifests, output_path, mode, site_url);
+    }
+    if mode != AtlasExportMode::Production || withdrawn.len() > 256 {
+        return Err(AtlasError::Manifest(
+            "withdrawn manifests require a bounded production release".to_owned(),
+        ));
+    }
+    let staging = tempfile::tempdir()?;
+    let staged_path = staging.path().join("active.json");
+    export_atlas_bundle(store, manifests, &staged_path, mode, site_url)?;
+    let mut snapshot: Value = serde_json::from_slice(&fs::read(&staged_path)?)?;
+    let active = snapshot["case_releases"]
+        .as_array()
+        .ok_or_else(|| AtlasError::Manifest("active bundle lacks case releases".to_owned()))?
+        .iter()
+        .filter_map(|item| item["case_id"].as_str())
+        .collect::<BTreeSet<_>>();
+    let mut notices = BTreeMap::<String, Value>::new();
+    for path in withdrawn {
+        let raw: Value = serde_json::from_slice(&fs::read(path)?)?;
+        let case_id = raw["case_id"]
+            .as_str()
+            .ok_or_else(|| AtlasError::Manifest("withdrawn case lacks case_id".to_owned()))?;
+        if !case_id.starts_with("co-") || active.contains(case_id) || notices.contains_key(case_id)
+        {
+            return Err(AtlasError::Manifest(
+                "withdrawn case is duplicated or still active".to_owned(),
+            ));
+        }
+        let requirements = review_requirements(path)?;
+        if requirements.len() != 1 {
+            return Err(AtlasError::Review(
+                "withdrawn case lacks one release binding".to_owned(),
+            ));
+        }
+        let requirement = &requirements[0];
+        let review = store.current_review(&requirement.id)?.ok_or_else(|| {
+            AtlasError::Review("withdrawn case lacks a current rejection".to_owned())
+        })?;
+        if review.state != ReviewState::Rejected
+            || review.bound_digest != requirement.bound_digest
+            || !human_reviewer(&review.reviewer)
+        {
+            return Err(AtlasError::Review(
+                "withdrawn case needs a current human rejection of this exact binding".to_owned(),
+            ));
+        }
+        notices.insert(
+            case_id.to_owned(),
+            json!({
+                "case_id":case_id,"state":"withdrawn","decided_at":review.decided_at,
+                "bound_digest":requirement.bound_digest,
+                "review_id":review.id,
+            }),
+        );
+    }
+    let old = snapshot["release_review"]["bound_digest"]
+        .as_str()
+        .ok_or_else(|| AtlasError::Manifest("bundle lacks release binding".to_owned()))?
+        .to_owned();
+    let notices = notices.into_values().collect::<Vec<_>>();
+    let parts = std::iter::once(old.as_str())
+        .chain(
+            notices
+                .iter()
+                .filter_map(|notice| notice["review_id"].as_str()),
+        )
+        .collect::<Vec<_>>();
+    let digest = review_digest("atlas-bundle-withdrawals", &parts);
+    snapshot["withdrawals"] = json!(notices);
+    snapshot["release_review"]["bound_digest"] = json!(digest);
+    snapshot["status"]["dataset_version"] = json!(digest);
+    snapshot["status"]["manifest_digest"] = json!(digest);
+    write_snapshot(&snapshot, output_path)
+}
+
+/// Preserve a reviewed withdrawal notice for a case from the previous public
+/// snapshot, including proposal-backed cases that have no v2 manifest.
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+pub fn export_atlas_bundle_with_prior_withdrawals(
+    store: &Store,
+    manifests: &[std::path::PathBuf],
+    withdrawn_manifests: &[std::path::PathBuf],
+    withdrawn_case_ids: &[String],
+    previous_snapshot: Option<&Path>,
+    output_path: &Path,
+    mode: AtlasExportMode,
+    site_url: Option<&str>,
+) -> Result<(), AtlasError> {
+    if withdrawn_case_ids.is_empty() {
+        return export_atlas_bundle_with_withdrawals(
+            store,
+            manifests,
+            withdrawn_manifests,
+            output_path,
+            mode,
+            site_url,
+        );
+    }
+    if mode != AtlasExportMode::Production || withdrawn_case_ids.len() > 256 {
+        return Err(AtlasError::Manifest(
+            "prior withdrawals require production".to_owned(),
+        ));
+    }
+    let prior_path = previous_snapshot.ok_or_else(|| {
+        AtlasError::Manifest("prior withdrawals need a previous public snapshot".to_owned())
+    })?;
+    let previous: Value = serde_json::from_slice(&fs::read(prior_path)?)?;
+    if previous["demo"] != false
+        || previous["preview"] != false
+        || previous["status"]["state"] != "released"
+    {
+        return Err(AtlasError::Manifest(
+            "previous snapshot is not a public release".to_owned(),
+        ));
+    }
+    let prior_releases = previous["case_releases"]
+        .as_array()
+        .ok_or_else(|| AtlasError::Manifest("previous release lacks case bindings".to_owned()))?;
+    let staging = tempfile::tempdir()?;
+    let staged_path = staging.path().join("active.json");
+    export_atlas_bundle_with_withdrawals(
+        store,
+        manifests,
+        withdrawn_manifests,
+        &staged_path,
+        mode,
+        site_url,
+    )?;
+    let mut snapshot: Value = serde_json::from_slice(&fs::read(&staged_path)?)?;
+    let mut notices = snapshot["withdrawals"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut seen = notices
+        .iter()
+        .filter_map(|item| item["case_id"].as_str().map(str::to_owned))
+        .collect::<BTreeSet<_>>();
+    for case_id in withdrawn_case_ids {
+        if !case_id.starts_with("co-")
+            || !seen.insert(case_id.clone())
+            || snapshot["case_releases"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item["case_id"] == case_id.as_str()))
+        {
+            return Err(AtlasError::Manifest(
+                "prior withdrawal is duplicate or active".to_owned(),
+            ));
+        }
+        let prior_release = prior_releases
+            .iter()
+            .find(|item| item["case_id"] == case_id.as_str());
+        let prior_notice = previous["withdrawals"].as_array().and_then(|items| {
+            items
+                .iter()
+                .find(|item| item["case_id"] == case_id.as_str() && item["state"] == "withdrawn")
+        });
+        let binding = if let Some(prior) = prior_release {
+            if !previous["entities"].as_array().is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| item["type"] == "DECISION" && item["slug"] == case_id.as_str())
+            }) {
+                return Err(AtlasError::Manifest("prior case lacks decision".to_owned()));
+            }
+            prior["release"]["bound_digest"].as_str()
+        } else {
+            prior_notice.and_then(|item| item["bound_digest"].as_str())
+        }
+        .ok_or_else(|| AtlasError::Manifest("case is absent from previous release".to_owned()))?;
+        let review_id = stable_id("atlas-release", &[case_id]);
+        let review = store
+            .current_review(&review_id)?
+            .ok_or_else(|| AtlasError::Review("prior case lacks withdrawal review".to_owned()))?;
+        if review.state != ReviewState::Rejected
+            || review.bound_digest != binding
+            || !human_reviewer(&review.reviewer)
+        {
+            return Err(AtlasError::Review(
+                "prior case lacks exact human rejection".to_owned(),
+            ));
+        }
+        notices.push(json!({"case_id":case_id,"state":"withdrawn",
+            "decided_at":review.decided_at,"bound_digest":binding,"review_id":review.id}));
+    }
+    notices.sort_by(|a, b| a["case_id"].as_str().cmp(&b["case_id"].as_str()));
+    let old = snapshot["release_review"]["bound_digest"]
+        .as_str()
+        .ok_or_else(|| AtlasError::Manifest("release lacks binding".to_owned()))?
+        .to_owned();
+    let parts = std::iter::once(old.as_str())
+        .chain(notices.iter().filter_map(|item| item["review_id"].as_str()))
+        .collect::<Vec<_>>();
+    let digest = review_digest("atlas-bundle-prior-withdrawals", &parts);
+    snapshot["withdrawals"] = json!(notices);
+    snapshot["release_review"]["bound_digest"] = json!(digest);
+    snapshot["status"]["dataset_version"] = json!(digest);
+    snapshot["status"]["manifest_digest"] = json!(digest);
+    write_snapshot(&snapshot, output_path)
+}
+
+/// Append a proposal snapshot already rebuilt from reviewed candidate
+/// archives by the CLI. This function checks bundle identity and consistency;
+/// the caller must perform the source revalidation before calling it.
+#[allow(clippy::too_many_lines)]
+pub fn append_verified_proposal_snapshot(
+    base: &mut Value,
+    extra: &Value,
+) -> Result<(), AtlasError> {
+    if base["demo"] != false
+        || base["preview"] != false
+        || extra["demo"] != false
+        || extra["preview"] != false
+        || base["status"]["state"] != "released"
+        || extra["status"]["state"] != "released"
+    {
+        return Err(AtlasError::Manifest(
+            "proposal cannot join a nonpublic bundle".to_owned(),
+        ));
+    }
+    let releases = extra["case_releases"]
+        .as_array()
+        .ok_or_else(|| AtlasError::Manifest("proposal lacks case release".to_owned()))?;
+    if releases.len() != 1 || releases[0]["release"]["state"] != "SOURCE_VERIFIED" {
+        return Err(AtlasError::Manifest(
+            "proposal lacks one source-verified release".to_owned(),
+        ));
+    }
+    let case_id = releases[0]["case_id"]
+        .as_str()
+        .ok_or_else(|| AtlasError::Manifest("proposal release lacks case ID".to_owned()))?;
+    if !extra["entities"].as_array().is_some_and(|entities| {
+        entities
+            .iter()
+            .filter(|entity| entity["type"] == "DECISION" && entity["slug"] == case_id)
+            .count()
+            == 1
+    }) {
+        return Err(AtlasError::Manifest(
+            "proposal lacks its exact decision".to_owned(),
+        ));
+    }
+    let withdrawn_collision = base["withdrawals"]
+        .as_array()
+        .is_some_and(|items| items.iter().any(|item| item["case_id"] == case_id));
+    let existing = base["case_releases"]
+        .as_array_mut()
+        .ok_or_else(|| AtlasError::Manifest("bundle lacks case releases".to_owned()))?;
+    if existing.iter().any(|item| item["case_id"] == case_id) || withdrawn_collision {
+        return Err(AtlasError::Manifest(
+            "proposal case ID already exists in bundle".to_owned(),
+        ));
+    }
+    existing.push(releases[0].clone());
+    existing.sort_by(|a, b| a["case_id"].as_str().cmp(&b["case_id"].as_str()));
+    for key in ["sources", "evidence", "entities"] {
+        let target = base[key]
+            .as_array_mut()
+            .ok_or_else(|| AtlasError::Manifest(format!("bundle lacks {key}")))?;
+        let incoming = extra[key]
+            .as_array()
+            .ok_or_else(|| AtlasError::Manifest(format!("proposal lacks {key}")))?;
+        let mut ids = target
+            .iter()
+            .filter_map(|item| item["id"].as_str().map(str::to_owned))
+            .collect::<BTreeSet<_>>();
+        for item in incoming {
+            let id = item["id"]
+                .as_str()
+                .ok_or_else(|| AtlasError::Manifest(format!("proposal {key} lacks id")))?;
+            if !ids.insert(id.to_owned()) {
+                return Err(AtlasError::Manifest(format!(
+                    "proposal {key} ID collides: {id}"
+                )));
+            }
+            target.push(item.clone());
+        }
+        target.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    }
+    let bindings = base["case_releases"]
+        .as_array()
+        .expect("checked releases")
+        .iter()
+        .map(|item| item["release"]["bound_digest"].as_str().unwrap_or(""))
+        .collect::<Vec<_>>();
+    if bindings.iter().any(|digest| !digest.starts_with("sha256:")) {
+        return Err(AtlasError::Manifest(
+            "bundle has an invalid case binding".to_owned(),
+        ));
+    }
+    let withdrawals = base["withdrawals"]
+        .as_array()
+        .map_or_else(Vec::new, |items| {
+            items
+                .iter()
+                .filter_map(|item| item["review_id"].as_str())
+                .collect::<Vec<_>>()
+        });
+    let digest = review_digest(
+        "atlas-bundle-with-proposals",
+        &bindings.into_iter().chain(withdrawals).collect::<Vec<_>>(),
+    );
+    base["release_review"] = json!({"state":"SOURCE_VERIFIED","bound_digest":digest,
+        "reviewed_at":null,"corrections":[],
+        "verification_method":"preserved_source_bytes_and_exact_locators"});
+    let relationships = base["entities"]
+        .as_array()
+        .expect("checked entities")
+        .iter()
+        .map(|entity| entity["relationships"].as_array().map_or(0, Vec::len))
+        .sum::<usize>();
+    base["status"]["counts"] = json!({"entities":base["entities"].as_array().expect("entities").len(),
+        "records":base["evidence"].as_array().expect("evidence").len(),
+        "sources":base["sources"].as_array().expect("sources").len(),"relationships":relationships});
+    base["status"]["dataset_version"] = json!(digest);
+    base["status"]["manifest_digest"] = json!(digest);
+    validate_value(base)?;
+    Ok(())
+}
+
+/// Persist a bundle assembled only from the gated atlas exporter and freshly
+/// rebuilt proposal snapshots.
+pub fn write_verified_atlas_snapshot(
+    snapshot: &Value,
+    output_path: &Path,
+) -> Result<(), AtlasError> {
+    write_snapshot(snapshot, output_path)
+}
+
 fn insert_consistent(
     collection: &mut BTreeMap<String, Value>,
     item: &Value,
@@ -1936,5 +2276,41 @@ mod tests {
             review_requirements(&manifest),
             Err(AtlasError::Source(message)) if message.contains("byte limit")
         ));
+    }
+
+    #[test]
+    fn verified_proposal_append_updates_bundle_and_rejects_duplicate_case() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut base: Value = serde_json::from_slice(
+            &fs::read(root.join("web/panopticon-terminal/public/public-snapshot.json"))
+                .expect("checked-in release"),
+        )
+        .expect("release JSON");
+        let case_id = "co-record-test-proposal";
+        let extra = json!({
+            "schema_version":"pnull-public-snapshot-v1","demo":false,"preview":false,
+            "status":{"state":"released"},
+            "case_releases":[{"case_id":case_id,"release":{
+                "state":"SOURCE_VERIFIED","bound_digest":format!("sha256:{}", "c".repeat(64)),
+                "reviewed_at":null,"corrections":[]}}],
+            "entities":[{"id":"decision_proposal_test","type":"DECISION","slug":case_id,
+                "name":"Test proposal","source_count":0,"relation_count":0,"source_ids":[],
+                "relationships":[],"attributes":[],"timeline":[],"votes":[]}],
+            "evidence":[],"sources":[]
+        });
+        append_verified_proposal_snapshot(&mut base, &extra).expect("append");
+        assert_eq!(base["case_releases"].as_array().expect("releases").len(), 5);
+        assert_eq!(base["status"]["counts"]["entities"], 45);
+        assert!(
+            base["entities"]
+                .as_array()
+                .expect("entities")
+                .iter()
+                .any(|item| item["slug"] == case_id)
+        );
+        assert!(append_verified_proposal_snapshot(&mut base, &extra).is_err());
+        if let Ok(path) = std::env::var("PNUL_PROPOSAL_BUNDLE_TEST_OUTPUT") {
+            fs::write(path, serde_json::to_vec_pretty(&base).expect("JSON")).expect("QA bundle");
+        }
     }
 }

@@ -3499,4 +3499,177 @@ mod tests {
                 .all(|case| case["release"]["state"] == "SOURCE_VERIFIED")
         );
     }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn correction_and_withdrawal_keep_bundle_atomic() {
+        let withdrawn = manifest("commerce-city-ord-2755-2026-04-06.v2.json");
+        let retained = manifest("commerce-city-ord-2756-2026-04-06.v2.json");
+        let cases = vec![withdrawn.clone(), retained.clone()];
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Store::open(dir.path().join("db")).expect("store");
+        let output = dir.path().join("public.json");
+        allow_release(&store);
+        seed_receipts(&store, &cases);
+        super::super::export_atlas_bundle(
+            &store,
+            &cases,
+            &output,
+            AtlasExportMode::Production,
+            Some("https://panopticon.fail"),
+        )
+        .expect("initial release");
+        let initial = fs::read(&output).expect("initial bytes");
+        let prior_path = dir.path().join("prior-release.json");
+        fs::write(&prior_path, &initial).expect("prior release");
+        let requirement = requirement(&inspect(&withdrawn).expect("withdrawn case"));
+        let rejected = ReviewDecision {
+            id: ReviewDecision::id_for(&requirement.id, "2026-11-10T13:00:00Z"),
+            citation_id: requirement.id.clone(),
+            state: ReviewState::Rejected,
+            reviewer: "Ada Editor".to_owned(),
+            note: "Withdraw pending correction".to_owned(),
+            bound_digest: requirement.bound_digest.clone(),
+            decision_digest: String::new(),
+            decided_at: "2026-11-10T13:00:00Z".to_owned(),
+            supersedes: None,
+        };
+        store.insert_review(&rejected).expect("withdraw review");
+        assert!(matches!(
+            super::super::export_atlas_bundle(
+                &store,
+                &cases,
+                &output,
+                AtlasExportMode::Production,
+                Some("https://panopticon.fail"),
+            ),
+            Err(AtlasError::Review(_))
+        ));
+        assert_eq!(fs::read(&output).expect("unchanged bytes"), initial);
+
+        // Rebuilding the release without the withdrawn manifest removes its
+        // decision, voters, and citations together. The rejected review remains
+        // in the private append-only history for a corrected revision.
+        super::super::export_atlas_bundle_with_withdrawals(
+            &store,
+            std::slice::from_ref(&retained),
+            std::slice::from_ref(&withdrawn),
+            &output,
+            AtlasExportMode::Production,
+            Some("https://panopticon.fail"),
+        )
+        .expect("release after withdrawal");
+        let updated: Value = serde_json::from_slice(&fs::read(&output).expect("updated bytes"))
+            .expect("updated JSON");
+        assert_eq!(
+            updated["case_releases"].as_array().expect("releases").len(),
+            1
+        );
+        assert!(updated["case_releases"].to_string().contains("ord-2756"));
+        assert!(!updated["entities"].to_string().contains("ord-2755"));
+        assert_eq!(
+            updated["withdrawals"][0]["case_id"],
+            "co-commerce-city-ord-2755-2026-04-06"
+        );
+        assert!(!updated.to_string().contains("Withdraw pending correction"));
+        assert_eq!(
+            store
+                .reviews_for_citation(&requirement.id)
+                .expect("history")
+                .len(),
+            1
+        );
+
+        let prior_case_id = vec!["co-commerce-city-ord-2755-2026-04-06".to_owned()];
+        super::super::export_atlas_bundle_with_prior_withdrawals(
+            &store,
+            std::slice::from_ref(&retained),
+            &[],
+            &prior_case_id,
+            Some(&prior_path),
+            &output,
+            AtlasExportMode::Production,
+            Some("https://panopticon.fail"),
+        )
+        .expect("prior release withdrawal");
+        let carried_path = dir.path().join("withdrawn-release.json");
+        fs::copy(&output, &carried_path).expect("carry prior notice");
+        super::super::export_atlas_bundle_with_prior_withdrawals(
+            &store,
+            std::slice::from_ref(&retained),
+            &[],
+            &prior_case_id,
+            Some(&carried_path),
+            &output,
+            AtlasExportMode::Production,
+            Some("https://panopticon.fail"),
+        )
+        .expect("carry withdrawal forward");
+        let carried: Value = serde_json::from_slice(&fs::read(&output).expect("carried bytes"))
+            .expect("carried JSON");
+        assert_eq!(carried["withdrawals"][0]["case_id"], prior_case_id[0]);
+
+        let corrected = ReviewDecision {
+            id: ReviewDecision::id_for(&requirement.id, "2026-11-10T14:00:00Z"),
+            citation_id: requirement.id.clone(),
+            state: ReviewState::Approved,
+            reviewer: "Ada Editor".to_owned(),
+            note: "Corrected interpretation checked against the same source binding".to_owned(),
+            bound_digest: requirement.bound_digest,
+            decision_digest: String::new(),
+            decided_at: "2026-11-10T14:00:00Z".to_owned(),
+            supersedes: Some(rejected.id),
+        };
+        store.insert_review(&corrected).expect("correction review");
+        assert!(matches!(
+            super::super::export_atlas_bundle_with_prior_withdrawals(
+                &store,
+                std::slice::from_ref(&retained),
+                &[],
+                &prior_case_id,
+                Some(&carried_path),
+                &output,
+                AtlasExportMode::Production,
+                Some("https://panopticon.fail"),
+            ),
+            Err(AtlasError::Review(_))
+        ));
+        assert!(matches!(
+            super::super::export_atlas_bundle_with_withdrawals(
+                &store,
+                &[retained],
+                &[withdrawn],
+                &output,
+                AtlasExportMode::Production,
+                Some("https://panopticon.fail"),
+            ),
+            Err(AtlasError::Review(_))
+        ));
+        super::super::export_atlas_bundle(
+            &store,
+            &cases,
+            &output,
+            AtlasExportMode::Production,
+            Some("https://panopticon.fail"),
+        )
+        .expect("corrected rerelease");
+        let rereleased: Value =
+            serde_json::from_slice(&fs::read(&output).expect("rerelease bytes"))
+                .expect("rerelease JSON");
+        assert_eq!(
+            rereleased["case_releases"]
+                .as_array()
+                .expect("releases")
+                .len(),
+            2
+        );
+        assert!(rereleased["case_releases"].to_string().contains("Rejected"));
+        assert_eq!(
+            store
+                .reviews_for_citation(&requirement.id)
+                .expect("history")
+                .len(),
+            2
+        );
+    }
 }

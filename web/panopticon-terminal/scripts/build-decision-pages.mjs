@@ -73,6 +73,18 @@ export function buildDecisionPages(snapshot, template, siteUrl) {
     }
     pages.push({ path: `decisions/${slug}.html`, html });
   }
+  for (const notice of snapshot.withdrawals ?? []) {
+    const slug = notice.case_id;
+    if (seen.has(slug)) throw new Error("Withdrawn case is still active");
+    seen.add(slug);
+    const url = escapeHtml(`${origin.origin}/decisions/${slug}.html`);
+    pages.push({ path: `decisions/${slug}.html`, html: `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,follow" /><meta name="description" content="This decision record has been withdrawn pending correction." />
+<link rel="canonical" href="${url}" /><title>Record withdrawn pending correction | PANOPTICON.FAIL</title></head>
+<body><main><h1>Record withdrawn pending correction</h1><p>This decision record is currently withdrawn while its evidence is checked. The previous release is not a current finding.</p>
+<p><a href="../index.html">Return to the Colorado atlas</a></p></main></body></html>\n` });
+  }
   return pages;
 }
 

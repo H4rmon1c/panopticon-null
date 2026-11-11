@@ -386,6 +386,46 @@ fn technology_needs_an_explicit_same_matter_relationship_for_case_stage() {
 }
 
 #[test]
+fn contract_authorization_needs_an_atomic_approved_item_link() {
+    let mut sources = BTreeMap::new();
+    sources.insert("minutes".to_owned(), source(
+        "Item 5\n2026-11-10\nTown Council\nMotion to approve Item 5\nApproved\nFlock Safety\nItem 5: Flock Safety\nAgreement 123\nItem 5 | Agreement 123 | Flock Safety | award authorized"
+    ));
+    let mut input = json!({
+        "schema_version":1,"jurisdiction_ref":"test-place",
+        "sources":[{"source_ref":"minutes","archive_record":"discovery-archives/test-pdf-documents/record.json"}],
+        "decision":{
+            "matter":{"value":"Item 5","proof":proof(1,"Item 5")},
+            "date":{"value":"2026-11-10","proof":proof(2,"2026-11-10")},
+            "body":{"value":"Town Council","proof":proof(3,"Town Council")},
+            "action":{"value":"Motion to approve Item 5","proof":proof(4,"Motion to approve Item 5")},
+            "outcome":{"value":"Approved","proof":proof(5,"Approved")}
+        },
+        "technology":{"value":"Flock Safety","proof":proof(6,"Flock Safety")},
+        "technology_relationship":{"value":"Item 5: Flock Safety","proof":proof(7,"Item 5: Flock Safety")},
+        "contract_reference":{"value":"Agreement 123","proof":proof(8,"Agreement 123")},
+        "contract_award_link":{"value":"Item 5 | Agreement 123 | Flock Safety | award authorized",
+            "proof":proof(9,"Item 5 | Agreement 123 | Flock Safety | award authorized")},
+        "votes":{"scope":"not_established"},"unresolved_question":"Was the agreement signed?"
+    });
+    let root = tempfile::tempdir().unwrap();
+    let checked: ProposalInput = serde_json::from_value(input.clone()).unwrap();
+    let result = compose_proposal(root.path(), &checked, &sources).unwrap();
+    assert!(matches!(
+        result.contract_award_link,
+        FactState::Established { .. }
+    ));
+    input["decision"]["outcome"] = json!({"value":"Failed","proof":proof(5,"Approved")});
+    let rejected: ProposalInput = serde_json::from_value(input.clone()).unwrap();
+    assert!(compose_proposal(root.path(), &rejected, &sources).is_err());
+    input["decision"]["outcome"] = json!({"value":"Approved","proof":proof(5,"Approved")});
+    input["contract_award_link"]["value"] =
+        json!("Item 5 | Agreement 123 | Flock Safety | not award authorized");
+    let negated: ProposalInput = serde_json::from_value(input).unwrap();
+    assert!(compose_proposal(root.path(), &negated, &sources).is_err());
+}
+
+#[test]
 fn direct_item_votes_require_matter_and_nearby_named_rows() {
     let mut sources = BTreeMap::new();
     let mut lines = vec!["Item 5".to_owned(), "Motion to approve Item 5".to_owned()];

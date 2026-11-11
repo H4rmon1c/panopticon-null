@@ -87,3 +87,40 @@ not a finding that Moffat adopted a surveillance technology, awarded a
 contract, or recorded an individual vote. The same schema applies to the
 reviewed Legistar paths and other towns after their exact source policies and
 geography mappings have been added.
+
+## Release bridge
+
+`pnull case release --input proposal.json --output /absolute/path/snapshot.json`
+with an explicit `--site-url https://...` rebuilds the proposal from its
+original candidate archives and current source reviews. It also checks the
+global atlas publication allowlist, the latest successful bytes for every
+cited document, a current case veto, exact ISO date, and an unambiguous
+approved/failed outcome. It emits a **single-case** static snapshot with the
+same public schema and per-case release record used by the atlas. A persisted
+proposal JSON alone cannot be passed to this command to bypass its checks.
+
+The bridge currently publishes direct named votes or an explicit gap; it
+rejects consent-motion proposals until a distinct block-vote adapter is
+available. A contract reference alone stays `not_established`. An optional
+`contract_award_link` claim establishes only **award authorization**, and only
+when one exact official line has the form
+`<matter> | <contract reference> | <technology> | award authorized` (or
+`contract approved`), within the same bounded item section as the approved
+decision and the contract reference. The resulting decision-to-contract edge
+does not assert signature, payment, or deployment. Other wording remains a gap
+until a source-specific verifier is added. `atlas export` accepts
+`--proposal-input /absolute/private/input.json` with the jurisdiction's
+`--config`, rebuilds each candidate, and combines it with the release
+manifests. The self-host publisher accepts private paths through
+`PNUL_PROPOSAL_INPUTS`. A failed proposal leaves the current artifact intact.
+Source review remains per endpoint or path, not per record; a keyword hit
+cannot become a published approval.
+
+A proposal case's stable `co-record-...` ID appears in its release snapshot.
+To withdraw it, record a rejection of its exact prior `atlas-release` binding,
+omit its input from the next bundle, and use `--withdrawn-case-id <id>
+--previous-snapshot <prior-public-snapshot>`. The exporter checks that the
+prior public artifact carried the same case binding and retains a sanitized
+noindex notice at the old share URL. A correction creates a new proposal ID;
+retain the old case's withdrawal notice until the correction history and new
+case are published.
