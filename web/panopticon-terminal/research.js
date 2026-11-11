@@ -76,8 +76,11 @@ function render(report) {
               const portraitProof = node('details', 'proof');
               portraitProof.append(node('summary', '', 'Portrait capture details'));
               portraitProof.append(node('p', 'meta', portrait.caption));
-              portraitProof.append(node('p', 'meta', `Original portrait embedded on source page ${portrait.source_page}.`));
+              portraitProof.append(node('p', 'meta', portrait.image_transform === 'lossless_png_from_jpeg2000'
+                ? `Portrait on source page ${portrait.source_page}, converted losslessly from JPEG 2000 to PNG for display.`
+                : `Original portrait embedded on source page ${portrait.source_page}.`));
               portraitProof.append(node('p', 'meta digest', `Source SHA-256 ${portrait.source_document_sha256}`));
+              if (portrait.embedded_original_sha256) portraitProof.append(node('p', 'meta digest', `Embedded image SHA-256 ${portrait.embedded_original_sha256}`));
               detail.append(portraitProof);
             }
             detail.append(node('p', 'meta', 'Portrait date not established.'));

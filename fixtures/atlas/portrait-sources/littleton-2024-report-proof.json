@@ -1,0 +1,22 @@
+{
+  "source_url": "https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2024-littleton-reports/2024-12-dec-jan-littleton-report.pdf",
+  "source_sha256": "f8264f7fc25a40afdc6c34ba41ea1864bbc5ac219f2485f91bf2c6ae9ba7e394",
+  "source_page": 3,
+  "page_fixture": "fixtures/atlas/portrait-sources/littleton-2024-report-page.pdf",
+  "page_fixture_sha256": "0bb29b5d44dae80db18632b843b3f97f71a32f525d34df84f072088385ecdf50",
+  "page_fixture_note": "One-page derivative of the source. The complete PDF and network receipt remain in the private archive. Portrait JPEGs are the original embedded streams.",
+  "portraits": [
+    {
+      "name": "Andrea Peters",
+      "person_id": 503,
+      "image_index": 2,
+      "sha256": "cc93be470bce7757dad036ca4316b13818a4094cde002376b7e3aacffb2cf701"
+    },
+    {
+      "name": "Robert Reichardt",
+      "person_id": 502,
+      "image_index": 3,
+      "sha256": "b154471db023063b8c63b7d4cefa0dfb55c0772e2e5e61ce35913a0ca098eee6"
+    }
+  ]
+}

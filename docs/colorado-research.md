@@ -14,6 +14,8 @@ no relevant decision exists.
    directory and county sites from an archived county-clerks directory. Visit
    up to six prioritized same-host navigation pages on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
+   Document links may contain encoded spaces; other encoded path sequences are
+   left out of the queue to avoid ambiguous separators, traversal, and controls.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of
    pages for configured vendor and technology terms. A title match is a lead,
@@ -53,6 +55,12 @@ no relevant decision exists.
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture
    are pinned in `fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json`.
+   Seven Littleton voters have portraits from a labeled 2023 city newsletter.
+   Its embedded JPEG 2000 streams are retained in the source PDF; lossless PNG
+   display copies and their original-stream digests are independently verified
+   by `scripts/test-littleton-portraits.py`.
+   The remaining two Littleton voters use original JPEG streams from the
+   labeled 2024 newsletter page, verified by `scripts/test-littleton-2024-portraits.py`.
 6. Export a strict, sanitized static JSON snapshot. Every entry is labeled
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and

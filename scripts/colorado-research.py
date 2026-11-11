@@ -426,9 +426,11 @@ def normalized_home(raw):
 
 def candidate_kind(url, index_url, label):
     parsed, index = urlsplit(url), urlsplit(index_url)
+    # Admit ordinary encoded filename spaces without admitting encoded path
+    # separators, dot segments, controls, or double-encoded escapes.
     if (parsed.scheme != 'https' or parsed.hostname != index.hostname or parsed.port not in (None, 443)
             or parsed.username or parsed.password or parsed.query or parsed.fragment or len(url) > 2000
-            or '%' in parsed.path or '\\' in parsed.path or '..' in parsed.path.split('/')):
+            or re.search(r'%(?!20)', parsed.path, re.I) or '\\' in parsed.path or '..' in parsed.path.split('/')):
         return None
     civic = re.fullmatch(r'/AgendaCenter/ViewFile/(Agenda|Minutes)/_([0-9]{2})([0-9]{2})([0-9]{4})-[0-9]{1,12}',
                          parsed.path, re.I)
@@ -1768,6 +1770,68 @@ def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
             'portrait_date': 'not_established'}
 
 
+def littleton_report_portrait(data_dir, receipts, ref, client, vote, assets_dir):
+    """Bind a recorded voter to a labeled portrait in a city newsletter."""
+    if assets_dir is None or ref != 'us-co-place-0845255' or client != 'littletongov':
+        return None
+    later = vote.get('person_id') in (502, 503)
+    year = 2024 if later else 2023
+    proof_path = f'fixtures/atlas/portrait-sources/littleton-{year}-report-proof.json'
+    fixture = f'fixtures/atlas/portrait-sources/littleton-{year}-report-page.pdf'
+    proof = json.loads(read_blob(ROOT / proof_path, 100_000))
+    if later:
+        url = 'https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2024-littleton-reports/2024-12-dec-jan-littleton-report.pdf'
+        source_digest = 'f8264f7fc25a40afdc6c34ba41ea1864bbc5ac219f2485f91bf2c6ae9ba7e394'
+        page_digest = '0bb29b5d44dae80db18632b843b3f97f71a32f525d34df84f072088385ecdf50'
+    else:
+        url = 'https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2023-littleton-reports/2023-02-feb-littleton-report.pdf'
+        source_digest = '34a8dc30a20a37c23179b122722175be6cf3c253c825009db6fbdeb4cff6ea7e'
+        page_digest = 'b6be37f13111fc566f28900396619154179a4dce635529b538c67fe1a83c6ada'
+    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != 3
+            or proof['page_fixture'] != fixture or proof['page_fixture_sha256'] != page_digest
+            or sha(read_blob(ROOT / proof['page_fixture'], 2_000_000)) != page_digest):
+        raise ValueError('Littleton portrait proof differs')
+    matches = [item for item in proof['portraits'] if item['name'] == vote['name'] and item['person_id'] == vote['person_id']]
+    if len(matches) != 1:
+        return None
+    if (url, source_digest) not in receipts:
+        raise ValueError('Littleton portrait source receipt is missing')
+    source_blob(data_dir, source_digest, 20 * 1024 * 1024)
+    item = matches[0]
+    image_digest, original_digest = item['sha256'], item.get('original_sha256')
+    if (not re.fullmatch(r'[0-9a-f]{64}', image_digest)
+            or (not later and not re.fullmatch(r'[0-9a-f]{64}', original_digest or ''))
+            or type(item['image_index']) is not int):
+        raise ValueError('invalid Littleton portrait identity')
+    extension = 'jpg' if later else 'png'
+    signature = b'\xff\xd8\xff' if later else b'\x89PNG\r\n\x1a\n'
+    image = read_blob(ROOT / 'web/panopticon-terminal/research-portraits' / f'{image_digest}.{extension}', 2_000_000)
+    if not image.startswith(signature) or sha(image) != image_digest:
+        raise ValueError('Littleton portrait display bytes differ')
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_dir.is_symlink() or not assets_dir.is_dir():
+        raise ValueError('portrait output directory is unsafe')
+    target = assets_dir / f'{image_digest}.{extension}'
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        if sha(read_blob(target, 2_000_000)) != image_digest:
+            raise ValueError('existing portrait output differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(image)
+            handle.flush()
+            os.fsync(handle.fileno())
+    result = {'src': f'./research-portraits/{image_digest}.{extension}', 'sha256': image_digest,
+              'source_kind': 'embedded_pdf', 'source_url': url, 'source_document_sha256': source_digest,
+              'source_page': 3, 'embedded_image_index': item['image_index'],
+              'caption': f"{year} city council; source labels this portrait {item['name']}.",
+              'portrait_date': 'not_established'}
+    if not later:
+        result.update(embedded_original_sha256=original_digest, image_transform='lossless_png_from_jpeg2000')
+    return result
+
+
 def materialize_action(data_dir, receipts, client, matter, history_id, raw):
     """Reopen every exact source before associating a recorded vote with a matter."""
     captures = json.loads(raw)
@@ -1950,6 +2014,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                             portrait = checked_portrait(data_dir, db, receipts, ref, vote['name'], assets_dir)
                             if not portrait:
                                 portrait = arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
+                            if not portrait:
+                                portrait = littleton_report_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):

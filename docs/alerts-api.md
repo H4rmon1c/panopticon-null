@@ -72,8 +72,11 @@ An optional vote `portrait` includes a local `src`, its SHA-256 digest, and a
 source URL. Resolve `src` against the site's root, not the API file's path.
 A portrait with `source_kind: "embedded_pdf"` additionally provides
 `source_document_sha256`, `source_page`, and `embedded_image_index`; it has no
-standalone `image_url` because the original JPEG is embedded in the linked PDF.
+standalone `image_url` because the original image is embedded in the linked PDF.
 Pages are one-based; the embedded image index follows Poppler's zero-based
 extraction order for that page.
+For Littleton's JPEG 2000 images, `embedded_original_sha256` identifies the
+original stream and `image_transform: "lossless_png_from_jpeg2000"` identifies
+the PNG display copy; `sha256` identifies that display copy.
 The portrait identifies the person and does not prove the vote or the date
 the image was taken.

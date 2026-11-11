@@ -276,8 +276,11 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(module.candidate_kind(good, index, ''), ('minutes', '2026-09-15'))
         self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council-minutes.pdf', index, 'Minutes')[0], 'minutes')
         self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council-minutes.docx', index, 'Minutes')[0], 'minutes')
+        self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council%20minutes.pdf', index, 'Minutes')[0], 'minutes')
         for bad in ['http://city.example.org/uploads/agenda.pdf', 'https://evil.example/uploads/agenda.pdf',
                     'https://city.example.org/uploads/agenda.pdf?token=x', 'https://city.example.org/uploads/%2e%2e/agenda.pdf',
+                    'https://city.example.org/uploads/%252e%252e/agenda.pdf', 'https://city.example.org/uploads%2fagenda.pdf',
+                    'https://city.example.org/uploads/%0aagenda.pdf', 'https://city.example.org/uploads/%ZZagenda.pdf',
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
 
@@ -574,6 +577,37 @@ class ResearchTests(unittest.TestCase):
                 self.assertIsNone(module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'arapahoe', {**vote, 'person_id': 999}, root / 'assets'))
                 with self.assertRaises(ValueError):
                     module.arapahoe_budget_portrait(root, set(), 'us-co-county-08005', 'arapahoe', vote, root / 'assets')
+
+    def test_littleton_portrait_requires_source_receipt_and_exact_portal_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/littleton-2023-report-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Kyle Schlachter', 'person_id': 333}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (3, 4))
+                self.assertEqual(result['image_transform'], 'lossless_png_from_jpeg2000')
+                self.assertEqual(result['embedded_original_sha256'], proof['portraits'][0]['original_sha256'])
+                self.assertIsNone(module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'wrong', vote, root / 'assets'))
+                self.assertIsNone(module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', {**vote, 'person_id': 999}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.littleton_report_portrait(root, set(), 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+
+    def test_littleton_2024_portraits_require_the_later_city_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/littleton-2024-report-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Andrea Peters', 'person_id': 503}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (3, 2))
+                self.assertTrue(result['src'].endswith('.jpg'))
+                self.assertNotIn('image_transform', result)
+                self.assertIsNone(module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', {**vote, 'name': 'Robert Reichardt'}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.littleton_report_portrait(root, set(), 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
 
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'
