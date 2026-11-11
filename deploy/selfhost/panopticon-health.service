@@ -1,0 +1,20 @@
+[Unit]
+Description=Check Panopticon collection, source-review expiry and publication freshness
+
+[Service]
+Type=oneshot
+User=panopticon
+Group=panopticon
+WorkingDirectory=/srv/panopticon/repo
+EnvironmentFile=/etc/panopticon/panopticon.env
+ExecStart=/usr/bin/python3 /srv/panopticon/repo/deploy/selfhost/run-stage.py check
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/panopticon /srv/panopticon/status
+UMask=0077
+CapabilityBoundingSet=
+TimeoutStartSec=60s
+MemoryMax=256M

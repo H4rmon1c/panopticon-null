@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up Panopticon every day
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 UTC
+RandomizedDelaySec=30min
+Persistent=true
+Unit=panopticon-backup.service
+
+[Install]
+WantedBy=timers.target

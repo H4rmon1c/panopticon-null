@@ -28,7 +28,7 @@ PROFILE_FIXTURES = {
     "co-castle-rock-archive.toml": {
         "castle-rock-res2025-071-event-json": "fixtures/co-castlerock/event-4406-2025-06-03.json",
         "castle-rock-res2025-071-votes-json": "fixtures/co-castlerock/votes-66424-res-2025-071.json",
-        "castle-rock-res2025-071-detail": "fixtures/co-castlerock/res-2025-071-detail.html",
+        "castle-rock-res2025-071-detail": "fixtures/co-castlerock/res-2025-071-detail-captured-2026-11-10.html",
         "castle-rock-res2025-071-agreement": "fixtures/co-castlerock/res-2025-071-vendor-signed-agreement.pdf",
         "castle-rock-res2025-071-matter-json": "fixtures/co-castlerock/matter-10968-res-2025-071.json",
         "castle-rock-res2025-071-sole-source": "fixtures/co-castlerock/res-2025-071-sole-source-request.pdf",

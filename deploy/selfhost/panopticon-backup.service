@@ -1,0 +1,23 @@
+[Unit]
+Description=Encrypted off-server Panopticon private state and release backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=panopticon
+Group=panopticon
+WorkingDirectory=/srv/panopticon/repo
+EnvironmentFile=/etc/panopticon/panopticon.env
+EnvironmentFile=/etc/panopticon/backup.env
+ExecStart=/srv/panopticon/repo/deploy/selfhost/backup.sh
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/panopticon
+Environment=RESTIC_CACHE_DIR=/var/lib/panopticon/ops/restic-cache
+UMask=0077
+CapabilityBoundingSet=
+TimeoutStartSec=3h
+MemoryMax=1G

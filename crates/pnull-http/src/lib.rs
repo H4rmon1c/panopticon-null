@@ -228,6 +228,8 @@ pub fn is_public_address(address: IpAddr) -> bool {
                     && octets[1] == 0x01
                     && (octets[2] <= 0x01 || (octets[2] == 0x0d && octets[3] == 0xb8)))
                 && !(octets[0] == 0x20 && octets[1] == 0x02)
+                // RFC 9637 documentation prefix (3fff::/20).
+                && !(octets[0] == 0x3f && octets[1] == 0xff && octets[2] & 0xf0 == 0)
         }
     }
 }
@@ -869,6 +871,8 @@ mod tests {
             "192.0.0.1",
             "2001:db8::1",
             "2002:c0a8:0101::1",
+            "3fff::1",
+            "3fff:fff:ffff:ffff:ffff:ffff:ffff:ffff",
         ] {
             assert!(
                 matches!(
@@ -878,6 +882,7 @@ mod tests {
                 "{address} must be refused"
             );
         }
+        assert!(is_public_address("2606:4700:4700::1111".parse().unwrap()));
     }
 
     #[test]

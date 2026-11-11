@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Poll configured official sources into the private ledger; do not publish findings.
 set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${PNUL_REPO_DIR:?set PNUL_REPO_DIR to the checked-out repository}"
 : "${PNUL_DATA_DIR:?set PNUL_DATA_DIR to the private collector state}"
@@ -24,8 +25,11 @@ cd "$PNUL_REPO_DIR"
     echo "collection fallback matrix must be a regular file under deploy/selfhost" >&2
     exit 1
 }
-exec 9>"$PNUL_DATA_DIR/.collect.lock"
-flock -n 9 || { echo "another collection is running" >&2; exit 1; }
+if [[ -z "${PNUL_HELD_LOCKS:-}" ]]; then
+    exec python3 "$script_dir/locked-run.py" "$PNUL_DATA_DIR/.collect.lock" -- bash "$script_dir/collect.sh"
+fi
+python3 "$script_dir/locked-run.py" --verify "$PNUL_DATA_DIR/.collect.lock"
+
 
 # Validate the complete schedule before any source fetch. Source IDs are unique
 # across profiles because the private ledger uses source IDs as global keys.

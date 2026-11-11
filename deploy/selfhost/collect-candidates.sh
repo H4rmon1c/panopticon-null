@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Follow only digest-bound official document candidates into private state.
 set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${PNUL_REPO_DIR:?set PNUL_REPO_DIR to the checked-out repository}"
 : "${PNUL_DATA_DIR:?set PNUL_DATA_DIR to the private collector state}"
@@ -19,8 +20,11 @@ cd "$PNUL_REPO_DIR"
 }
 
 # The calendar collector takes this same lock while writing candidate files.
-exec 9>"$PNUL_DATA_DIR/.collect.lock"
-flock -n 9 || { echo "another collection is running" >&2; exit 1; }
+if [[ -z "${PNUL_HELD_LOCKS:-}" ]]; then
+    exec python3 "$script_dir/locked-run.py" "$PNUL_DATA_DIR/.collect.lock" -- bash "$script_dir/collect-candidates.sh"
+fi
+python3 "$script_dir/locked-run.py" --verify "$PNUL_DATA_DIR/.collect.lock"
+
 
 declare -a configs=() origins=() maxima=() refreshes=()
 declare -A seen=()

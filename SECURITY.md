@@ -20,12 +20,12 @@ Never send X tokens, secret files, raw plate data, movement histories, home addr
 - Deterministic classification bugs that create unsupported strong claims.
 - Supply-chain and reproducibility failures.
 
-## Security posture at 0.0.2
+## Security posture for the Colorado production candidate
 
 - **Sandbox.** Live PDF/OCR extraction runs in a Linux bubblewrap sandbox: no network namespace, no inherited secrets, no writable access outside a dedicated temporary output directory, read-only exact inputs, new process/session boundaries, and prlimit CPU/memory/file-size/output-size/wall-time limits. Cleanup happens on success, failure, timeout, or interrupt. Live ingestion fails closed when the sandbox cannot be established. Aggregate job budgets bound downloaded bytes, attachments, PDF pages, OCR pages, extracted bytes, child processes, CPU, and wall time.
 - **DNS-safe HTTP.** Only public addresses are accepted; private, loopback, link-local, multicast, unspecified, and documentation addresses are rejected, and mixed public + prohibited DNS answers fail closed. HTTPS is required; certificate validation cannot be disabled. Redirects are same-host. Provenance is persisted for every request and redirect.
 - **No secrets.** HTTP provenance never persists cookies, authorization headers, or bearer tokens. Processing-run environment capture uses an allowlist, not an environment dump. Subprocess logs contain no secrets. Credentials are never placed in command arguments, source, fixtures, logs, shell examples, or generated output.
-- **Publication gates.** Every public citation and image excerpt requires a human review decision bound to exact content digests. Publication allowlists are permissions, not auto-approval. The site, Atom, and X fail closed on pending, rejected, stale, or mismatched decisions.
+- **Publication gates.** Atlas v2 cases require exact source bytes, current source-policy reviews, private public-network fetch receipts, complete fact proofs and a global publication allowlist. This route does not require human approval per record; an explicit case veto still blocks release. Legacy citation/approved-case routes retain their bound review gates. The public API uses only a validated released snapshot, and new or changed private candidates do not automatically become public claims.
 - **No content execution.** Source-document content is never executed: no macros, embedded files, JavaScript, or document actions.
 
 ## Operational guidance
@@ -37,3 +37,11 @@ Maintain current source reviews (`pnull source review capture/record/show/verify
 If a post attempt fails after any segment, do not clear the reservation or retry blindly. Inspect X and the persisted `post_segments` state, then reconcile manually via `pnull x reconcile`.
 
 Supported security updates apply to the latest tagged release.
+
+The [Colorado production release](docs/colorado-production-release.md) records
+the current coverage and deployment boundary. A passing local audit cannot
+establish the security of an unprovisioned host. Deploy from a checked commit,
+keep the repository and configuration root-owned, retain private state outside
+the web root, isolate document extraction, and test monitoring, rollback, and
+encrypted off-host restore on the actual server. No X credentials are needed
+for the static atlas or read-only alerts API.

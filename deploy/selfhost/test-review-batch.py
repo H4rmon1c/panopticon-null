@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import sqlite3
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,32 @@ class SyntheticPacket:
         self.packet_path = self.base / "packet.json"
         self.attestation_path = self.base / "attestation.json"
         self.packet = copy.deepcopy(batch.json_file(batch.PACKET))
+        # Replay the historical attestation in its exact original repository
+        # context. Production must continue to reject it after a registry/case
+        # revision; never rewrite the owner's old packet to bless new bytes.
+        self.repository = self.base / 'historical-repository'
+        self.repository.mkdir()
+        registry = batch.json_file(batch.REGISTRY)
+        revision = batch.json_file(batch.ROOT / 'fixtures/co-castlerock/detail-revision-2026-11-10.json')
+        for row in registry['sources']:
+            if row['id'] == revision['source_id']:
+                row.update(revision['prior'])
+        self.registry = self.repository / 'fixtures/atlas/sources.co.v1.json'
+        self.registry.parent.mkdir(parents=True)
+        self.registry.write_text(json.dumps(registry, indent=2) + '\n')
+        assert sha(self.registry.read_bytes()) == self.packet['source_registry_sha256']
+        for relative in [*batch.CONFIGS, *(row['preserved_fixture'] for row in self.packet['sources'])]:
+            destination = self.repository / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(batch.ROOT / relative, destination)
+        for name in batch.CASE_FILES:
+            relative = f'fixtures/atlas/cases/{name}'
+            case = batch.json_file(batch.ROOT / relative)
+            if name == 'castle-rock-res-2025-071.v2.json':
+                case['supporting_sources'].append(revision['source_id'])
+            destination = self.repository / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(json.dumps(case))
         self.now = datetime.now(timezone.utc).replace(microsecond=0)
         self.connection = sqlite3.connect(self.private / "pnull.db")
         self.connection.executescript("""
@@ -106,9 +133,10 @@ class SyntheticPacket:
         self.attestation_path.write_text(json.dumps(self.attestation), encoding="utf-8")
 
     def preflight(self):
-        return batch.preflight(
-            self.packet_path, self.attestation_path, self.private, self.now,
-        )
+        with patch.object(batch, 'ROOT', self.repository), patch.object(batch, 'REGISTRY', self.registry):
+            return batch.preflight(
+                self.packet_path, self.attestation_path, self.private, self.now,
+            )
 
     def add_review(self, row, note=None):
         review = {
@@ -168,6 +196,10 @@ class ReviewBatchTests(unittest.TestCase):
         self.assertEqual({state for _, _, state in plan}, {"ready"})
         self.assertTrue(all(row["release_cited"] for row, _, _ in plan))
         self.assertTrue(all("404" in note and "terms" in note for _, note, _ in plan))
+
+    def test_historical_attestation_does_not_authorize_revised_registry(self):
+        with self.assertRaisesRegex(batch.ReviewBatchError, 'source registry changed'):
+            batch.preflight(self.state.packet_path, self.state.attestation_path, self.state.private, self.state.now)
 
     def test_packet_digest_binds_attestation(self):
         self.row()["endpoint_url"] += "&other=1"

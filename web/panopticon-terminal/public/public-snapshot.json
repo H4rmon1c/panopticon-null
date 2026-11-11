@@ -2,6 +2,16 @@
   "activity": [],
   "case_releases": [
     {
+      "case_id": "co-castle-rock-res-2025-071-2025-06-03",
+      "release": {
+        "bound_digest": "sha256:4cddd5b3a65b537df43d520c882c35ffdcdfd558c5e0b05c450e2f886a9b5511",
+        "corrections": [],
+        "reviewed_at": null,
+        "state": "SOURCE_VERIFIED",
+        "verification_method": "preserved_source_bytes_and_exact_locators"
+      }
+    },
+    {
       "case_id": "co-colorado-springs-25-581-2025-11-25",
       "release": {
         "bound_digest": "sha256:64e23d56e655f81c4b525af97f1d0712dce63bc7f8b911bd793c9695e8deca59",
@@ -13,7 +23,7 @@
     {
       "case_id": "co-commerce-city-ord-2755-2026-04-06",
       "release": {
-        "bound_digest": "sha256:3c818f149b087ffbf285fb56e33a9c6cea68f88e268bbb7f7d875d86dbc35516",
+        "bound_digest": "sha256:027f64e7735eae264c7c1dd69b384921c253641c2dab8224f3e2e0ac3fe1cb37",
         "corrections": [],
         "reviewed_at": null,
         "state": "SOURCE_VERIFIED",
@@ -23,7 +33,7 @@
     {
       "case_id": "co-commerce-city-ord-2756-2026-04-06",
       "release": {
-        "bound_digest": "sha256:68f8fff4a21763b7e54d4d7639f49d2e7ed2650d99155e843ca9b74cabc476c2",
+        "bound_digest": "sha256:056ed3d074e8b132dc0721c933b83f633e76f57a32fba3a404c7690cbd3e5a17",
         "corrections": [],
         "reviewed_at": null,
         "state": "SOURCE_VERIFIED",
@@ -33,7 +43,7 @@
     {
       "case_id": "co-denver-25-0413-2025-05-05",
       "release": {
-        "bound_digest": "sha256:4e65cd8998ebd26084861c644ea20468c06784f0b083646aa512c58ccf592818",
+        "bound_digest": "sha256:e8b498f58d7210ed3fd13ce8c6906d4855b894035fa4db03a8f996a0b595852c",
         "corrections": [],
         "reviewed_at": null,
         "state": "SOURCE_VERIFIED",
@@ -85,6 +95,55 @@
       "attributes": [
         {
           "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_agreement",
+          "label": "Agreement named in decision",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Master Services Agreement and Order Form with Flock Group Inc."
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_outcome",
+          "label": "Recorded authorization outcome",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Pass"
+        }
+      ],
+      "description": "The official decision title records agreement authorization; the cited records do not establish signed execution or payments.",
+      "id": "agreement_co_castle_rock_res_2025_071_2025_06_03",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "name": "Master Services Agreement and Order Form with Flock Group Inc.",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-event"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Authorized agreement; execution not established",
+      "tags": [
+        "agreement context"
+      ],
+      "timeline": [],
+      "type": "AGREEMENT",
+      "unknowns": [
+        {
+          "kind": "contract_execution",
+          "state": "not_established"
+        },
+        {
+          "kind": "payment",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
           "evidence_id": "evidence_co_commerce_city_ord_2755_2026_04_06_agreement",
           "label": "Agreement named in decision",
           "review_state": "SOURCE_VERIFIED",
@@ -128,6 +187,254 @@
         }
       ],
       "updated_at": "2026-04-06"
+    },
+    {
+      "aliases": [
+        "RES 2025-071"
+      ],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_outcome",
+          "label": "Recorded outcome",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Pass"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_matter",
+          "label": "Official matter",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "RES 2025-071"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_action",
+          "label": "Recorded action",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Approved"
+        }
+      ],
+      "consent_block": null,
+      "description": "Castle Rock, CO approved RES 2025-071: Flock Safety Drone-As-First-Responder Program on 2025-06-03. The direct roll call records 6 Yes, 1 Abstain. Council approval of a sole-source agreement is documented. Town execution and payments are not established by these records.",
+      "geo": null,
+      "id": "decision_co_castle_rock_res_2025_071_2025_06_03",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "name": "RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+      "relation_count": 9,
+      "relationships": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_jurisdiction",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_jurisdiction",
+          "label": "Jurisdiction named in official record",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "jurisdiction_co_castle_rock",
+          "type": "WITHIN_JURISDICTION"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_agreement",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_agreement",
+          "label": "Public body authorized an agreement; execution not established",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "agreement_co_castle_rock_res_2025_071_2025_06_03",
+          "type": "AUTHORIZED_AGREEMENT"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54377",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_419",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54378",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_492",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54379",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_420",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54380",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_626",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54381",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_342",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54382",
+          "label": "Recorded Yes vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_494",
+          "type": "RECORDED_VOTE"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54383",
+          "label": "Recorded Abstain vote",
+          "review_state": "SOURCE_VERIFIED",
+          "source_count": 1,
+          "target_entity_id": "recorded_voter_co_castle_rock_castlerock_co_493",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "share_url": "https://panopticon.fail/decisions/co-castle-rock-res-2025-071-2025-06-03.html",
+      "slug": "co-castle-rock-res-2025-071-2025-06-03",
+      "source_count": 3,
+      "source_ids": [
+        "co-castle-rock-2025-event",
+        "co-castle-rock-2025-matter",
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "2025-06-03 • Pass",
+      "summary": "Castle Rock, CO approved RES 2025-071: Flock Safety Drone-As-First-Responder Program on 2025-06-03. The direct roll call records 6 Yes, 1 Abstain. Council approval of a sole-source agreement is documented. Town execution and payments are not established by these records.",
+      "tags": [
+        "official decision",
+        "approved"
+      ],
+      "technology_context": [
+        {
+          "context": "Named in an authorized agreement decision; execution and payments are not established",
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_technology_0",
+          "name": "Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED"
+        }
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_outcome",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_decision",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "RES 2025-071: Flock Safety Drone-As-First-Responder Program: Pass",
+          "type": "RECORDED_DECISION"
+        }
+      ],
+      "type": "DECISION",
+      "unknowns": [
+        {
+          "detail": "Council approval of a sole-source agreement is documented. Town execution and payments are not established by these records.",
+          "kind": "contract_execution",
+          "state": "not_established"
+        }
+      ],
+      "unresolved_question": "Was the agreement later executed by the Town, and what payments or deployments followed?",
+      "updated_at": "2025-06-03",
+      "vote_gap": null,
+      "vote_record_state": "direct",
+      "votes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote",
+          "name": "Jason Gray",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_419"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote",
+          "name": "Ryan Hollingshead",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_492"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote",
+          "name": "Kevin Bracken",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_420"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote",
+          "name": "Mark Davis",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_626"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote",
+          "name": "Max Brooks",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_342"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote",
+          "name": "Tim Dietz",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Yes",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_494"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote",
+          "name": "Laura Cavey",
+          "office_role": "not_established",
+          "office_term": "not_established",
+          "review_state": "SOURCE_VERIFIED",
+          "vote": "Abstain",
+          "voter_entity_id": "recorded_voter_co_castle_rock_castlerock_co_493"
+        }
+      ]
     },
     {
       "aliases": [
@@ -1371,6 +1678,38 @@
       "attributes": [
         {
           "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_jurisdiction",
+          "label": "Official jurisdiction name",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Castle Rock, CO"
+        }
+      ],
+      "description": "Jurisdiction named in an official decision record",
+      "geo": null,
+      "id": "jurisdiction_co_castle_rock",
+      "jurisdiction_ids": [],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Castle Rock, CO",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-event"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Colorado jurisdiction",
+      "tags": [
+        "Colorado"
+      ],
+      "timeline": [],
+      "type": "JURISDICTION",
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
           "evidence_id": "evidence_jurisdiction",
           "label": "Governing body",
           "review_state": "SOURCE_VERIFIED",
@@ -1850,6 +2189,489 @@
         }
       ],
       "updated_at": "2025-11-25"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Max Brooks"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "342"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_342",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Max Brooks",
+      "official_person_id": "342",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54381",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Jason Gray"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "419"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_419",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Jason Gray",
+      "official_person_id": "419",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54377",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Kevin Bracken"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "420"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_420",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Kevin Bracken",
+      "official_person_id": "420",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54379",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Ryan Hollingshead"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "492"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_492",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Ryan Hollingshead",
+      "official_person_id": "492",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54378",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Laura Cavey"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "493"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Abstain"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_493",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Laura Cavey",
+      "official_person_id": "493",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54383",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Abstain on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Tim Dietz"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "494"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_494",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Tim Dietz",
+      "official_person_id": "494",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54382",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
+    },
+    {
+      "aliases": [],
+      "attributes": [
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_name",
+          "label": "Name in roll call",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Mark Davis"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_person_id",
+          "label": "Official portal person ID",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "626"
+        },
+        {
+          "corrections": [],
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote",
+          "label": "Vote on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "review_state": "SOURCE_VERIFIED",
+          "value": "Yes"
+        }
+      ],
+      "description": "The cited roll calls use the same official portal person ID and exact name in this jurisdiction. Public office role and term are not established by these sources.",
+      "id": "recorded_voter_co_castle_rock_castlerock_co_626",
+      "identity_scope": "legistar:castlerock-co",
+      "jurisdiction_ids": [
+        "jurisdiction_co_castle_rock"
+      ],
+      "jurisdiction_ref": "us-co-place-0812415",
+      "name": "Mark Davis",
+      "official_person_id": "626",
+      "relation_count": 0,
+      "relationships": [],
+      "source_count": 1,
+      "source_ids": [
+        "co-castle-rock-2025-votes"
+      ],
+      "status": "SOURCE_VERIFIED",
+      "subtitle": "Recorded voter; office role and term not established",
+      "tags": [
+        "public roll call"
+      ],
+      "timeline": [
+        {
+          "corrections": [],
+          "date": "2025-06-03",
+          "evidence_id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote",
+          "id": "co_castle_rock_res_2025_071_2025_06_03_vote_54380",
+          "review_state": "SOURCE_VERIFIED",
+          "title": "Yes on RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+          "type": "RECORDED_VOTE"
+        }
+      ],
+      "type": "RECORDED_VOTER",
+      "unknowns": [
+        {
+          "kind": "office_role",
+          "state": "not_established"
+        },
+        {
+          "kind": "office_term",
+          "state": "not_established"
+        }
+      ],
+      "updated_at": "2025-06-03"
     },
     {
       "aliases": [],
@@ -3818,6 +4640,604 @@
       "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
       "source_id": "source_co_signed_ordinance_25_93",
       "verification_digest": "sha256:fabd1265a2b8d3a40fc7a354d278f2122d1aed4bc349fcac20703e3c7447a670"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Master Services Agreement and Order Form with Flock Group Inc.",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_agreement",
+      "locator": "$.EventItems[25].EventItemTitle",
+      "quote": "Master Services Agreement and Order Form with Flock Group Inc.",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:8cbe40f87b1fdbf8342d9e44e5f6a12885a7e29f7bdcf284dcd7426f8d4d45fa"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Approved",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_action",
+      "locator": "$.EventItems[25].EventItemActionName",
+      "quote": "Approved",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:41a84b8ef524ee2b15b67065db9e5b97e61deaed6f66a3fb1cc5cd7617bfac2d"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Town Council",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_body",
+      "locator": "$.EventBodyName",
+      "quote": "Town Council",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:b108676bd481b3299faaa299520311b9816c0f98446262c24ee7ccdd91ad99ed"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "2025-06-03",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_date",
+      "locator": "$.EventDate",
+      "quote": "2025-06-03T00:00:00",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:fd3316dcf59e14211022fb3c6663fd276b8f5cfb40331fdf2c7605f7c8866d6d"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_event_item",
+      "locator": "$.EventItems[25].EventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:8378f92ff0ca691627b8eca142a23d55c558ca19af3db7d804bd963fc83ed759"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "RES 2025-071",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_matter",
+      "locator": "$.EventItems[25].EventItemMatterFile",
+      "quote": "RES 2025-071",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:cb1633a2b1e76dd8e53789fa18cbe87cf087a2918db56f91e09b57664e05c7de"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Pass",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_outcome",
+      "locator": "$.EventItems[25].EventItemPassedFlagName",
+      "quote": "Pass",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:89706debad47385c7554393bb1e6e2e9b6a9e6a9baf1ab4c53a5c223a827dbab"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Flock Safety Drone-As-First-Responder Program",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_short_label",
+      "locator": "$.EventItems[25].EventItemTitle",
+      "quote": "Flock Safety Drone-As-First-Responder Program",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:93e921603e377b49724dcc6310d92638845830b1d8d1184a8f84e246e6c2944a"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Resolution Waiving the Formal Written Bidding Requirement on the Basis of Sole Source and Approving a Master Services Agreement and Order Form with Flock Group Inc. for the Flock Safety Drone-As-First-Responder Program",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_decision_title",
+      "locator": "$.EventItems[25].EventItemTitle",
+      "quote": "Resolution Waiving the Formal Written Bidding Requirement on the Basis of Sole Source and Approving a Master Services Agreement and Order Form with Flock Group Inc. for the Flock Safety Drone-As-First-Responder Program",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:b43b78d727c0d7e1f83608e5b437fca1b96b923e24542a4b277dfab203eb17ce"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Castle Rock, CO",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_jurisdiction",
+      "locator": "$.EventLocation",
+      "quote": "Castle Rock, CO",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:6f38b4842291c8516a8812ff9bec1cc5e511056f401c38d71aa21c1f6b56802e"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Flock Safety Drone-As-First-Responder Program",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_technology_0",
+      "locator": "$.EventItems[25].EventItemTitle",
+      "quote": "Flock Safety Drone-As-First-Responder Program",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_id": "co-castle-rock-2025-event",
+      "verification_digest": "sha256:abb7afc9b0039ba02bd21230e72cc5baadb8a164dbaaf20d62d96052aee44c85"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_decision_ref",
+      "locator": "$[0].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:14de7ded553acc2e537bd4bdea90183b2cea358bacf35088d3006e9c42b50818"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Jason Gray",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_name",
+      "locator": "$[0].VotePersonName",
+      "quote": "Jason Gray",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:dbffa05899bca18f287f9b13b0083331d68efa8017ae9178aa030da72cd9118c"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "419",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_person_id",
+      "locator": "$[0].VotePersonId",
+      "quote": "419",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:33a66d7af73dcf13d5f91adfddc60ca28ca185143772d1fdcf2b082579b80646"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote",
+      "locator": "$[0].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:f244dd6c381bd6286e26cb5985f83e8e403ef907cc84c30298606b6509dc01d1"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54377",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_0_vote_id",
+      "locator": "$[0].VoteId",
+      "quote": "54377",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:8f147e293e64edfc401c24ae5f21bef466d9268623d5b17b296829ce02eccb7f"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_decision_ref",
+      "locator": "$[1].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:d7660f0efe4bf2da9f43f2f33ef1f23e55d7da9716fb03393dc1b871a026c59e"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Ryan Hollingshead",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_name",
+      "locator": "$[1].VotePersonName",
+      "quote": "Ryan Hollingshead",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:1de2797faa7b02cacbf50d6d62b83cb7e7179a461b309f5b2f2b8627797bf1c6"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "492",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_person_id",
+      "locator": "$[1].VotePersonId",
+      "quote": "492",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:b834dbe406f73dd8ba30d57166c858a52495bbc3040522204234e63c9a65a2f5"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote",
+      "locator": "$[1].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:cede3a6f11605a11d37e0b31d968dc3b59907f2c8c7b32c2d70d05b1e38375b5"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54378",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_1_vote_id",
+      "locator": "$[1].VoteId",
+      "quote": "54378",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:d7a2b693b510190bd9367379716bd48c93de77222b705cec242668ca3bde1cb2"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_decision_ref",
+      "locator": "$[2].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:99e4a4e5e2afaf4c0d493a07c252c168fdb07205ca685af7da048f5c10227e46"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Kevin Bracken",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_name",
+      "locator": "$[2].VotePersonName",
+      "quote": "Kevin Bracken",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:e04710654d43f53a8baedc143edfc2855b6a41253ee7f9c1cf52fc5b02fcb94f"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "420",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_person_id",
+      "locator": "$[2].VotePersonId",
+      "quote": "420",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:58779a47d85086caf8ba13fd479e982cc78d9fbd8369f6383b2fa654b3c1045f"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote",
+      "locator": "$[2].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:05f6c381c00c46886b897ac8742f70183825246d98e8efb5d329bfb17a8dfa5e"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54379",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_2_vote_id",
+      "locator": "$[2].VoteId",
+      "quote": "54379",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:ed4c45a767a5fc93f603aa2d7f412e86f31f9e063370438ad9f531162e4a0b81"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_decision_ref",
+      "locator": "$[3].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:2b759bca400af66d665543b806902551065a68a9d639010dea8622fa8a170c0b"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Mark Davis",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_name",
+      "locator": "$[3].VotePersonName",
+      "quote": "Mark Davis",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:b4e266d703b152da623bbf7b09de2e309704f3300290e47e93daa5b72d8dd964"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "626",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_person_id",
+      "locator": "$[3].VotePersonId",
+      "quote": "626",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:5297ef0f24943990bece7a27f5ea8d5fae5931810c92d9aa5132e36f70abbc44"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote",
+      "locator": "$[3].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:e53681eae4c06b3a4825839ecb256a279b37b31ac48069508cd58a29bd9d9e6a"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54380",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_3_vote_id",
+      "locator": "$[3].VoteId",
+      "quote": "54380",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:577d16beae7238d5847e8e272b6d1f1e7527e82fb50481fd6c71626832c57017"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_decision_ref",
+      "locator": "$[4].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:ea350292ccfe26bd74aaa85111a5a2c6171ac586b92f402700fc80d25d06aed7"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Max Brooks",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_name",
+      "locator": "$[4].VotePersonName",
+      "quote": "Max Brooks",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:7589a899423e86cb1d2c820e9d8138b0bb20d9e488c1e6163cc28a958d74a5b8"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "342",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_person_id",
+      "locator": "$[4].VotePersonId",
+      "quote": "342",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:95f75028dfb34b8fb0125677453335198112f734411836cea9ae1d7951774537"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote",
+      "locator": "$[4].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:4690e0d96f1f73553f6dcdd87a5e73a812aed2fd31d36ead2fe3ffc6dcd879be"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54381",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_4_vote_id",
+      "locator": "$[4].VoteId",
+      "quote": "54381",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:1ffec98b24a68c1592bb47a39d4d97a6400803b25256c1ff2c8c7a11e6ea19a6"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_decision_ref",
+      "locator": "$[5].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:7606074a33d4331dd2e86e6a4e9a18d2cdba70cdd8cd850d095544af0d2e84b1"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Tim Dietz",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_name",
+      "locator": "$[5].VotePersonName",
+      "quote": "Tim Dietz",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:efa8737b32e4571ed77b6fd1337dc79c769d92758f88c287e4b0a4e34197a36a"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "494",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_person_id",
+      "locator": "$[5].VotePersonId",
+      "quote": "494",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:f85eca6a6946df74bdbe39b86ec5ab3ed471491fbed9413eed93814c38d3579e"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Yes",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote",
+      "locator": "$[5].VoteValueName",
+      "quote": "Yes",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:9fe5ac660a12fe6812f8bbeb788ac1999a6f935a69971802adfad77f54c6819d"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54382",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_5_vote_id",
+      "locator": "$[5].VoteId",
+      "quote": "54382",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:c77830a5c2d892967d73fd50ec4c376129fca2aef8ee3fa2835d49da0c425bb7"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "66424",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_decision_ref",
+      "locator": "$[6].VoteEventItemId",
+      "quote": "66424",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:59c964e4893798c56bafb50d13d468dab41943925d98274b7cf24f2e4a9562f4"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Laura Cavey",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_name",
+      "locator": "$[6].VotePersonName",
+      "quote": "Laura Cavey",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:3ba433ad4aab1334d48c20dd995ad4e1a3bab9b69ebbd49c947f75386039b56e"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "493",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_person_id",
+      "locator": "$[6].VotePersonId",
+      "quote": "493",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:cb57f746bc1759105102a6e4b1dc03bcef09fd2fa474400c7870f56592ac62f7"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "Abstain",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote",
+      "locator": "$[6].VoteValueName",
+      "quote": "Abstain",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:96295fa311856e9a7b39958f1fbcc93337ab7b33af4043e718204422ae175187"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "claim": "54383",
+      "corrections": [],
+      "id": "evidence_co_castle_rock_res_2025_071_2025_06_03_vote_6_vote_id",
+      "locator": "$[6].VoteId",
+      "quote": "54383",
+      "retrieved_at": null,
+      "review_state": "SOURCE_VERIFIED",
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_id": "co-castle-rock-2025-votes",
+      "verification_digest": "sha256:e7854253801705e71d7e78320cd374441f632f1946ea62fab7d6db5b81f2c5b5"
     },
     {
       "authority": "Commerce City Council via Legistar",
@@ -6409,7 +7829,7 @@
   ],
   "preview": false,
   "release_review": {
-    "bound_digest": "sha256:5ab0611e00fbc9c3d78d330c4fc45f8e318ce777cd7b2ff0a66cf6faa9bcd4cd",
+    "bound_digest": "sha256:81f59407f7d97c9be6ec309491b9164d3e0bdf4a3c5ec0153436dbc0e12e3a69",
     "corrections": [],
     "reviewed_at": null,
     "state": "SOURCE_VERIFIED",
@@ -6417,6 +7837,39 @@
   },
   "schema_version": "pnull-public-snapshot-v1",
   "sources": [
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "canonical_url": "https://webapi.legistar.com/v1/castlerock-co/Events/4406?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+      "description": "Preserved official record; exact digest and locator verified against local raw bytes",
+      "document_date": null,
+      "id": "co-castle-rock-2025-event",
+      "retrieved_at": null,
+      "sha256": "3b6f98d35500e9d2ec6ae2fbd9542dab81629e6ef708b6b87f17c80dece086a7",
+      "source_type": "official_record",
+      "title": "Castle Rock Town Council event, June 3, 2025"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "canonical_url": "https://webapi.legistar.com/v1/castlerock-co/Matters/10968?MatterAttachments=1&MatterSponsors=1&MatterHistory=1",
+      "description": "Preserved official record; SHA-256 verified, not used for machine-verified claims",
+      "document_date": null,
+      "id": "co-castle-rock-2025-matter",
+      "retrieved_at": null,
+      "sha256": "625a030e98c23527790f7fd94d8464ea7cdd53d450bc8bb02b758f73d1c77c20",
+      "source_type": "official_record",
+      "title": "Castle Rock Resolution 2025-071 matter"
+    },
+    {
+      "authority": "Town of Castle Rock via Legistar",
+      "canonical_url": "https://webapi.legistar.com/v1/castlerock-co/EventItems/66424/Votes",
+      "description": "Preserved official record; exact digest and locator verified against local raw bytes",
+      "document_date": null,
+      "id": "co-castle-rock-2025-votes",
+      "retrieved_at": null,
+      "sha256": "8b505df3cb64f29b0624b055bed0165d476ef38b31e9faf687391037368d9fcc",
+      "source_type": "official_record",
+      "title": "Castle Rock roll call on Resolution 2025-071"
+    },
     {
       "authority": "Commerce City Council via Legistar",
       "canonical_url": "https://webapi.legistar.com/v1/commerce/Events/4626?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
@@ -6552,15 +8005,15 @@
   ],
   "status": {
     "counts": {
-      "entities": 44,
-      "records": 200,
-      "relationships": 46,
-      "sources": 12
+      "entities": 54,
+      "records": 246,
+      "relationships": 55,
+      "sources": 15
     },
-    "dataset_version": "sha256:5ab0611e00fbc9c3d78d330c4fc45f8e318ce777cd7b2ff0a66cf6faa9bcd4cd",
+    "dataset_version": "sha256:81f59407f7d97c9be6ec309491b9164d3e0bdf4a3c5ec0153436dbc0e12e3a69",
     "last_ingest": null,
     "last_publish": null,
-    "manifest_digest": "sha256:5ab0611e00fbc9c3d78d330c4fc45f8e318ce777cd7b2ff0a66cf6faa9bcd4cd",
+    "manifest_digest": "sha256:81f59407f7d97c9be6ec309491b9164d3e0bdf4a3c5ec0153436dbc0e12e3a69",
     "state": "released"
   }
 }

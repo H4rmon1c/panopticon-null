@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Panopticon health every hour
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1h
+Unit=panopticon-health.service
+
+[Install]
+WantedBy=timers.target

@@ -11,3 +11,5 @@
 .env.*
 !.env.example
 /web/panopticon-terminal/preview-snapshot.json
+__pycache__/
+*.pyc

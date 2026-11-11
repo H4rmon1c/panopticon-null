@@ -79,3 +79,4 @@ styles/07.css
 styles/08-civic.css
 styles/09-civic-polish.css
 styles/10-colorado-coverage.css
+scripts/build-alert-api.mjs

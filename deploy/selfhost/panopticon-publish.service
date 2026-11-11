@@ -7,11 +7,31 @@ User=panopticon
 Group=panopticon
 WorkingDirectory=/srv/panopticon/repo
 EnvironmentFile=/etc/panopticon/panopticon.env
-ExecStart=/srv/panopticon/repo/deploy/selfhost/publish.sh
+ExecStart=/usr/bin/python3 /srv/panopticon/repo/deploy/selfhost/run-stage.py publish -- /srv/panopticon/repo/deploy/selfhost/publish.sh
 StateDirectory=panopticon
 StateDirectoryMode=0700
 ProtectSystem=strict
 ProtectHome=true
-PrivateTmp=true
+TemporaryFileSystem=/tmp:rw,nosuid,nodev,size=512M,nr_inodes=32768,mode=1777
+TemporaryFileSystem=/var/tmp:rw,nosuid,nodev,size=32M,nr_inodes=4096,mode=1777
+Environment=TMPDIR=/tmp
 NoNewPrivileges=true
-ReadWritePaths=/var/lib/panopticon /srv/panopticon/site
+ReadWritePaths=/var/lib/panopticon /srv/panopticon/status /srv/panopticon/site
+UMask=0077
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictRealtime=true
+LimitNOFILE=4096
+TasksMax=128
+MemoryMax=4G
+TimeoutStartSec=90min
+TimeoutStopSec=30s
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX

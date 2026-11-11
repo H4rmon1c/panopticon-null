@@ -1,4 +1,4 @@
-import { PanopticonClient } from "./api.js";
+import { PanopticonClient, startSnapshotRefresh } from "./api.js";
 import { portraitForRecordedVote } from "./portraits/portraits.js";
 
 const params = new URLSearchParams(location.search);
@@ -407,6 +407,7 @@ async function main() {
     previewUrl: `${rootPrefix}preview-snapshot.json`,
   });
   await client.bootstrap();
+  startSnapshotRefresh(client);
   const snapshot = client.snapshot;
   const id = decisionIdFromLocation(location.pathname, location.search);
   if (!id) {

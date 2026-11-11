@@ -14,10 +14,12 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
       - name: Test Nix retry gate
         run: bash .github/scripts/test-retry-nix-flake-check.sh
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v17
+        uses: DeterminateSystems/nix-installer-action@21a544727d0c62386e78b4befe52d19ad12692e3 # v17
       - name: Check flake
         # `nix flake check` resolves Cargo.lock through importCargoLock and
         # fetches .crate archives from static.crates.io. The crates.io CDN can
@@ -33,7 +35,7 @@ jobs:
         run: nix develop --command cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test offline fixtures
         run: nix develop --command cargo test --workspace --all-features
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
       - name: Cross-check combined Rust preview in browser validator

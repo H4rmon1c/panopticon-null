@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Publish only the approved static atlas. The collector database is never copied.
 set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${PNUL_REPO_DIR:?set PNUL_REPO_DIR to the checked-out repository}"
 : "${PNUL_DATA_DIR:?set PNUL_DATA_DIR to the private collector state}"
@@ -19,20 +20,6 @@ withdrawn_case_ids="${PNUL_WITHDRAWN_CASE_IDS:-}"
 for path in "$PNUL_REPO_DIR" "$PNUL_DATA_DIR" "$PNUL_RELEASE_ROOT" "$PNUL_CURRENT_LINK"; do
     [[ "$path" == /* ]] || { echo "deployment paths must be absolute: $path" >&2; exit 1; }
 done
-withdrawn_args=()
-if [[ -n "$withdrawn_paths" ]]; then
-    read -r -a withdrawn_list <<< "$withdrawn_paths"
-    for manifest in "${withdrawn_list[@]}"; do
-        [[ "$manifest" =~ ^fixtures/atlas/[a-zA-Z0-9._/-]+\.json$ &&
-           "$manifest" != *..* && -z "${seen_manifests[$manifest]:-}" &&
-           -f "$PNUL_REPO_DIR/$manifest" && ! -L "$PNUL_REPO_DIR/$manifest" ]] || {
-            echo "invalid or active withdrawn manifest: $manifest" >&2
-            exit 1
-        }
-        seen_manifests[$manifest]=1
-        withdrawn_args+=(--withdrawn-manifest "$manifest")
-    done
-fi
 [[ -d "$PNUL_REPO_DIR/web/panopticon-terminal" ]] || { echo "web source is missing" >&2; exit 1; }
 [[ -d "$PNUL_DATA_DIR" ]] || { echo "private collector state is missing" >&2; exit 1; }
 
@@ -50,6 +37,20 @@ for manifest in "${manifest_list[@]}"; do
     seen_manifests[$manifest]=1
     manifest_args+=(--manifest "$manifest")
 done
+withdrawn_args=()
+if [[ -n "$withdrawn_paths" ]]; then
+    read -r -a withdrawn_list <<< "$withdrawn_paths"
+    for manifest in "${withdrawn_list[@]}"; do
+        [[ "$manifest" =~ ^fixtures/atlas/[a-zA-Z0-9._/-]+\.json$ &&
+           "$manifest" != *..* && -z "${seen_manifests[$manifest]:-}" &&
+           -f "$PNUL_REPO_DIR/$manifest" && ! -L "$PNUL_REPO_DIR/$manifest" ]] || {
+            echo "invalid or active withdrawn manifest: $manifest" >&2
+            exit 1
+        }
+        seen_manifests[$manifest]=1
+        withdrawn_args+=(--withdrawn-manifest "$manifest")
+    done
+fi
 [[ -e "$PNUL_CURRENT_LINK" && ! -L "$PNUL_CURRENT_LINK" ]] && {
     echo "current path exists and is not a symlink" >&2
     exit 1
@@ -80,6 +81,26 @@ fi
 release_root="$(realpath -m "$PNUL_RELEASE_ROOT")"
 public_root="$(realpath -m "$(dirname "$PNUL_CURRENT_LINK")")"
 current_link="$public_root/$(basename "$PNUL_CURRENT_LINK")"
+case "$private_root/" in "$release_root/"*) echo "collector state is inside the public release root" >&2; exit 1 ;; esac
+case "$release_root/" in "$private_root/"*) echo "public release root is inside collector state" >&2; exit 1 ;; esac
+case "$private_root/" in "$public_root/"*) echo "collector state is inside the public site directory" >&2; exit 1 ;; esac
+case "$public_root/" in "$private_root/"*) echo "public site directory is inside collector state" >&2; exit 1 ;; esac
+
+mkdir -p "$release_root" "$(dirname "$current_link")"
+if [[ -z "${PNUL_HELD_LOCKS:-}" ]]; then
+    exec python3 "$script_dir/locked-run.py" "$release_root/.publish.lock" "$PNUL_DATA_DIR/.collect.lock" -- bash "$script_dir/publish.sh"
+fi
+python3 "$script_dir/locked-run.py" --verify "$release_root/.publish.lock" "$PNUL_DATA_DIR/.collect.lock"
+
+prior_api_args=()
+if [[ -L "$current_link" ]]; then
+    prior_release="$(realpath -e -- "$current_link")"
+    [[ "$prior_release" == "$release_root/"* ]] || { echo "current release escapes release root" >&2; exit 1; }
+    if [[ -e "$prior_release/api/v1/alerts.json" ]]; then
+        [[ -f "$prior_release/api/v1/alerts.json" && ! -L "$prior_release/api/v1/alerts.json" ]] || { echo "prior alert API is unsafe" >&2; exit 1; }
+        prior_api_args+=("$prior_release/api/v1/alerts.json")
+    fi
+fi
 prior_withdrawal_args=()
 if [[ -n "$withdrawn_case_ids" ]]; then
     [[ -L "$current_link" ]] || { echo "prior withdrawals need a current release" >&2; exit 1; }
@@ -99,15 +120,6 @@ if [[ -n "$withdrawn_case_ids" ]]; then
     done
     prior_withdrawal_args+=(--previous-snapshot "$prior_snapshot")
 fi
-case "$private_root/" in "$release_root/"*) echo "collector state is inside the public release root" >&2; exit 1 ;; esac
-case "$release_root/" in "$private_root/"*) echo "public release root is inside collector state" >&2; exit 1 ;; esac
-case "$private_root/" in "$public_root/"*) echo "collector state is inside the public site directory" >&2; exit 1 ;; esac
-case "$public_root/" in "$private_root/"*) echo "public site directory is inside collector state" >&2; exit 1 ;; esac
-
-mkdir -p "$release_root" "$(dirname "$current_link")"
-exec 9>"$release_root/.publish.lock"
-flock -n 9 || { echo "another publish is running" >&2; exit 1; }
-
 stage="$(mktemp -d "$release_root/.candidate.XXXXXXXX")"
 cleanup() {
     if [[ -n "$stage" && -d "$stage" ]]; then
@@ -153,9 +165,11 @@ PNUL_PORTRAIT_PROOF_ROOT="$PNUL_REPO_DIR" "$node_bin" "$stage/scripts/validate.m
 "$node_bin" "$stage/scripts/build-decision-pages.mjs" "$stage" "$PNUL_SITE_URL"
 PNUL_PORTRAIT_PROOF_ROOT="$PNUL_REPO_DIR" PNUL_VALIDATE_RELEASE=1 "$node_bin" "$stage/scripts/validate.mjs"
 PNUL_VALIDATE_RELEASE=1 "$node_bin" --test "$stage/scripts/test-client.mjs"
+"$node_bin" "$stage/scripts/build-alert-api.mjs" "$stage" "$PNUL_SITE_URL" "${prior_api_args[@]}"
+"$node_bin" "$PNUL_REPO_DIR/web/panopticon-terminal/scripts/build-coverage-api.mjs" "$stage"
 
 # Operator scripts are needed for staging validation, not for browsers.
-rm -- "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
+rm -- "$stage/scripts/build-alert-api.mjs" "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
 find "$stage" -type d -exec chmod 755 {} +
 find "$stage" -type f -exec chmod 644 {} +
 

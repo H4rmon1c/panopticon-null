@@ -1,4 +1,4 @@
-import { PanopticonClient } from "./api.js";
+import { PanopticonClient, startSnapshotRefresh } from "./api.js";
 import { installColoradoCoverage } from "./scripts/24-colorado-coverage.mjs";
 
 const templateParts = [
@@ -63,7 +63,10 @@ installColoradoCoverage({
 const params = new URLSearchParams(location.search);
 window.client = new PanopticonClient({ demo: params.get("demo") === "1", preview: params.get("preview") === "1" });
 
-window.boot().catch((error) => {
+window.boot().then(() => startSnapshotRefresh(window.client, { onError: () => {
+  const label = document.querySelector("#system-state-label");
+  if (label) label.textContent = "UPDATE CHECK FAILED // SHOWING LOADED SNAPSHOT";
+} })).catch((error) => {
   console.error(error);
   document.querySelector("#system-state")?.classList.add("is-stale");
   const label = document.querySelector("#system-state-label");
