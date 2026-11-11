@@ -968,6 +968,41 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(module.labels_at_quote(ids, 'Axon body cameras'), ['Axon'])
         self.assertEqual(module.labels_at_quote(ids, 'A flock of birds flew overhead'), [])
         self.assertEqual(module.labels_at_quote(['vendor.soundthinking-shotspotter'], 'ShotSpotter project'), ['ShotSpotter'])
+        self.assertEqual(module.labels_at_quote(['vendor.motorola-solutions'], 'Motorola Solutions radio equipment'), [])
+        self.assertEqual(module.labels_at_quote(['vendor.motorola-solutions'], 'Motorola Solutions license plate cameras'), ['Motorola Solutions'])
+
+    def test_document_highlights_show_distinct_formal_passages_and_redact_public_comments(self):
+        lines = ['RESOLUTION DISCONTINUING SERVICES WITH FLOCK GROUP, INC.'] + [''] * 23
+        lines += ['Flock Safety was discussed.'] + [''] * 23
+        lines += ['Public Comments', 'Resident Jane Doe opposed the Flock contract at 123 Main Street.']
+        found = module.document_highlights(lines, 25, ['vendor.flock-safety'])
+        self.assertEqual(len(found), 2)
+        self.assertEqual(found[0]['locator'], 'extracted line 1')
+        self.assertIn('DISCONTINUING', found[0]['title'])
+        self.assertEqual(found[1]['locator'], 'extracted line 50')
+        self.assertNotIn('Jane Doe', found[1]['title'])
+        self.assertNotIn('123 Main', found[1]['title'])
+        self.assertEqual(found[1]['title'], 'Possible Flock (identity not established) reference in a public record.')
+
+    def test_packet_roster_attaches_only_same_line_present_officials_in_the_same_meeting(self):
+        lines = ['TOWN COUNCIL', 'MINUTES', 'TOWN COUNCIL', 'ROLL CALL', 'Present',
+                 'Mayor Pro Tem Don Post (Online)', 'Councilmember Lisa Buesgens', 'Absent',
+                 'Councilmember Pat Wrong', 'Town Staff Present'] + [''] * 25
+        lines += ['Mayor Pro Tem Post discussed Flock cameras.', 'Councilmember Buesgens moved an unrelated item.']
+        number = len(lines) - 1
+        found = module.officials_near_reference(lines, number)
+        self.assertEqual([item['name'] for item in found], ['Don Post'])
+        self.assertEqual(found[0]['individual_vote'], 'not_established')
+        self.assertEqual(found[0]['role_in_source'], 'Mayor Pro Tem')
+        absent = lines.copy()
+        absent[number - 1] = 'Councilmember Wrong discussed Flock cameras.'
+        self.assertEqual(module.officials_near_reference(absent, number), [])
+        crossed = lines.copy()
+        crossed[number - 3] = 'ADJOURNMENT'
+        self.assertEqual(module.officials_near_reference(crossed, number), [])
+        ambiguous = lines.copy()
+        ambiguous.insert(6, 'Councilmember Dana Post')
+        self.assertEqual(module.officials_near_reference(ambiguous, number + 1), [])
 
     def test_ambiguous_flock_name_does_not_become_a_vendor_or_an_artwork_claim(self):
         rule = ['vendor.flock-safety']

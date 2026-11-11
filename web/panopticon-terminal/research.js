@@ -42,6 +42,17 @@ function render(report) {
     if (item.source_status) card.append(node('p', 'meta', `The source lists its status as “${item.source_status}.” This is not an individual roll call.`));
     if (item.historical) card.append(node('p', 'meta', 'Historical capture: a later source check changed this record or no longer found the same reference.'));
     if (item.ocr) card.append(node('p', 'meta', 'Text was read with OCR and may contain errors.'));
+    if (item.document_highlights?.length) {
+      const details = node('details', 'proof');
+      details.open = true;
+      details.append(node('summary', '', 'Other matching passages in this document'));
+      details.append(node('p', 'meta', 'Up to five additional source passages; these do not establish an individual vote.'));
+      const list = node('ul', '');
+      for (const highlight of item.document_highlights) {
+        list.append(node('li', '', `${highlight.locator}: ${highlight.title}`));
+      }
+      details.append(list); card.append(details);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));
@@ -106,7 +117,7 @@ function render(report) {
     }
     if (item.people_context?.length) {
       const people = node('div', 'people');
-      people.append(node('p', 'meta', 'Officials named nearby. Their individual votes on this item are not established.'));
+      people.append(node('p', 'meta', 'Officials named near the main passage. Other passages may concern different items or meetings; their individual votes are not established.'));
       for (const person of item.people_context) {
         const entry = node('div', 'person');
         if (person.portrait) {

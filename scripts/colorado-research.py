@@ -926,16 +926,19 @@ def query_url(client, page, page_size, version=TERM_VERSION, batch=0):
     return f'https://{API_HOST}/v1/{client}/matters?' + urlencode(params)
 
 
+def has_surveillance_context(value):
+    return bool(re.search(r'\b(?:alpr|lpr|license[ -]plate|licence[ -]plate|cameras?|video|'
+                          r'facial|face[ -]recognition|surveillance|biometric|vigilant|'
+                          r'drones?|evidence[ -]management)\b', value, re.I))
+
+
 def matching_terms(title, terms=TERMS):
     lower = title.casefold()
-    surveillance_context = bool(re.search(r'\b(?:alpr|lpr|license[ -]plate|licence[ -]plate|cameras?|video|'
-                                          r'facial|face[ -]recognition|surveillance|biometric|vigilant|'
-                                          r'drones?|evidence[ -]management)\b', lower))
     return [term for term in terms
             if re.search(r'(?<!\w)' + re.escape(term.casefold()) + r'(?!\w)', lower)
             and not (term == 'Flock' and ('flock of birds' in lower or 'safety of the flock' in lower))
             and not (term == 'StingRay' and 'stingray fish' in lower)
-            and not (term == 'Motorola Solutions' and not surveillance_context)]
+            and not (term == 'Motorola Solutions' and not has_surveillance_context(title))]
 
 
 def scan(data_dir, db, max_clients, pages, page_size, only=None):
@@ -1967,6 +1970,8 @@ def labels_at_quote(rule_ids, quote):
                 explicit = re.search(r'\bflock\s+(?:safety|group|vehicle.intelligence)\b', quote, re.I)
                 technology = re.search(r'\b(?:cameras?|alpr|lpr|licen[cs]e[ -]plate|plate[ -]reader|surveillance)\b', quote, re.I)
                 labels.add('Flock Safety' if explicit or technology else 'Flock (identity not established)')
+            elif rule_id == 'vendor.motorola-solutions' and not has_surveillance_context(quote):
+                continue
             else:
                 labels.add(RULE_LABELS[rule_id])
     return sorted(labels)
@@ -1981,10 +1986,46 @@ def non_surveillance_flock_context(lines, number, labels):
     return bool(art and not technology)
 
 
+def document_highlights(lines, primary_number, rule_ids):
+    """Expose a few distinct formal passages without inferring their outcome."""
+    rules = public_rule_terms()
+    needles = {term.casefold() for rule_id in rule_ids for term in rules.get(rule_id, {}).get('terms', [])}
+    if not needles:
+        return []
+    highlights = []
+    positions = [primary_number]
+    signatures = []
+    for number, line in enumerate(lines, 1):
+        if len(line) > 4000 or any(abs(number - position) <= 20 for position in positions):
+            continue
+        lower = line.casefold()
+        if not any(term in lower for term in needles):
+            continue
+        # Keep formal decision/contract passages; ordinary discussion is
+        # already represented by the primary source match.
+        if not re.search(r'\b(?:resolution|ordinance|contract|agreement|purchase|renewal|'
+                         r'discontinu\w*|terminat\w*|approv\w*|adopt\w*)\b', lower):
+            continue
+        labels = labels_at_quote(rule_ids, line)
+        if not labels or non_surveillance_flock_context(lines, number, labels):
+            continue
+        words = set(re.findall(r'[a-z0-9]+', lower))
+        if len(words) >= 3 and any(len(words & earlier) / min(len(words), len(earlier)) >= 0.7
+                                   for earlier in signatures if len(earlier) >= 3):
+            continue
+        title = reference_title(line, labels, public_comment_context(lines, number))
+        highlights.append({'locator': f'extracted line {number}', 'title': title, 'signals': labels})
+        positions.append(number)
+        signatures.append(words)
+        if len(highlights) == 5:
+            break
+    return highlights
+
+
 def officials_near_reference(lines, number):
     """Conservative name context; this is not an individual vote parser."""
     heading = ' '.join(lines[:12]).upper()
-    if not any(term in heading for term in ('BOARD OF COUNTY COMMISSIONERS', 'CITY COUNCIL', 'BOARD OF TRUSTEES')):
+    if not any(term in heading for term in ('BOARD OF COUNTY COMMISSIONERS', 'CITY COUNCIL', 'TOWN COUNCIL', 'BOARD OF TRUSTEES')):
         return []
     names = []
     pattern = re.compile(r"^([A-Z][A-Za-z.'’ -]{2,90}),\s*(Chairperson|Vice-Chairperson|Commissioner|Trustee|Mayor|Councilmember)\s*$", re.I)
@@ -1998,16 +2039,43 @@ def officials_near_reference(lines, number):
         words = fullname.split()
         if len(words) < 2 or any(len(word) > 40 for word in words):
             continue
-        names.append((fullname, role, index + 1))
+        names.append((fullname, role, index + 1, False))
+    # Some packets contain earlier approved minutes rather than a roster on
+    # page one. Use a nearby, explicitly present roll-call roster only within
+    # the same meeting section; never attach an absent member by inference.
+    before = lines[max(0, number - 300):max(0, number - 1)]
+    starts = [max(0, number - 300) + i for i, line in enumerate(before)
+              if re.fullmatch(r'\s*ROLL CALL\s*', line, re.I)]
+    if starts:
+        start = starts[-1]
+        prior_heading = ' '.join(lines[max(0, start - 10):start]).upper()
+        crossed_section = any(re.fullmatch(r'\s*(?:\d+[.)]\s*)?(?:ADJOURNMENT|MINUTES|ROLL CALL)\s*', line, re.I)
+                              for line in lines[start + 1:max(0, number - 1)])
+        if (not crossed_section and 'MINUTES' in prior_heading
+                and any(term in prior_heading for term in ('CITY COUNCIL', 'TOWN COUNCIL', 'BOARD OF TRUSTEES'))):
+            present = False
+            reverse = re.compile(r"^(Mayor Pro Tem|Mayor|Councilmember|Councilor|Trustee)\s+([A-Z][A-Za-z.'’ -]{2,90}?)(?:\s+\((?:Online|Remote)\))?\s*$", re.I)
+            for index in range(start + 1, min(start + 42, number - 1)):
+                line = lines[index].strip()
+                if re.fullmatch(r'Present\s*:?', line, re.I):
+                    present = True
+                    continue
+                if re.match(r'^(?:Absent|Staff Present|Town Staff|Adjournment|MINUTES|ROLL CALL)\b', line, re.I):
+                    break
+                match = reverse.fullmatch(line) if present else None
+                if match:
+                    role, fullname = match.groups()
+                    if len(fullname.split()) >= 2 and not any(existing[0].casefold() == fullname.casefold() for existing in names):
+                        names.append((fullname, role, index + 1, True))
     found = []
-    nearby = range(max(0, number - 6), min(len(lines), number + 16))
-    for fullname, role, line in names:
+    for fullname, role, line, same_line_only in names:
+        nearby = [number - 1] if same_line_only else range(max(0, number - 6), min(len(lines), number + 16))
         parts = fullname.split()
         alternatives = [' '.join(parts[-2:]), parts[-1]] if len(parts) > 2 else [parts[-1]]
         for alias in alternatives:
             if len(alias) < 4 or sum(other[0].casefold().endswith(alias.casefold()) for other in names) != 1:
                 continue
-            mention = re.compile(r'\b(?:Commissioner|Trustee|Mayor|Council(?:member|or))\s+' + re.escape(alias) + r'\b', re.I)
+            mention = re.compile(r'\b(?:Commissioner|Trustee|Mayor(?:\s+Pro\s+Tem)?|Council(?:member|or))\s+' + re.escape(alias) + r'\b', re.I)
             match_index = next((i for i in nearby if mention.search(lines[i])), None)
             if match_index is not None:
                 found.append({'name': fullname, 'role_in_source': role, 'name_locator': f'extracted line {line}',
@@ -2621,6 +2689,10 @@ def export_report(data_dir, db, output, assets_dir=None):
                 raise ValueError('finding does not bind to its extracted line')
             labels = labels_at_quote(finding['matched_rule_ids'], citation['quote'])
             if not labels:
+                if ('motorola solutions' in citation['quote'].casefold()
+                        and not has_surveillance_context(citation['quote'])):
+                    non_surveillance_withheld += 1
+                    continue
                 raise ValueError('no supported rule is present at the cited line')
             if non_surveillance_flock_context(lines, number, labels):
                 non_surveillance_withheld += 1
@@ -2657,6 +2729,10 @@ def export_report(data_dir, db, output, assets_dir=None):
             if 'redirect_receipt' in candidate:
                 record.update(capture_adjustment=candidate['capture_adjustment'],
                               indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
+            if not ocr_page:
+                highlights = document_highlights(lines, number, finding['matched_rule_ids'])
+                if highlights:
+                    record['document_highlights'] = highlights
             records.append(record)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             omitted += 1
