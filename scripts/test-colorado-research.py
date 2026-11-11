@@ -473,6 +473,22 @@ class ResearchTests(unittest.TestCase):
         self.assertTrue(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Smith', 'Elizabeth (Liz) Smith, Commissioner'))
         self.assertFalse(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Jones', 'Elizabeth (Liz) Smith, Commissioner'))
 
+    def test_budget_portrait_requires_source_receipt_and_exact_portal_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json').read_text())
+            receipt_key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Carrie Warren-Gully', 'person_id': 513}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                portrait = module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'arapahoe', vote, root / 'assets')
+                self.assertEqual(portrait['source_kind'], 'embedded_pdf')
+                self.assertEqual(portrait['source_document_sha256'], proof['source_sha256'])
+                self.assertEqual(portrait['embedded_image_index'], 6)
+                self.assertIsNone(module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'wrong', vote, root / 'assets'))
+                self.assertIsNone(module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'arapahoe', {**vote, 'person_id': 999}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.arapahoe_budget_portrait(root, set(), 'us-co-county-08005', 'arapahoe', vote, root / 'assets')
+
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'
                   b'<img alt="Commissioner Abe Laydon" srcset="https://www.douglasco.gov/a-small.jpg 480w, '

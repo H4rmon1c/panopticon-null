@@ -46,6 +46,10 @@ no relevant decision exists.
    nickname is required; a missing portrait stays missing. The interface can
    also reuse an existing sourced portrait when the portal, jurisdiction,
    person ID, and name all match. Portrait dates are not inferred.
+   Five Arapahoe County research voters also reuse the original JPEG streams
+   from the labeled 2022 board page of the county's recommended budget. The
+   archived PDF digest, page, image indexes, aliases, and extracted-page fixture
+   are pinned in `fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json`.
 6. Export a strict, sanitized static JSON snapshot. Every entry is labeled
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and

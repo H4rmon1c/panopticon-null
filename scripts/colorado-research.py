@@ -1692,6 +1692,53 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
             'portrait_date': 'not_established'}
 
 
+def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
+    """Bind a scoped recorded voter to a pinned JPEG from the county budget."""
+    if assets_dir is None or ref != 'us-co-county-08005' or client != 'arapahoe':
+        return None
+    proof = json.loads(read_blob(ROOT / 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json', 100_000))
+    url = 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf'
+    source_digest = 'dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43'
+    page_digest = '23fc3217eaa1024751d62fde024dcf73f9f0ba6560fb4f86d7df1534f9fc6777'
+    if (proof['source_url'] != url or proof['source_sha256'] != source_digest or proof['source_page'] != 7
+            or proof['page_fixture'] != 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-page.pdf'
+            or proof['page_fixture_sha256'] != page_digest
+            or sha(read_blob(ROOT / proof['page_fixture'], 2_000_000)) != page_digest):
+        raise ValueError('county budget portrait proof differs')
+    matches = [item for item in proof['portraits'] if item['name'] == vote['name'] and item['person_id'] == vote['person_id']]
+    if len(matches) != 1:
+        return None
+    if (url, source_digest) not in receipts:
+        raise ValueError('county budget source receipt is missing')
+    source_blob(data_dir, source_digest, 20 * 1024 * 1024)
+    item = matches[0]
+    image_digest = item['sha256']
+    if not re.fullmatch(r'[0-9a-f]{64}', image_digest) or type(item['image_index']) is not int:
+        raise ValueError('invalid budget portrait identity')
+    image = read_blob(ROOT / 'web/panopticon-terminal/research-portraits' / f'{image_digest}.jpg', 2_000_000)
+    if not image.startswith(b'\xff\xd8\xff') or sha(image) != image_digest:
+        raise ValueError('county budget portrait bytes differ')
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_dir.is_symlink() or not assets_dir.is_dir():
+        raise ValueError('portrait output directory is unsafe')
+    target = assets_dir / f'{image_digest}.jpg'
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        if sha(read_blob(target, 2_000_000)) != image_digest:
+            raise ValueError('existing portrait output differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(image)
+            handle.flush()
+            os.fsync(handle.fileno())
+    return {'src': f'./research-portraits/{image_digest}.jpg', 'sha256': image_digest,
+            'source_kind': 'embedded_pdf', 'source_url': url, 'source_document_sha256': source_digest,
+            'source_page': 7, 'embedded_image_index': item['image_index'],
+            'caption': f"2022 county board; source labels this portrait {item['source_label']}.",
+            'portrait_date': 'not_established'}
+
+
 def materialize_action(data_dir, receipts, client, matter, history_id, raw):
     """Reopen every exact source before associating a recorded vote with a matter."""
     captures = json.loads(raw)
@@ -1871,6 +1918,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                     for vote in motion['votes']:
                         try:
                             portrait = checked_portrait(data_dir, db, receipts, ref, vote['name'], assets_dir)
+                            if not portrait:
+                                portrait = arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
