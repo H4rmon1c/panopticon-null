@@ -1782,6 +1782,45 @@ class ResearchTests(unittest.TestCase):
         self.assertIsNone(module.official_profile_image(source.replace(b'Commissioner Abe Laydon, District I', b'Other Person'), 'Abe Laydon'))
         self.assertIsNone(module.official_profile_image(source.replace(b'www.douglasco.gov', b'evil.example'), 'Abe Laydon'))
 
+    def test_douglas_gallery_requires_an_exact_name_and_image_in_one_card(self):
+        image = 'https://www.douglasco.gov/wp-content/uploads/2026/06/Thomas.png'
+        card = (f'<div class="gallery-item"><div><img data-lazy-srcset="{image} 2000w"></div>'
+                '<div>Commissioner Lora Thomas &#8211; 2017</div></div>').encode()
+        expected = (image, 'Commissioner Lora Thomas – 2017')
+        self.assertEqual(module.douglas_gallery_image(card, 'Lora Thomas'), expected)
+        self.assertIsNone(module.douglas_gallery_image(card, 'George Teal'))
+        self.assertIsNone(module.douglas_gallery_image(card.replace(b'www.douglasco.gov', b'evil.example'), 'Lora Thomas'))
+        self.assertIsNone(module.douglas_gallery_image(card + card, 'Lora Thomas'))
+        self.assertIsNone(module.douglas_gallery_image(card.replace(b'Commissioner Lora Thomas', b'Commissioner Lora Thomas Junior'), 'Lora Thomas'))
+
+    def test_douglas_gallery_portrait_rechecks_source_card_and_original_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            ref, name, home = 'us-co-county-08035', 'Lora Thomas', 'https://www.douglasco.gov/'
+            image_url = 'https://www.douglasco.gov/wp-content/uploads/2026/06/Thomas.png'
+            page = (f'<div class="gallery-item"><img srcset="{image_url} 2000w">'
+                    '<p>Commissioner Lora Thomas &#8211; 2017</p></div>').encode()
+            image = b'\x89PNG\r\n\x1a\nfixture'
+            page_obs, image_obs = receipt(module.DOUGLAS_GALLERY, page), receipt(image_url, image)
+            module.archive(root, [(page_obs, page), (image_obs, image)])
+            info = {'kind': 'commissioner_gallery', 'source_url': module.DOUGLAS_GALLERY,
+                    'source_sha256': module.sha(page), 'image_url': image_url, 'image_sha256': module.sha(image),
+                    'caption': 'Commissioner Lora Thomas – 2017', 'extension': 'png', 'image_receipt': image_obs}
+            try:
+                with db:
+                    db.execute('insert into discovery values (?,?,?,?)', (ref, home, module.utcnow(), '{}'))
+                    db.execute('insert into official_portraits values (?,?,?)', (ref, name, json.dumps(info)))
+                portrait = module.checked_portrait(root, db, module.observation_keys(root), ref, name, root / 'assets')
+                self.assertEqual(portrait['sha256'], module.sha(image))
+                info['caption'] = 'Commissioner George Teal – 2020'
+                with db:
+                    db.execute('update official_portraits set portrait_json=?', (json.dumps(info),))
+                with self.assertRaises(ValueError):
+                    module.checked_portrait(root, db, module.observation_keys(root), ref, name, root / 'assets')
+            finally:
+                db.close()
+
     def test_profile_portrait_is_bound_to_roster_profile_and_original_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
