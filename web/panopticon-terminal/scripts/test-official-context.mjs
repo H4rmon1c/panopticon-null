@@ -5,6 +5,8 @@ import { validateResearch } from '../research-api.js';
 
 const base = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const seeds = [
+  ['greeley-flock', 'us-co-place-0832155', 'Greeley', 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/', 'Greeley police describe their Flock Safety camera program.', ['Flock Safety']],
+  ['boulder-flock', 'us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/flock-safety-cameras-and-boulder-police-department', 'Boulder police describe their selection of Flock Safety.', ['Flock Safety']],
   ['broomfield-flock', 'us-co-place-0809280', 'Broomfield', 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers', 'Broomfield police describe their Flock Safety license-plate-reader program.', ['Flock Safety', 'Automated License Plate Readers']],
   ['boulder-uas', 'us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/unmanned-aircraft-system', 'Boulder police describe their unmanned-aircraft program.', ['Police drone']],
   ['westminster-axon', 'us-co-place-0883835', 'Westminster', 'https://www.westminsterco.gov/180/Engagement-Transparency', 'Westminster police describe their Axon body-worn-camera program.', ['Axon', 'Body-worn cameras']],
@@ -23,8 +25,8 @@ function report() {
   data.coverage.jurisdictions_with_mentions = new Set(data.records.map((item) => item.jurisdiction_ref)).size;
   return data;
 }
-test('three official technology pages validate only as context', () => {
-  assert.equal(validateResearch(report()).coverage.official_page_references, 3);
+test('five official technology pages validate only as context', () => {
+  assert.equal(validateResearch(report()).coverage.official_page_references, 5);
 });
 test('official context rejects swapped agency, destination, claims, markup and invented votes', () => {
   for (const change of [
@@ -39,6 +41,20 @@ test('official context rejects swapped agency, destination, claims, markup and i
   ]) {
     const data = report(); change(data.records.at(-3));
     assert.throws(() => validateResearch(data));
+  }
+});
+test('new agency contexts cannot be swapped or given invented actions', () => {
+  for (const index of [-5, -4]) {
+    for (const change of [
+      (r) => { r.jurisdiction = 'Other city'; },
+      (r) => { r.source_url = 'https://bouldercolorado.gov/another-page'; },
+      (r) => { r.title = 'The city approved a contract.'; },
+      (r) => { r.signals = ['Flock Safety', 'Automated License Plate Readers']; },
+      (r) => { r.actions = []; },
+    ]) {
+      const data = report(); change(data.records.at(index));
+      assert.throws(() => validateResearch(data));
+    }
   }
 });
 test('withdrawal keeps stable record without asserting the old technology claim', () => {

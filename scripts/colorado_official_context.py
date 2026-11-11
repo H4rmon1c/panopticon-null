@@ -7,6 +7,26 @@ import re
 from urllib.parse import urlsplit
 
 SEEDS = {
+    'greeley-flock': {
+        'jurisdiction_ref': 'us-co-place-0832155',
+        'url': 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/',
+        'agency': 'The Greeley Police Department uses Flock Safety cameras',
+        'claim': 'The Greeley Police Department uses Flock Safety cameras',
+        'combined_start': 'The Greeley Police Department uses Flock Safety cameras',
+        'context_sha256': 'ab2246d40ce5044bac29226a5daae0ec2c51836376ede57095f76295d8cb1a80',
+        'title': 'Greeley police describe their Flock Safety camera program.',
+        'signals': ['Flock Safety'],
+    },
+    'boulder-flock': {
+        'jurisdiction_ref': 'us-co-place-0807850',
+        'url': 'https://bouldercolorado.gov/services/flock-safety-cameras-and-boulder-police-department',
+        'agency': 'Boulder Police Department selected Flock Safety',
+        'claim': 'Boulder Police Department selected Flock Safety',
+        'combined_start': 'Boulder Police Department selected Flock Safety',
+        'context_sha256': 'c426a4371607293699ab501974dcbe707129282eb096a918cc4daa424e64589d',
+        'title': 'Boulder police describe their selection of Flock Safety.',
+        'signals': ['Flock Safety'],
+    },
     'broomfield-flock': {
         'jurisdiction_ref': 'us-co-place-0809280',
         'url': 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers',
@@ -224,7 +244,8 @@ def materialize(research, data_dir, db, receipts, name, raw, updated, state='act
     return {'id': 'co-official-context-' + name, 'kind': 'official_page_context',
             'context_state': state,
             'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
-            'jurisdiction': {'broomfield-flock': 'Broomfield', 'boulder-uas': 'Boulder', 'westminster-axon': 'Westminster'}[name],
+            'jurisdiction': {'broomfield-flock': 'Broomfield', 'boulder-uas': 'Boulder', 'westminster-axon': 'Westminster',
+                             'greeley-flock': 'Greeley', 'boulder-flock': 'Boulder'}[name],
             'file': 'Official police technology page', 'title': title, 'signals': signals,
             'source_status': '', 'source_url': url, 'source_sha256': digest,
             'locator': locator, 'captured_at': receipt['retrieved_at'],

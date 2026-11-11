@@ -314,6 +314,8 @@ export function validateResearch(report) {
     }
     else if (record.kind === 'official_page_context') {
       const allowed = {
+        'co-official-context-greeley-flock': ['us-co-place-0832155', 'Greeley', 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/', 'Greeley police describe their Flock Safety camera program.', ['Flock Safety']],
+        'co-official-context-boulder-flock': ['us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/flock-safety-cameras-and-boulder-police-department', 'Boulder police describe their selection of Flock Safety.', ['Flock Safety']],
         'co-official-context-broomfield-flock': ['us-co-place-0809280', 'Broomfield', 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers', 'Broomfield police describe their Flock Safety license-plate-reader program.', ['Flock Safety', 'Automated License Plate Readers']],
         'co-official-context-boulder-uas': ['us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/unmanned-aircraft-system', 'Boulder police describe their unmanned-aircraft program.', ['Police drone']],
         'co-official-context-westminster-axon': ['us-co-place-0883835', 'Westminster', 'https://www.westminsterco.gov/180/Engagement-Transparency', 'Westminster police describe their Axon body-worn-camera program.', ['Axon', 'Body-worn cameras']],

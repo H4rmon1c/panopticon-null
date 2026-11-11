@@ -1,8 +1,9 @@
 # Official technology-page context
 
-Three explicitly scoped municipal police pages provide technology context for
+Five explicitly scoped municipal police pages provide technology context for
 Broomfield (Flock ALPR), Boulder (police unmanned-aircraft team), and Westminster
-(Axon body-worn cameras). These records are preliminary agency statements;
+(Axon body-worn cameras), as well as Greeley (Flock cameras) and Boulder (selection of Flock Safety).
+These records are preliminary agency statements;
 they do not establish a decision, an individual vote, a contract award or
 execution, or independent verification that a deployment remains current.
 Capture time and exact HTML text-node locators are included. The live source

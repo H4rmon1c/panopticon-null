@@ -3951,7 +3951,7 @@ def main():
     suite = subs.add_parser('agendasuite')
     suite.add_argument('--limit', type=int, default=60, help='maximum recent meeting pages to screen')
     suite.add_argument('--pages', type=int, default=3, help='maximum linked calendar pages')
-    subs.add_parser('official-context', help='capture three explicitly scoped official agency technology pages')
+    subs.add_parser('official-context', help='capture explicitly scoped official agency technology pages')
     p = subs.add_parser('screen-documents')
     p.add_argument('--pnull-bin', default=os.environ.get('PNUL_BIN', str(ROOT / 'target/debug/pnull')))
     p.add_argument('--limit', type=int, default=100)

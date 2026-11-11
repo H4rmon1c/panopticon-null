@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 scripts/test-colorado-research.py
           python3 scripts/test-colorado-official-context.py
+          python3 scripts/test-colorado-cisc-2018-members.py
           python3 scripts/test-colorado-local-source-capture.py
           python3 scripts/test-colorado-district-tenants.py
           python3 scripts/test-colorado-tenant-followup.py
@@ -52,6 +53,7 @@ jobs:
           python3 scripts/test-colorado-shared-followup.py
           python3 scripts/test-colorado-eff-private-leads.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
+          node --test web/panopticon-terminal/scripts/test-official-context.mjs
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-littleton-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-commerce-portraits.mjs

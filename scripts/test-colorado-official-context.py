@@ -88,6 +88,33 @@ class ContextTests(unittest.TestCase):
     def test_unknown_seed_rejected(self):
         with self.assertRaises(ValueError):
             c.materialize(r, self.path, self.db, self.receipts, 'unknown', json.dumps(self.receipt), self.receipt['retrieved_at'])
+    def test_new_fixed_agency_passages_reject_wrong_or_changed_text(self):
+        for name in ('greeley-flock', 'boulder-flock'):
+            seed = dict(c.SEEDS[name])
+            statement = seed['combined_start'] + ' in this synthetic example.'
+            body = ('<html><body><p>' + statement + '</p></body></html>').encode()
+            self.bind_context_hash(seed, body)
+            with self.subTest(name=name):
+                self.assertEqual(c.locate(r, seed, body), 0)
+                for changed in (body.replace(b'<p>', b'<p hidden>'),
+                                body.replace(seed['combined_start'].encode(), b'Other Agency'),
+                                body.replace(b'synthetic example', b'altered example'), body + body):
+                    with self.assertRaises(ValueError): c.locate(r, seed, changed)
+    def test_greeley_signal_does_not_infer_alpr_from_other_page_text(self):
+        name = 'greeley-flock'; seed = dict(c.SEEDS[name])
+        body = ('<p>' + seed['combined_start'] + ' in this synthetic example.</p>'
+                '<p>These cameras do not read license plates.</p>').encode()
+        self.bind_context_hash(seed, body)
+        saved = dict(self.receipt, url=seed['url'], sha256=r.sha(body), bytes=len(body), content_type='text/html')
+        r.archive(self.path, [(saved, body)])
+        with self.db:
+            self.db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (seed['jurisdiction_ref'],
+                'https://greeleyco.gov/', self.receipt['retrieved_at'], '{}'))
+        with patch.dict(c.SEEDS, {name: seed}):
+            record = c.materialize(r, self.path, self.db, r.observation_keys(self.path), name,
+                                   json.dumps(saved), self.receipt['retrieved_at'])
+        self.assertEqual(record['signals'], ['Flock Safety'])
+        self.assertEqual(record['title'], 'Greeley police describe their Flock Safety camera program.')
     def test_only_exact_known_collapsed_tab_can_supply_context(self):
         seed = dict(c.SEEDS['westminster-axon']); panel = seed['tab_panel_id']; labelled = 'tabBtn' + panel[3:]
         body = (f'<div id="{panel}" class="tabbedWidget cpTabPanel" role="region" '
