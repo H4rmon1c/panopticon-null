@@ -1277,13 +1277,19 @@ def extract_saved_docx(data_dir, ref, candidate, receipt):
             os.fsync(handle.fileno())
     evidence = 'docx:' + digest
     finding = None
+    ambiguous = None
     for number, line in enumerate(text.splitlines(), 1):
         labels = labels_at_quote(RULE_LABELS, line)
         if labels:
             rule_ids = [rule for rule in RULE_LABELS if labels_at_quote([rule], line)]
-            finding = {'evidence_id': evidence, 'matched_rule_ids': rule_ids,
+            current = {'evidence_id': evidence, 'matched_rule_ids': rule_ids,
                        'citations': [{'evidence_id': evidence, 'locator': {'kind': 'line', 'start': number}, 'quote': line}]}
-            break
+            if labels == ['Flock (identity not established)']:
+                ambiguous = ambiguous or current
+            else:
+                finding = current
+                break
+    finding = finding or ambiguous
     return {'state': 'matched' if finding else 'no_match', 'document_format': 'docx', 'document_sha256': digest,
             'extracted_sha256': text_digest, 'evidence_id': evidence, 'finding': finding, 'extraction_status': 'complete',
             'docx_deleted_text_excluded': True,
@@ -1445,9 +1451,22 @@ def labels_at_quote(rule_ids, quote):
                 and any(re.search(r'(?<!\w)' + re.escape(term) + r'(?!\w)', quote, re.I) for term in rule['terms'])):
             if rule_id == 'vendor.soundthinking-shotspotter':
                 labels.update(term for term in rule['terms'] if re.search(r'(?<!\w)' + re.escape(term) + r'(?!\w)', quote, re.I))
+            elif rule_id == 'vendor.flock-safety':
+                explicit = re.search(r'\bflock\s+(?:safety|group|vehicle.intelligence)\b', quote, re.I)
+                technology = re.search(r'\b(?:cameras?|alpr|lpr|licen[cs]e[ -]plate|plate[ -]reader|surveillance)\b', quote, re.I)
+                labels.add('Flock Safety' if explicit or technology else 'Flock (identity not established)')
             else:
                 labels.add(RULE_LABELS[rule_id])
     return sorted(labels)
+
+
+def non_surveillance_flock_context(lines, number, labels):
+    if labels != ['Flock (identity not established)']:
+        return False
+    context = ' '.join(lines[max(0, number - 5):min(len(lines), number + 2)])
+    art = re.search(r'\b(?:artist|artwork|sculpture|public art|roundabout submissions)\b', context, re.I)
+    technology = re.search(r'\b(?:flock\s+(?:safety|group|cameras?)|alpr|lpr|licen[cs]e[ -]plate|plate[ -]reader|surveillance)\b|\bflock\b.{0,100}\bcameras?\b', context, re.I)
+    return bool(art and not technology)
 
 
 def officials_near_reference(lines, number):
@@ -1885,6 +1904,7 @@ def export_report(data_dir, db, output, assets_dir=None):
     receipts = observation_keys(data_dir)
     records = []
     omitted = 0
+    non_surveillance_withheld = 0
     omission_reasons = Counter()
     for identifier, ref, client, matter, page, row_index, source_digest, raw, updated in db.execute(
             'SELECT id,jurisdiction_ref,client,matter_id,page,row_index,source_sha256,record_json,updated_at FROM leads ORDER BY id'):
@@ -1997,6 +2017,9 @@ def export_report(data_dir, db, output, assets_dir=None):
             labels = labels_at_quote(finding['matched_rule_ids'], citation['quote'])
             if not labels:
                 raise ValueError('no supported rule is present at the cited line')
+            if non_surveillance_flock_context(lines, number, labels):
+                non_surveillance_withheld += 1
+                continue
             key = (ref, doc_digest)
             if key in seen_documents:
                 continue
@@ -2092,6 +2115,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                            'recorded_vote_entries': sum(len(motion['votes']) for x in records for motion in x.get('actions', [])),
                            'document_screening': status,
                            'refresh_failures_preserving_prior_results': db.execute("SELECT count(*) FROM document_candidates WHERE state IN ('matched','no_match') AND last_error IS NOT NULL").fetchone()[0],
+                           'non_surveillance_mentions_withheld': non_surveillance_withheld,
                            'omitted_failed_provenance': omitted}, 'records': records}
     encoded = (json.dumps(report, ensure_ascii=True, separators=(',', ':')) + '\n').encode()
     if len(encoded) > 8 * 1024 * 1024:
@@ -2110,6 +2134,13 @@ def export_report(data_dir, db, output, assets_dir=None):
     print(f"Exported {len(records)} preliminary references in {report['coverage']['jurisdictions_with_mentions']} jurisdictions; {omitted} omitted by validation", flush=True)
     if omission_reasons:
         print('Omission reasons:', dict(omission_reasons), flush=True)
+
+
+def export_consistent(data_dir, db, output, assets_dir=None):
+    """Keep counts and source rows on one SQLite snapshot during live work."""
+    with db:
+        db.execute('BEGIN')
+        export_report(data_dir, db, output, assets_dir)
 
 
 def main():
@@ -2201,7 +2232,7 @@ def main():
         elif args.command == 'portraits':
             collect_portraits(args.data_dir, db, args.limit)
         elif args.command == 'export':
-            export_report(args.data_dir, db, args.output, args.assets_dir)
+            export_consistent(args.data_dir, db, args.output, args.assets_dir)
     finally:
         db.close()
 

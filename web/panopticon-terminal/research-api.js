@@ -66,7 +66,7 @@ export function validateResearch(report) {
       !Array.isArray(report.records) || report.records.length > 50000 ||
       !onlyKeys(report.coverage, ['lookback_period', 'jurisdictions_with_mentions', 'matter_references',
         'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
-        'refresh_failures_preserving_prior_results', 'omitted_failed_provenance']) ||
+        'refresh_failures_preserving_prior_results', 'non_surveillance_mentions_withheld', 'omitted_failed_provenance']) ||
       report.coverage.lookback_period !== null ||
       !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match']) ||
       !Object.values(report.coverage.document_screening).every(nonnegative) ||
@@ -74,6 +74,8 @@ export function validateResearch(report) {
         (!onlyKeys(report.coverage.agenda_portal_screening, ['pending', 'error', 'matched', 'no_match']) ||
           !Object.values(report.coverage.agenda_portal_screening).every(nonnegative))) ||
       !nonnegative(report.coverage.omitted_failed_provenance) ||
+      (report.coverage.non_surveillance_mentions_withheld !== undefined &&
+        !nonnegative(report.coverage.non_surveillance_mentions_withheld)) ||
       (report.coverage.refresh_failures_preserving_prior_results !== undefined &&
         !nonnegative(report.coverage.refresh_failures_preserving_prior_results)) ||
       typeof report.notice !== 'string' || report.notice.length > 500 ||

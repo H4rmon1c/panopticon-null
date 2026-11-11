@@ -38,6 +38,7 @@ test('invalid confidence, source URL, identifiers, counts and text are rejected'
     (r) => { r.private_note = 'not for publication'; },
     (r) => { r.records[0].private_note = 'not for publication'; },
     (r) => { r.coverage.document_screening.internal_error = 2; },
+    (r) => { r.coverage.non_surveillance_mentions_withheld = -1; },
   ];
   for (const change of changes) { const report = copy(); change(report); assert.throws(() => validateResearch(report)); }
 });

@@ -35,6 +35,9 @@ no relevant decision exists.
    complete extraction; a partial scan cannot become a no-match result. DOCX files are
    parsed in a separate network-isolated sandbox with ZIP, XML, memory, CPU,
    and output limits; embedded links and files are never followed.
+   A bare “Flock” mention is labeled as an unresolved identity unless the
+   cited line also identifies the company or relevant technology. Obvious
+   non-surveillance artwork context is withheld and counted separately.
 4. For matched Legistar matters, capture the matter history, corresponding
    meeting item, recorded votes, and any separate consent-agenda item. The
    exporter reopens every raw capture and verifies client, matter, meeting,
