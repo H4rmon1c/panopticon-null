@@ -6,6 +6,35 @@ import { matchesResearchQuery, readBoundedResearchResponse, validateResearch, va
 const original = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(original);
 
+test('cross-agency portrait requires the exact authority, person and pinned source chain', () => {
+  const report = copy();
+  const record = report.records.find((r) => r.actions?.some((a) => a.votes.some((v) => v.person_id === 637 && v.name === 'Craig Machuga')));
+  assert.ok(record);
+  const motion = record.actions.find((a) => a.votes.some((v) => v.person_id === 637));
+  const vote = motion.votes.find((v) => v.person_id === 637);
+  vote.portrait = { src: './research-portraits/03afcbdf3dcadad64a2817377403fc0e49cd55a9b6ec6855b4e78f33524e5a3f.jpg', sha256: '03afcbdf3dcadad64a2817377403fc0e49cd55a9b6ec6855b4e78f33524e5a3f',
+    source_url: 'https://www.sacfd.org/meet-our-district-board-of-directors',
+    image_url: 'https://streamline.imgix.net/0ec9c10d-3273-4b87-a0de-62fc6b0603cd/9a0b203c-7e23-4e21-8628-e6390fbdd0c9/C.%20Machuga.JPG?ixlib=rb-1.1.0&or=0&w=720&h=720&fit=fill&fill=blur&auto=format%2Ccompress&s=066395a71136c9612a133dc915584835',
+    identity_source_url: 'https://www.c3gov.com/Government/Boards-Commissions/Urban-Renewal-Authority', identity_source_sha256: 'b7f94b19ff9a65699174df106a141fb10d3a2328b4dc3e6cd64b640be6423403',
+    identity_agenda_url: 'https://ompnetwork.s3-us-west-2.amazonaws.com/sites/1717/documents/agenda_22_1.pdf', identity_agenda_sha256: '2936f9b6bee4c0a1b1556579dd8fb807fa0bfc5a7ec357e1fb22e352ec39a67a',
+    identity_matter_url: 'https://webapi.legistar.com/v1/commerce/Matters/9151', identity_matter_sha256: 'a73a53441b86e65b3a81080f34dfe76563c203a9530d65a2a0ea7ff87741358f',
+    portrait_source_sha256: 'c62be165e986063ecd8b955dd3ee730516f92268d823060cc1d40d2abd79609b',
+    caption: 'Fire board name-labeled card shows Craig Machuga; page 1 of the 2022 appointment agenda lists a South Adams Fire Department recommendation. Identity connection is preliminary.', portrait_date: 'not_established' };
+  validateResearch(report);
+  for (const change of [
+    (v, a) => { a.body = 'City Council'; },
+    (v) => { v.person_id = 638; },
+    (v) => { v.portrait.identity_agenda_sha256 = '0'.repeat(64); },
+    (v) => { v.portrait.portrait_source_sha256 = '0'.repeat(64); },
+    (v) => { v.portrait.image_url = 'https://example.com/wrong.jpg'; },
+  ]) {
+    const changed = structuredClone(report);
+    const action = changed.records.find((r) => r.id === record.id).actions.find((a) => a.votes.some((v) => v.person_id === 637));
+    change(action.votes.find((v) => v.person_id === 637), action);
+    assert.throws(() => validateResearch(changed));
+  }
+});
+
 test('real research output remains explicitly preliminary and counts source references', () => {
   const report = validateResearch(copy());
   assert.equal(report.state, 'preliminary');

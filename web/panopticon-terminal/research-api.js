@@ -29,13 +29,20 @@ export function matchesResearchQuery(item, value) {
 function validatePortrait(portrait, context = null) {
   if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date',
       'source_kind', 'source_document_sha256', 'source_page', 'embedded_image_index',
-      'embedded_original_sha256', 'image_transform', 'identity_source_url']) ||
+      'embedded_original_sha256', 'image_transform', 'identity_source_url', 'identity_agenda_url', 'identity_agenda_sha256',
+      'portrait_source_sha256', 'identity_source_sha256', 'identity_matter_url', 'identity_matter_sha256']) ||
       !digest(portrait.sha256) ||
       !new RegExp(`^\\./research-portraits/${portrait.sha256}\\.(?:jpg|png|webp)$`).test(portrait.src) ||
       portrait.portrait_date !== 'not_established' || !safeText(portrait.caption, 250)) throw new Error('Invalid research portrait');
+  const crossAgencyProof = ['identity_agenda_url', 'identity_agenda_sha256', 'portrait_source_sha256', 'identity_source_sha256', 'identity_matter_url', 'identity_matter_sha256'].some((key) => portrait[key] !== undefined);
+  if (crossAgencyProof && (portrait.source_kind !== undefined || context?.client !== 'commerce' ||
+      context.jurisdiction !== 'us-co-place-0816495' || context.personId !== 637 || context.body !== 'Urban Renewal Authority')) {
+    throw new Error('Unexpected cross-agency portrait proof');
+  }
   if (portrait.identity_source_url !== undefined && !(
       (context?.client === 'arapahoe' && context.jurisdiction === 'us-co-county-08005' && context.personId === 572) ||
-      (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000' && context.personId === 282))) {
+      (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000' && context.personId === 282) ||
+      (context?.client === 'commerce' && context.jurisdiction === 'us-co-place-0816495' && context.personId === 637 && context.body === 'Urban Renewal Authority'))) {
     throw new Error('Unexpected portrait identity source');
   }
   let page;
@@ -183,6 +190,22 @@ function validatePortrait(portrait, context = null) {
   if (portrait.source_kind !== undefined || portrait.source_document_sha256 !== undefined ||
       portrait.source_page !== undefined || portrait.embedded_image_index !== undefined ||
       portrait.embedded_original_sha256 !== undefined || portrait.image_transform !== undefined) throw new Error('Unknown portrait source kind');
+  if (crossAgencyProof) {
+    if (context?.client !== 'commerce' || context.jurisdiction !== 'us-co-place-0816495' || context.personId !== 637 ||
+        context.name !== 'Craig Machuga' || context.body !== 'Urban Renewal Authority' ||
+        portrait.source_url !== 'https://www.sacfd.org/meet-our-district-board-of-directors' ||
+        portrait.identity_source_url !== 'https://www.c3gov.com/Government/Boards-Commissions/Urban-Renewal-Authority' ||
+        portrait.identity_agenda_url !== 'https://ompnetwork.s3-us-west-2.amazonaws.com/sites/1717/documents/agenda_22_1.pdf' ||
+        portrait.identity_agenda_sha256 !== '2936f9b6bee4c0a1b1556579dd8fb807fa0bfc5a7ec357e1fb22e352ec39a67a' ||
+        portrait.portrait_source_sha256 !== 'c62be165e986063ecd8b955dd3ee730516f92268d823060cc1d40d2abd79609b' ||
+        portrait.identity_source_sha256 !== 'b7f94b19ff9a65699174df106a141fb10d3a2328b4dc3e6cd64b640be6423403' ||
+        portrait.identity_matter_url !== 'https://webapi.legistar.com/v1/commerce/Matters/9151' ||
+        portrait.identity_matter_sha256 !== 'a73a53441b86e65b3a81080f34dfe76563c203a9530d65a2a0ea7ff87741358f' ||
+        portrait.sha256 !== '03afcbdf3dcadad64a2817377403fc0e49cd55a9b6ec6855b4e78f33524e5a3f' ||
+        portrait.caption !== 'Fire board name-labeled card shows Craig Machuga; page 1 of the 2022 appointment agenda lists a South Adams Fire Department recommendation. Identity connection is preliminary.' ||
+        portrait.image_url !== 'https://streamline.imgix.net/0ec9c10d-3273-4b87-a0de-62fc6b0603cd/9a0b203c-7e23-4e21-8628-e6390fbdd0c9/C.%20Machuga.JPG?ixlib=rb-1.1.0&or=0&w=720&h=720&fit=fill&fill=blur&auto=format%2Ccompress&s=066395a71136c9612a133dc915584835') throw new Error('Invalid cross-agency portrait proof');
+    return;
+  }
   let image;
   try { image = new URL(portrait.image_url); }
   catch { throw new Error('Invalid portrait image URL'); }
@@ -362,7 +385,7 @@ export function validateResearch(report) {
               !Number.isSafeInteger(vote.vote_id) || vote.vote_id <= 0 || people.has(vote.person_id)) throw new Error('Invalid recorded vote');
           people.add(vote.person_id);
           if (vote.portrait) validatePortrait(vote.portrait, { client: matter[1], jurisdiction: record.jurisdiction_ref,
-            personId: vote.person_id, name: vote.name });
+            personId: vote.person_id, name: vote.name, body: motion.body });
         }
       }
     }
