@@ -137,7 +137,10 @@ gates. Source policy is checked for each captured site. The self-hosted
 research schedule enables the project owner's requested exception for public
 TownCloud agenda links explicitly present on a municipality website, including
 the same-tenant PDF redirect. Set `PNUL_ALLOW_TOWNCLOUD_PUBLIC=0` to honor that
-service's robots exclusion. Other explicit robots disallows, content access
+service's robots exclusion. The scheduled collector also applies the owner's
+requested exception to the exact public Arapahoe County Rhonda Fields profile
+and its explicitly linked portrait; set `PNUL_ALLOW_ARAPAHOE_PROFILE=0` to
+honor that host's robots exclusion. Other explicit robots disallows, content access
 denials, CAPTCHAs, and login requirements remain blocked; the five previously
 excluded Granicus attachment URLs remain excluded.
 The collector understands robots wildcard and longest-match rules using the
