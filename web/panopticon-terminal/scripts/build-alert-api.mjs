@@ -158,8 +158,11 @@ export function buildAlertApi(snapshot, siteUrl, { previous = null, now = new Da
   }).sort((a, b) => b.changed_at.localeCompare(a.changed_at) || a.case_id.localeCompare(b.case_id));
   const api = { schema_version: schema, site_url: origin, generated_at: now, notice, coverage_url: `${origin}/api/v1/coverage.json`, health_url: `${origin}/api/v1/health.json`, records };
   const feed = { version: "https://jsonfeed.org/version/1.1", title: "Panopticon Colorado public records", home_page_url: origin, feed_url: `${origin}/api/v1/feed.json`, description: notice,
-    items: records.map((record) => ({ id: record.url, url: record.url, title: record.title, content_text: `${record.summary}${record.unknowns.length ? `\nUnresolved: ${record.unknowns.map((item) => item.detail).join(" ")}` : ""}`, date_published: record.first_published_at, date_modified: record.changed_at,
-      _panopticon: { case_id: record.case_id, revision_id: record.revision_id, revision: record.revision, state: record.state, change: record.change, decision_date: record.decision_date, source_last_checked_at: null } })) };
+    items: records.map((record) => {
+      const unresolved = record.unknowns.filter((item) => item.state === "not_established");
+      return { id: record.url, url: record.url, title: record.title, content_text: `${record.summary}${unresolved.length ? `\nUnresolved: ${unresolved.map((item) => item.detail).join(" ")}` : ""}`, date_published: record.first_published_at, date_modified: record.changed_at,
+        _panopticon: { case_id: record.case_id, revision_id: record.revision_id, revision: record.revision, state: record.state, change: record.change, decision_date: record.decision_date, source_last_checked_at: null } };
+    }) };
   serializeApi(api); serializeApi(feed);
   return { api, feed };
 }

@@ -143,6 +143,35 @@ fn aggregate_vote_language_cannot_create_named_rows() {
 }
 
 #[test]
+fn named_votes_cannot_crop_negation_or_another_voter_from_the_source_line() {
+    for line in [
+        "Not Alice Smith Aye",
+        "Alice Smith Aye; Bob Jones No",
+        "Alice Smith Aye was incorrectly reported",
+    ] {
+        let mut sources = BTreeMap::new();
+        sources.insert(
+            "minutes".to_owned(),
+            source(&format!("Item 5\nMotion to approve Item 5\n{line}")),
+        );
+        let matter: ClaimInput = serde_json::from_value(json!({
+            "value":"Item 5","proof":proof(1,"Item 5")
+        }))
+        .unwrap();
+        let matter = checked_claim(Some(&matter), &sources, "matter").unwrap();
+        let vote: VoteInput = serde_json::from_value(json!({
+            "scope":"direct_item",
+            "motion":{"value":"Motion to approve Item 5","proof":proof(2,"Motion to approve Item 5")},
+            "rows":[{"name":"Alice Smith","position":"Aye","proof":proof(3,"Alice Smith Aye")}]
+        })).unwrap();
+        assert!(
+            checked_votes(&vote, &matter, &sources, "test-place").is_err(),
+            "{line}"
+        );
+    }
+}
+
+#[test]
 fn consent_motion_rows_never_become_item_votes() {
     let mut sources = BTreeMap::new();
     sources.insert(
@@ -219,6 +248,7 @@ fn named_position_must_be_atomic_for_that_person() {
     for (position, quote) in [
         ("Yes", "Alice Smith No; Bob Jones Yes"),
         ("Yes", "Alice Smith No"),
+        ("No", "Alice Smith No"),
     ] {
         let vote: VoteInput = serde_json::from_value(json!({
             "scope":"direct_item",
@@ -227,6 +257,10 @@ fn named_position_must_be_atomic_for_that_person() {
         })).unwrap();
         assert!(checked_votes(&vote, &matter, &sources, "test-place").is_err());
     }
+    sources.insert(
+        "minutes".to_owned(),
+        source("Item 5\nMotion to approve Item 5\nAlice Smith No"),
+    );
     let valid: VoteInput = serde_json::from_value(json!({
         "scope":"direct_item",
         "motion":{"value":"Motion to approve Item 5","proof":proof(2,"Motion to approve Item 5")},

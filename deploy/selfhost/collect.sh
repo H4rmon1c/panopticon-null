@@ -45,7 +45,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     adapter="${rest#*$'\t'}"
     [[ "$config" =~ ^configs/states/co[-a-z0-9]*\.toml$ &&
        "$id" =~ ^[a-z0-9-]+$ &&
-       ( "$adapter" == ingest || "$adapter" == procurement || "$adapter" == archive || "$adapter" == discover-calendar ) &&
+       ( "$adapter" == ingest || "$adapter" == procurement || "$adapter" == archive || "$adapter" == discover-calendar || "$adapter" == discover-index ) &&
        -z "${seen[$id]:-}" && -f "$config" && ! -L "$config" ]] || {
         echo "invalid or duplicate collection source: $id" >&2
         exit 1
@@ -83,6 +83,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     fallback_seen[$fallback]=1
 done < "$fallback_path"
 
+python3 "$script_dir/validate-collection-matrix.py" "$PNUL_REPO_DIR" "$matrix_path" "$fallback_path"
+
 run_api_fallback() {
     local primary="$1" config="$2" fallback="${fallback_for[$1]:-}"
     if [[ -z "$fallback" ]]; then
@@ -109,6 +111,8 @@ for index in "${!ids[@]}"; do
             "$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config" procurement refresh "$source" --live || status=1
         elif [[ "$adapter" == archive ]]; then
             "$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config" source archive "$source" || status=1
+        elif [[ "$adapter" == discover-index ]]; then
+            "$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config" source discover-index "$source" || status=1
         else
             if ! "$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config" source discover-calendar "$source"; then
                 status=1

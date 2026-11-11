@@ -12,6 +12,8 @@ The production environment defaults to [`collection-release-sources.tsv`](collec
 
 The broader [`collection-sources.tsv`](collection-sources.tsv) has seven calendar sources, two procurement sources, and the same twelve archive endpoints. Switch to it and `collection-fallbacks.tsv` only after the additional source reviews exist. Its five API fallbacks are independently gated and cannot replace exact release evidence. Missing/expired/mismatched review records prevent retrieval. No review is renewed automatically.
 
+The five configured town document indexes can be selected through the opt-in [`collection-small-town-sources.tsv`](collection-small-town-sources.tsv) and the `discover-index` adapter after their source reviews exist. The entire schedule and referenced source definitions are checked before any CLI retrieval call. Selecting the matrix does not create reviews or enable timers. See [the discovery guide](../../docs/document-first-discovery.md).
+
 The candidate activation matrix is empty. Its stage reports **disabled**, rather than claiming new areas are being discovered. Adding reviewed candidate queues and verified proposal inputs is required for automatic new-case expansion. Publication accepts only configured manifests and original private proposal inputs that pass the Rust proof verifier. It does not publish arbitrary fetched records or invent missing votes, contract execution, or portraits.
 
 `publish.sh` locks against concurrent capture, validates the complete staged bundle and portraits, creates decision pages, alerts/feed and coverage APIs, and switches one symlink atomically. Alert revision IDs stay stable on repeat exports; explicit corrections/withdrawals are retained, while a silently disappearing case blocks publication. All lock opens are nontruncating and use `O_NOFOLLOW`; directory provisioning uses directory FDs to avoid following service-planted symlinks during root installation.
@@ -33,6 +35,7 @@ bash deploy/selfhost/test-publish.sh
 python3 deploy/selfhost/test-health.py
 python3 deploy/selfhost/test-backup.py
 python3 deploy/selfhost/test-locks.py
+python3 deploy/selfhost/test-worklist-schedules.py
 ```
 
 These tests perform no network capture and do not change production state. They cover source routing, failed-review isolation, publication rollback, repeated export, real staged withdrawals and retained correction pages, source expiry and stale health, private-data exclusion, coherent SQLite backup, and planted lock/directory symlinks. Host TLS, service isolation, PDF sandbox execution, off-server backup restoration, and external alert delivery remain commissioning checks.

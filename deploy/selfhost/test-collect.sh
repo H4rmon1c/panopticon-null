@@ -22,6 +22,12 @@ fi
 if [[ "${PNUL_TEST_FAIL_DENVER_API:-0}" == 1 && " $* " == *" source review verify denver-legistar-events "* ]]; then
     exit 1
 fi
+if [[ "${PNUL_TEST_FAIL_MOFFAT:-0}" == 1 && " $* " == *" source review verify moffat-document-index "* ]]; then
+    exit 1
+fi
+if [[ "${PNUL_TEST_FAIL_SIMLA_INDEX:-0}" == 1 && " $* " == *" source discover-index simla-document-index "* ]]; then
+    exit 1
+fi
 if [[ "${PNUL_TEST_FAIL_COMMERCE:-0}" == 1 && " $* " == *" source discover-calendar commerce-city-calendar "* ]]; then
     exit 1
 fi
@@ -93,4 +99,42 @@ if bash "$repo/deploy/selfhost/collect.sh" 2>/dev/null || [[ -s "$PNUL_TEST_LOG"
     echo "duplicate API fallback was not rejected before fetching" >&2
     exit 1
 fi
+# Opt-in town indexes dispatch correctly; one missing review does not fetch it
+# or prevent independently reviewed towns from being checked.
+cp "$repo/deploy/selfhost/collection-small-town-sources.tsv" "$scratch/repo/deploy/selfhost/"
+cp "$repo/deploy/selfhost/collection-release-fallbacks.tsv" "$scratch/repo/deploy/selfhost/"
+export PNUL_COLLECT_MATRIX_PATH=deploy/selfhost/collection-small-town-sources.tsv
+export PNUL_COLLECT_FALLBACKS_PATH=deploy/selfhost/collection-release-fallbacks.tsv
+: > "$PNUL_TEST_LOG"
+bash "$repo/deploy/selfhost/collect.sh"
+[[ "$(grep -c ' source discover-index ' "$PNUL_TEST_LOG")" == 5 ]]
+: > "$PNUL_TEST_LOG"
+if PNUL_TEST_FAIL_MOFFAT=1 PNUL_TEST_FAIL_SIMLA_INDEX=1 bash "$repo/deploy/selfhost/collect.sh"; then
+    echo "town discovery failure was hidden" >&2; exit 1
+fi
+! grep -q ' source discover-index moffat-document-index' "$PNUL_TEST_LOG"
+grep -q ' source discover-index saguache-document-index' "$PNUL_TEST_LOG"
+! grep -q ' ingest ' "$PNUL_TEST_LOG"
+
+# Validate every row AND its source config before the first CLI operation.
+for broken in unknown wrong-adapter broken-toml duplicate-config-source wrong-policy-host; do
+    cp "$repo"/configs/states/co*.toml "$scratch/repo/configs/states/"
+    cp "$repo/deploy/selfhost/collection-small-town-sources.tsv" "$scratch/repo/deploy/selfhost/"
+    python3 - "$scratch/repo" "$broken" <<'PYTEST'
+from pathlib import Path
+import sys
+root=Path(sys.argv[1]);broken=sys.argv[2]
+matrix=root/'deploy/selfhost/collection-small-town-sources.tsv'
+config=root/'configs/states/co-saguache.toml'
+if broken=='unknown': matrix.write_text(matrix.read_text()+'configs/states/co-saguache.toml\tunknown-source\tdiscover-index\n')
+elif broken=='wrong-adapter': matrix.write_text(matrix.read_text().replace('saguache-document-index\tdiscover-index','saguache-document-index\tdiscover-calendar'))
+elif broken=='broken-toml': config.write_text(config.read_text()+'\ninvalid = [')
+elif broken=='duplicate-config-source': config.write_text(config.read_text()+'\n[[sources]]\nid = "saguache-document-index"\n')
+elif broken=='wrong-policy-host': config.write_text(config.read_text().replace('https://www.townofsaguache.org/uploads/','https://other.example.org/uploads/'))
+PYTEST
+    : > "$PNUL_TEST_LOG"
+    if bash "$repo/deploy/selfhost/collect.sh" >/dev/null 2>&1 || [[ -s "$PNUL_TEST_LOG" ]]; then
+        echo "invalid $broken schedule reached the CLI" >&2; exit 1
+    fi
+done
 printf 'collection schedule checks passed\n'

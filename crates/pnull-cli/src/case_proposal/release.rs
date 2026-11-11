@@ -119,8 +119,49 @@ fn public_text(value: &Value) -> Result<()> {
     Ok(())
 }
 
+/// This is a geography join, not evidence that a government made a decision.
+/// The proposal builder separately checks the official index/config mapping.
+fn jurisdiction_entity(repository_root: &Path, jurisdiction_ref: &str) -> Result<Value> {
+    let roster_bytes = read_regular_bounded(
+        &repository_root.join("web/panopticon-terminal/geography/colorado-jurisdictions.json"),
+        16 * 1024 * 1024,
+    )?;
+    let roster: Value = serde_json::from_slice(&roster_bytes)?;
+    let rows = roster["jurisdictions"]
+        .as_array()
+        .context("geography roster lacks jurisdictions")?;
+    if roster["schema_version"] != 1 || rows.len() > 10_000 {
+        bail!("invalid bounded geography roster");
+    }
+    let matches = rows
+        .iter()
+        .filter(|row| row["id"] == jurisdiction_ref)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        bail!("proposal jurisdiction must match exactly one geography roster entry");
+    }
+    let row = matches[0];
+    let name = row["name"].as_str().context("geography entry lacks name")?;
+    if name.trim().is_empty() || name.len() > 300 {
+        bail!("geography entry lacks a bounded name");
+    }
+    Ok(json!({
+        "id":stable_id("atlas-proposal-jurisdiction", &[jurisdiction_ref]),
+        "type":"JURISDICTION","name":name,"jurisdiction_ref":jurisdiction_ref,
+        "status":"geography indexed","subtitle":"Colorado geography index",
+        "description":"Geography roster identity, joined through the configured official document index. This entry alone establishes no decision or technology use.",
+        "geo":null,"jurisdiction_ids":[],"source_count":0,"relation_count":0,
+        "source_ids":[],"attributes":[],"relationships":[],"timeline":[]
+    }))
+}
+
 #[allow(clippy::too_many_lines)]
-fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value> {
+fn snapshot(
+    store: &Store,
+    repository_root: &Path,
+    proposal: &Proposal,
+    site_url: &str,
+) -> Result<Value> {
     if proposal.stage != "source_checked_case_proposal"
         || proposal.publication_state != "private_pending_publication_checks"
     {
@@ -260,7 +301,12 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let mut entities = Vec::new();
+    let jurisdiction = jurisdiction_entity(repository_root, &proposal.jurisdiction_ref)?;
+    let jurisdiction_id = jurisdiction["id"]
+        .as_str()
+        .context("jurisdiction ID")?
+        .to_owned();
+    let mut entities = vec![jurisdiction];
     let mut votes = Vec::new();
     let mut relationships = Vec::new();
     if let FactState::Established {
@@ -272,7 +318,7 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
         if authorized {
             let contract_id = stable_id("atlas-proposal-contract", &[&case_id, contract]);
             entities.push(json!({"id":contract_id,"type":"CONTRACT","name":contract,
-                "jurisdiction_ref":proposal.jurisdiction_ref,"status":"award authorized",
+                "jurisdiction_ref":proposal.jurisdiction_ref,"jurisdiction_ids":[jurisdiction_id],"status":"award authorized",
                 "source_count":1,"relation_count":0,"source_ids":[source_id(proof)],
                 "attributes":[{"label":"Contract reference","value":contract,
                     "evidence_id":evidence_id(&case_id,"contract_reference"),
@@ -295,6 +341,8 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
         };
         let vote_evidence = add_evidence(&mut evidence, &case_id, &key, &fact)?
             .context("named vote lacks proof")?;
+        evidence.last_mut().context("named vote evidence")?["verification_method"] =
+            json!("exact_document_line_named_vote_v1");
         let voter_id = stable_id(
             "atlas-proposal-voter",
             &[
@@ -322,6 +370,7 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
         }
         entities.push(json!({"id":voter_id,"type":"RECORDED_VOTER","name":row.name,
             "identity_scope":format!("decision:{case_id}"),"jurisdiction_ref":proposal.jurisdiction_ref,
+            "jurisdiction_ids":[jurisdiction_id],
             "source_count":1,"relation_count":0,"source_ids":[source_id(&row.proof)],
             "attributes":voter_attributes,"relationships":[],"timeline":[],"geo":null,
             "unknowns":[
@@ -347,12 +396,17 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
             "detail":if votes.is_empty() {"No named direct-item vote was established"} else {"Named direct-item positions are cited"}}
     ]);
     let title = format!("{matter}: {technology} ({outcome_class})");
-    let summary = format!("{action}. Outcome: {outcome}. Contract award link not established.");
+    let award_summary = if award_established {
+        "Award authorization is cited; execution and payment remain unestablished."
+    } else {
+        "Contract award link not established."
+    };
+    let summary = format!("{action}. Outcome: {outcome}. {award_summary}");
     entities.push(
         json!({"id":stable_id("atlas-proposal-decision", &[&case_id]),
         "type":"DECISION","slug":case_id,"name":title,"social_title":title,
         "social_summary":summary,"summary":summary,"description":summary,
-        "jurisdiction_ref":proposal.jurisdiction_ref,"status":"recorded","geo":null,
+        "jurisdiction_ref":proposal.jurisdiction_ref,"jurisdiction_ids":[jurisdiction_id],"status":"recorded","geo":null,
         "tags":["official decision",outcome_class],"updated_at":date,
         "source_count":source_ids.len(),"relation_count":relationships.len(),"source_ids":source_ids,
         "attributes":attributes,"relationships":relationships,
@@ -365,6 +419,15 @@ fn snapshot(store: &Store, proposal: &Proposal, site_url: &str) -> Result<Value>
         "unknowns":unknowns,"unresolved_question":proposal.unresolved_question,
         "share_url":format!("{}decisions/{case_id}.html",origin.as_str())}),
     );
+    if proposal.votes.scope == "direct_item" {
+        let (_, motion_proof) = established(&proposal.votes.motion, "direct-item motion")?;
+        entities.last_mut().context("decision entity")?["document_vote_context"] = json!({
+            "verification_method":"bounded_exact_document_lines_v1","scope":"direct_item",
+            "source_id":source_id(motion_proof),
+            "matter_evidence_id":evidence_id(&case_id,"matter"),
+            "motion_evidence_id":evidence_id(&case_id,"vote_motion")
+        });
+    }
     // A missing vote means that the official material has not established
     // individual positions; omit the stricter empty-API vote-record state.
     if proposal.votes.scope == "not_established" {
@@ -430,13 +493,18 @@ pub(crate) fn checked_snapshot(
         .nth(3)
         .context("config is not under a repository states directory")?;
     let proposal = build(store, root, &config_path, config, &input)?;
-    snapshot(store, &proposal, site_url)
+    snapshot(store, root, &proposal, site_url)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::case_proposal::{DecisionFacts, VoteFacts};
+    use crate::case_proposal::{CheckedSource, DecisionFacts, VoteFacts, compose_proposal};
+    use std::path::PathBuf;
+
+    fn repository_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
     use pnull_core::{FetchObservation, PublicationAllowlist, ReviewDecision};
 
     fn fact(value: &str, locator: &str) -> FactState {
@@ -504,6 +572,153 @@ mod tests {
         }
     }
 
+    /// Cross-language fixture producer: the actual Rust claim/context checker,
+    /// release exporter, and bundle join run before JavaScript sees any data.
+    /// The source is synthetic extracted text; live/archive ingestion is not
+    /// claimed by this test and is covered separately by candidate tests.
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn checked_document_proposals_export_for_browser() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        store
+            .insert_publication_allowlist(&PublicationAllowlist {
+                id: "allowlist:proposal-bridge-test".to_owned(),
+                field_categories: vec!["atlas_release".to_owned()],
+                created_at: "2026-11-10T12:00:00Z".to_owned(),
+                note: "Synthetic offline bridge regression only".to_owned(),
+            })
+            .unwrap();
+        let text = [5, 6].iter().map(|number| format!(
+            "Item {number}\n2026-11-10\nTown Council\nMotion to approve Item {number}\nAlice Smith Aye\nNo — Bob Jones\nApproved\nFlock Safety\nItem {number}: Flock Safety\nAgreement {number}\nItem {number} | Agreement {number} | Flock Safety | award authorized"
+        )).collect::<Vec<_>>().join("\n");
+        let mut source = proposed().source_proofs.remove(0);
+        source.sha256 = sha256_hex(text.as_bytes());
+        source.index_source_id = "moffat-document-index".to_owned();
+        let receipt = FetchObservation {
+            id: FetchObservation::id_for(&source.source_url, &source.retrieved_at, 200),
+            source_id: Some(source.source_id.clone()),
+            requested_url: source.source_url.clone(),
+            final_url: source.source_url.clone(),
+            method: "GET".to_owned(),
+            status_code: 200,
+            retrieved_at: source.retrieved_at.clone(),
+            resolved_ips: vec!["93.184.216.34".to_owned()],
+            redirect_target: None,
+            content_type: Some("text/html".to_owned()),
+            content_length: Some(text.len() as u64),
+            etag: None,
+            last_modified: None,
+            allowlisted_headers: vec![],
+            body_digest: Some(source.sha256.clone()),
+            error: None,
+        };
+        source.fetch_receipt_id.clone_from(&receipt.id);
+        store.insert_fetch_observation(&receipt).unwrap();
+        let checked = BTreeMap::from([(
+            "minutes".to_owned(),
+            CheckedSource {
+                proof: source,
+                text,
+                maps: vec![],
+            },
+        )]);
+        let root = repository_root();
+        let jurisdiction_ref = super::super::geography_ref_for_index(
+            &root,
+            &root.join("configs/states/co-moffat.toml"),
+            "moffat-document-index",
+        )
+        .unwrap();
+        let mut generated = Vec::new();
+        for (index, number) in [5, 6].iter().enumerate() {
+            let proof = |line: usize, quote: &str| {
+                json!({
+                    "source_ref":"minutes","locator":format!("line:{}",line + index * 11),"quote":quote
+                })
+            };
+            let claim = |line: usize, value: &str| json!({"value":value,"proof":proof(line,value)});
+            let matter = format!("Item {number}");
+            let motion = format!("Motion to approve Item {number}");
+            let input: ProposalInput = serde_json::from_value(json!({
+                "schema_version":1,"jurisdiction_ref":jurisdiction_ref,
+                "sources":[{"source_ref":"minutes","archive_record":"discovery-archives/test-documents/synthetic.json"}],
+                "decision":{"matter":claim(1,&matter),"date":claim(2,"2026-11-10"),
+                    "body":claim(3,"Town Council"),"action":claim(4,&motion),"outcome":claim(7,"Approved")},
+                "technology":claim(8,"Flock Safety"),
+                "technology_relationship":claim(9,&format!("Item {number}: Flock Safety")),
+                "contract_reference":claim(10,&format!("Agreement {number}")),
+                "contract_award_link":claim(11,&format!("Item {number} | Agreement {number} | Flock Safety | award authorized")),
+                "votes":{"scope":"direct_item","motion":claim(4,&motion),"rows":[
+                    {"name":"Alice Smith","position":"Aye","proof":proof(5,"Alice Smith Aye")},
+                    {"name":"Bob Jones","position":"No","proof":proof(6,"No — Bob Jones")}
+                ]},"unresolved_question":"Was the authorized agreement executed?"
+            })).unwrap();
+            let proposal = compose_proposal(store.data_dir(), &input, &checked).unwrap();
+            assert!(proposal.votes.item_votes_established);
+            let output = snapshot(&store, &root, &proposal, "https://panopticon.fail").unwrap();
+            let decision = output["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|item| item["type"] == "DECISION")
+                .unwrap();
+            assert_eq!(decision["votes"].as_array().unwrap().len(), 2);
+            assert_eq!(decision["jurisdiction_ids"].as_array().unwrap().len(), 1);
+            assert_eq!(decision["document_vote_context"]["scope"], "direct_item");
+            generated.push(output);
+        }
+        let mut combined: Value = serde_json::from_slice(
+            &fs::read(root.join("web/panopticon-terminal/public/public-snapshot.json")).unwrap(),
+        )
+        .unwrap();
+        let previous_sources = combined["sources"].as_array().unwrap().len();
+        let previous_decisions = combined["case_releases"].as_array().unwrap().len();
+        for proposal in &generated {
+            pnull_publish::atlas::append_verified_proposal_snapshot(&mut combined, proposal)
+                .unwrap();
+        }
+        assert_eq!(
+            combined["case_releases"].as_array().unwrap().len(),
+            previous_decisions + 2
+        );
+        assert_eq!(
+            combined["sources"].as_array().unwrap().len(),
+            previous_sources + 1
+        );
+        assert_eq!(
+            combined["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|entity| entity["type"] == "JURISDICTION"
+                    && entity["jurisdiction_ref"] == jurisdiction_ref)
+                .count(),
+            1
+        );
+        assert!(
+            pnull_publish::atlas::append_verified_proposal_snapshot(
+                &mut combined.clone(),
+                &generated[0]
+            )
+            .is_err()
+        );
+        let mut conflicting = generated[1].clone();
+        conflicting["sources"][0]["title"] = json!("conflicting title for one stable ID");
+        let mut first = generated[0].clone();
+        assert!(
+            pnull_publish::atlas::append_verified_proposal_snapshot(&mut first, &conflicting)
+                .is_err()
+        );
+        if let Ok(path) = std::env::var("PNUL_DOCUMENT_BRIDGE_TEST_OUTPUT") {
+            fs::write(
+                path,
+                serde_json::to_vec(&json!({"proposals":generated,"combined":combined})).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+
     #[test]
     #[allow(clippy::too_many_lines)]
     fn failed_decision_keeps_vote_and_award_gaps() {
@@ -541,7 +756,13 @@ mod tests {
         };
         store.insert_fetch_observation(&receipt).expect("receipt");
         let proposal = proposed();
-        let output = snapshot(&store, &proposal, "https://panopticon.fail").expect("snapshot");
+        let output = snapshot(
+            &store,
+            &repository_root(),
+            &proposal,
+            "https://panopticon.fail",
+        )
+        .expect("snapshot");
         let decision = output["entities"]
             .as_array()
             .expect("entities")
@@ -567,8 +788,13 @@ mod tests {
             "Item 5 | Agreement 123 | Flock | award authorized",
             "line:9",
         );
-        let linked =
-            snapshot(&store, &authorized, "https://panopticon.fail").expect("authorized snapshot");
+        let linked = snapshot(
+            &store,
+            &repository_root(),
+            &authorized,
+            "https://panopticon.fail",
+        )
+        .expect("authorized snapshot");
         let linked_decision = linked["entities"]
             .as_array()
             .expect("entities")
@@ -583,6 +809,18 @@ mod tests {
             1
         );
         assert_eq!(linked_decision["unknowns"][0]["state"], "established");
+        assert!(
+            linked_decision["summary"]
+                .as_str()
+                .unwrap()
+                .contains("Award authorization is cited")
+        );
+        assert!(
+            !linked_decision["summary"]
+                .as_str()
+                .unwrap()
+                .contains("Contract award link not established")
+        );
         assert!(
             linked["entities"]
                 .as_array()
@@ -608,6 +846,14 @@ mod tests {
                 supersedes: None,
             })
             .expect("withdrawal");
-        assert!(snapshot(&store, &proposal, "https://panopticon.fail").is_err());
+        assert!(
+            snapshot(
+                &store,
+                &repository_root(),
+                &proposal,
+                "https://panopticon.fail"
+            )
+            .is_err()
+        );
     }
 }

@@ -1,0 +1,7 @@
+# Opt-in discovery only; this file does not record source reviews or enable a timer.
+# Pair with collection-release-fallbacks.tsv (empty); each index needs its own current review.
+configs/states/co-silver-plume.toml	silver-plume-document-index	discover-index
+configs/states/co-moffat.toml	moffat-document-index	discover-index
+configs/states/co-simla.toml	simla-document-index	discover-index
+configs/states/co-del-norte.toml	del-norte-document-index	discover-index
+configs/states/co-saguache.toml	saguache-document-index	discover-index

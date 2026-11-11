@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateSnapshot } from '../api.js';
-import { coverageDecisionIndex } from './24-colorado-coverage.mjs';
+import { coverageDecisionIndex, coverageSearchStatus } from './24-colorado-coverage.mjs';
 
 const KINDS = ['state', 'county', 'municipality', 'school_district', 'district_provisional'];
 const digest = value => `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
@@ -53,7 +53,10 @@ export function buildCoverage(snapshot, geography) {
     return {
       id: record.id, name: record.name, kind: record.kind,
       identity_state: record.kind === 'district_provisional' ? 'provisional' : 'geography_indexed',
+      publication_state: local.length ? 'published_records' : 'records_not_indexed',
+      // Retained for v1 consumers; this is publication status, not search status.
       coverage_state: local.length ? 'published_records' : 'records_not_indexed',
+      search_coverage: coverageSearchStatus(),
       decision_ids: local.map(decision => decision.slug).sort(),
       direct_vote_rows: local.reduce((sum, decision) => sum + (decision.votes?.length ?? 0), 0),
       consent_motion_rows: local.reduce((sum, decision) => sum + (decision.consent_block?.roll_call?.length ?? 0), 0),
@@ -64,9 +67,11 @@ export function buildCoverage(snapshot, geography) {
     snapshot_version: snapshot.status.dataset_version,
     coverage_state: 'partial',
     lookback_period: null,
+    search_coverage: coverageSearchStatus(),
     geography_archived_on: geography.source_archived_on,
     caveats: [
       'A geography entry is not an investigation. Records not indexed does not mean no surveillance technology exists.',
+      'Publication counts do not establish completed jurisdiction searches. Search dates, searched periods, and checked-document counts are not established by the public inputs.',
       'This roster is not a complete inventory of Colorado public bodies; provisional districts require identity verification.',
       'Source reach, current source-policy review, and live collection health are not established by this report.',
       'Consent-motion rows describe their block motion and are never attributed as item-specific votes.',
@@ -76,6 +81,8 @@ export function buildCoverage(snapshot, geography) {
       published_decisions: decisions.length,
       jurisdictions_with_published_records: jurisdictions.filter(row => row.decision_ids.length).length,
       jurisdictions_without_indexed_records: jurisdictions.filter(row => !row.decision_ids.length).length,
+      jurisdictions_without_published_decisions: jurisdictions.filter(row => !row.decision_ids.length).length,
+      jurisdictions_with_established_search_coverage: null,
       direct_vote_rows: jurisdictions.reduce((sum, row) => sum + row.direct_vote_rows, 0),
       consent_motion_rows: jurisdictions.reduce((sum, row) => sum + row.consent_motion_rows, 0),
     },

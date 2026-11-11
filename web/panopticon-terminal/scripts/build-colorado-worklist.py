@@ -8,6 +8,7 @@ whether a jurisdiction uses surveillance technology.
 import argparse
 import csv
 import json
+import importlib.util
 import re
 import tomllib
 from collections import Counter, defaultdict
@@ -21,6 +22,7 @@ MAPPING = ROOT / "configs/states/co-calendar-geography.v1.json"
 INDEX_MAPPING = ROOT / "configs/states/co-document-index-geography.v1.json"
 MUNICIPAL_DIRECTORY = ROOT / "configs/states/co-municipal-websites.v1.json"
 MATRIX = ROOT / "deploy/selfhost/collection-sources.tsv"
+DEFAULT_MATRIX = ROOT / "deploy/selfhost/collection-release-sources.tsv"
 ATLAS = ROOT / "fixtures/atlas"
 PUBLIC = ROOT / "web/panopticon-terminal/public/public-snapshot.json"
 
@@ -54,17 +56,15 @@ def document_index_bindings(valid_refs):
     mapping = read_json(INDEX_MAPPING)
     if mapping.get("schema_version") != 1:
         raise ValueError("unsupported document-index mapping")
-    scheduled = {line.split("\t")[1] for line in MATRIX.read_text().splitlines()
-                 if line and not line.startswith("#")}
     indexes = defaultdict(list)
     seen = set()
     seen_pdf = set()
     for item in mapping["document_index_geography"]:
         source_id, ref, config_path = item["source_id"], item["jurisdiction_ref"], item["config_path"]
-        if (source_id in seen or source_id in scheduled or ref not in valid_refs
+        if (source_id in seen or ref not in valid_refs
                 or valid_refs[ref]["kind"] != "municipality"
                 or not re.fullmatch(r"configs/states/co-[a-z0-9-]+\.toml", config_path)):
-            raise ValueError(f"invalid unscheduled town index binding: {item}")
+            raise ValueError(f"invalid town index binding: {item}")
         seen.add(source_id)
         config_file = ROOT / config_path
         if config_file.is_symlink() or not config_file.is_file():
@@ -89,7 +89,7 @@ def document_index_bindings(valid_refs):
             raise ValueError(f"document index needs exactly one PDF path policy: {source_id}")
         pdf = pdf_policies[0]
         pdf_url = urlsplit(pdf["url"])
-        if (pdf["id"] in seen_pdf or pdf["id"] in scheduled or pdf_url.scheme != "https"
+        if (pdf["id"] in seen_pdf or pdf_url.scheme != "https"
                 or pdf_url.netloc != url.netloc or not fixed_official_path(pdf_url.path)
                 or not pdf_url.path.endswith("/")
                 or pdf_url.query or pdf_url.fragment or pdf["minimum_interval_seconds"] < 120
@@ -189,7 +189,21 @@ def published_inventory(records):
     return published
 
 
-def build_rows():
+def selected_discovery(matrix):
+    matrix = Path(matrix)
+    if not matrix.is_absolute():
+        matrix = ROOT / matrix
+    relative = matrix.relative_to(ROOT).as_posix()
+    spec = importlib.util.spec_from_file_location("collection_matrix", ROOT / "deploy/selfhost/validate-collection-matrix.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    entries = module.validate(ROOT, relative, "deploy/selfhost/collection-release-fallbacks.tsv")
+    return relative, {identity: adapter for _, identity, adapter in entries
+                      if adapter in ("discover-calendar", "discover-index")}
+
+
+def build_rows(matrix=DEFAULT_MATRIX):
+    selected_matrix, selected = selected_discovery(matrix)
     geography = read_json(GEOGRAPHY)
     records = geography["jurisdictions"]
     if len(records) != 4111 or geography["counts"]["county"] != 64:
@@ -209,8 +223,13 @@ def build_rows():
         mapped_ids.add(source_id)
         calendar_by_ref[ref].append(source_id)
     if mapped_ids != calendar_source_ids():
-        raise ValueError("calendar mapping does not match scheduled discovery sources")
+        raise ValueError("calendar mapping does not match configured discovery sources")
     indexes = document_index_bindings(by_ref)
+    known_calendar = {identity for values in calendar_by_ref.values() for identity in values}
+    known_indexes = {identity for values in indexes.values() for identity in values}
+    for identity, adapter in selected.items():
+        if identity not in (known_calendar if adapter == "discover-calendar" else known_indexes):
+            raise ValueError(f"scheduled discovery source lacks geography mapping: {identity}")
     website_leads = municipal_website_leads(by_ref)
     cases = case_inventory(by_ref)
     published = published_inventory(records)
@@ -240,7 +259,13 @@ def build_rows():
             "municipal_directory_status": directory_status,
             "municipal_website_lead": directory["website_url"] if directory else "",
             "municipal_directory_locator": directory["source_locator"] if directory else "",
-            "scheduled_calendar_ids": ";".join(sorted(calendar_by_ref[ref])),
+            "configured_calendar_ids": ";".join(sorted(calendar_by_ref[ref])),
+            "selected_collection_matrix": selected_matrix,
+            "scheduled_calendar_ids": ";".join(sorted(identity for identity in calendar_by_ref[ref] if identity in selected)),
+            "scheduled_document_index_ids": ";".join(sorted(identity for identity in indexes[ref] if identity in selected)),
+            "discovery_schedule_state": "selected_in_matrix" if any(identity in selected for identity in calendar_by_ref[ref] + indexes[ref]) else "not_selected",
+            "source_review_state": "not_checked",
+            "search_execution_state": "not_measured",
             "document_index_ids": ";".join(sorted(indexes[ref])),
             "source_verified_case_ids": ";".join(sorted(source_verified)),
             "pending_case_ids": ";".join(sorted(pending)),
@@ -252,8 +277,9 @@ def build_rows():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--collection-matrix", type=Path, default=DEFAULT_MATRIX, help="selected schedule to report; does not enable collection")
     args = parser.parse_args()
-    rows = build_rows()
+    rows = build_rows(args.collection_matrix)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=list(rows[0]))

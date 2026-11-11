@@ -12,6 +12,8 @@ Panopticon Null is lawful, nonviolent, evidence infrastructure for dismantling t
 
 The current Colorado atlas static release contains five decisions across Colorado Springs, Commerce City, Denver, and Castle Rock. See the [production release](docs/colorado-production-release.md) and [statewide coverage inventory](docs/colorado-coverage.md) for the evidence, update behavior, and remaining gaps.
 
+Statewide collection is unfinished: the geography directory is not a searched-record count, and the default updater rechecks 12 known URLs. The [search-status audit](docs/statewide-search-status.md) records the missing archive, decision-extraction, and portrait automation needed to reach every Colorado public body.
+
 Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It builds a verifiable institutional money trail — solicitation → amendment → award → contract → expenditure — connecting official records only when the evidence supports the connection. Missing records, inaccessible portals, ambiguous vendor names, contradictory amounts, and incomplete coverage remain visible as explicit evidence gaps.
 
 Version 0.0.4 ("The Public Ledger") turns the procurement chain public. Changes to official records become alerts; the chain is published to a static site and Atom feed; and the records-request loop closes with a local, append-only CORA request ledger — all behind the existing human review and privacy gates.

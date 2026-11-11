@@ -43,6 +43,24 @@ test("repeated exports retain revision IDs and publication/change times", () => 
   assert.equal(api.generated_at, secondTime);
 });
 
+test("news text does not call established proposal facts unresolved", () => {
+  const snapshot = clone();
+  const decision = snapshot.entities.find((item) => item.type === "DECISION");
+  decision.unknowns = [
+    { kind: "individual_votes", state: "established", detail: "Named direct-item positions are cited." },
+    { kind: "contract_execution", state: "not_established", detail: "A city signature has not been established." },
+  ];
+  const { api, feed } = buildAlertApi(snapshot, origin, { now: firstTime });
+  const record = api.records.find((item) => item.case_id === decision.slug);
+  assert.deepEqual(record.unknowns, decision.unknowns);
+  const item = feed.items.find((entry) => entry.url === decision.share_url);
+  assert.match(item.content_text, /Unresolved: A city signature has not been established\./);
+  assert.doesNotMatch(item.content_text, /Named direct-item positions are cited/);
+  decision.unknowns = [decision.unknowns[0]];
+  const resolved = buildAlertApi(snapshot, origin, { now: firstTime }).feed.items.find((entry) => entry.url === decision.share_url);
+  assert.doesNotMatch(resolved.content_text, /Unresolved:/);
+});
+
 test("content changes and reversions produce distinct monotonic revision IDs", () => {
   const { api: previous } = initial();
   const snapshot = clone();

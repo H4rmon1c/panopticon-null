@@ -59,7 +59,9 @@ jobs:
           python3 web/panopticon-terminal/scripts/build-colorado-worklist.py --output /tmp/pnull-colorado-worklist.csv
           python3 deploy/selfhost/test-small-town-profile.py
       - name: Test multi-jurisdiction collection schedule
-        run: bash deploy/selfhost/test-collect.sh
+        run: |
+          bash deploy/selfhost/test-collect.sh
+          python3 deploy/selfhost/test-worklist-schedules.py
       - name: Test bounded private candidate queue schedule
         run: bash deploy/selfhost/test-candidate-queue.sh
       - name: Verify fixed official archive profiles

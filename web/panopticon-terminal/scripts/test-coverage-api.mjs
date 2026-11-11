@@ -16,12 +16,32 @@ test('real release counts decisions, not map entries or held cases', () => {
   assert.equal(report.totals.published_decisions, 5);
   assert.equal(report.totals.jurisdictions_with_published_records, 4);
   assert.equal(report.totals.jurisdictions_without_indexed_records, 4107);
+  assert.equal(report.totals.jurisdictions_without_published_decisions, 4107);
+  assert.equal(report.totals.jurisdictions_with_established_search_coverage, null);
   assert.equal(report.totals.direct_vote_rows, 47);
   assert.equal(report.totals.consent_motion_rows, 0);
   assert.equal(report.jurisdictions.find(row => row.id === 'us-co-place-0812415').coverage_state, 'published_records');
   assert.equal(report.jurisdictions.find(row => row.id === 'us-co-place-0870360').coverage_state, 'records_not_indexed');
   assert.deepEqual(buildCoverage(snapshot, geography), report);
   assert.equal(JSON.stringify(report).includes('reviewer'), false);
+});
+
+test('publication and geography cannot invent a completed search or no-match finding', () => {
+  const changed = structuredClone(snapshot);
+  changed.search_coverage = { state: 'searched_no_match', last_searched_at: '2026-11-10T00:00:00Z', receipt_count: 100 };
+  changed.entities.find(row => row.type === 'JURISDICTION').last_searched_at = '2026-11-10T00:00:00Z';
+  const roster = structuredClone(geography);
+  roster.jurisdictions[0].search_coverage = changed.search_coverage;
+  const report = buildCoverage(changed, roster);
+  const unknown = { state: 'not_established', last_searched_at: null, lookback_period: null, source_count: null, document_count: null, receipt_count: null };
+  assert.deepEqual(report.search_coverage, unknown);
+  for (const row of report.jurisdictions) {
+    assert.deepEqual(row.search_coverage, unknown);
+    assert.equal(row.publication_state, row.decision_ids.length ? 'published_records' : 'records_not_indexed');
+  }
+  assert.ok(report.jurisdictions.some(row => row.publication_state === 'published_records'));
+  assert.ok(report.jurisdictions.some(row => row.publication_state === 'records_not_indexed'));
+  assert.doesNotMatch(JSON.stringify(report), /searched_no_match|2026-11-10T00:00:00Z/);
 });
 
 test('synthetic and preview snapshots never become coverage', () => {

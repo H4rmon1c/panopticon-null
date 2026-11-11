@@ -293,6 +293,7 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
       if (item.evidence_id && !evidence.has(item.evidence_id)) throw new Error(`Entity ${entity.id} has unknown evidence`);
       if (!demo && item.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid fact verification state`);
     }
+    const documentContext = checkedDocumentVoteContext(entity, evidence, sources, entities);
     for (const vote of entity.votes ?? []) {
       const voter = entities.get(vote.voter_entity_id);
       if (!evidence.has(vote.evidence_id) || (!demo &&
@@ -301,10 +302,25 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
       }
       if (!demo) {
         const proof = evidence.get(vote.evidence_id);
-        const scalar = /^\$\[\d+\]\.VoteValueName$/.test(proof.locator) && proof.claim === vote.vote;
-        const composite = /^\$\[(\d+)\]\.VotePersonName; \$\[\1\]\.VoteValueName$/.test(proof.locator) &&
+        const apiProof = proof.verification_method === undefined && !voter.identity_scope?.startsWith("decision:");
+        const scalar = apiProof && /^\$\[\d+\]\.VoteValueName$/.test(proof.locator) && proof.claim === vote.vote;
+        const composite = apiProof && /^\$\[(\d+)\]\.VotePersonName; \$\[\1\]\.VoteValueName$/.test(proof.locator) &&
           typeof proof.claim === "string" && proof.claim.startsWith(`${vote.name} recorded ${vote.vote} on `);
-        if (!scalar && !composite) throw new Error(`Entity ${entity.id} has a direct vote inconsistent with its cited value`);
+        const documentLine = documentContext &&
+          proof.verification_method === "exact_document_line_named_vote_v1" &&
+          proof.source_id === documentContext.source_id && proof.claim === vote.vote &&
+          exactNamedVote(proof.quote, vote.name, vote.vote) &&
+          documentLineNumber(proof.locator) > documentContext.motion_line &&
+          documentLineNumber(proof.locator) - documentContext.motion_line <= 25 &&
+          voter.identity_scope === `decision:${entity.slug}` &&
+          voter.jurisdiction_ref === entity.jurisdiction_ref &&
+          voter.jurisdiction_ids?.length === 1 && voter.jurisdiction_ids[0] === documentContext.jurisdiction_id &&
+          (voter.source_ids ?? []).includes(proof.source_id);
+        // A document context cannot borrow a JSON API vote, and a document
+        // line cannot fall back to the independently checked API grammar.
+        if (documentContext ? !documentLine : (!scalar && !composite)) {
+          throw new Error(`Entity ${entity.id} has a direct vote inconsistent with its cited value`);
+        }
       }
       if (!demo && vote.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid vote verification state`);
     }
@@ -314,6 +330,69 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
     }
   }
   return snapshot;
+}
+
+function documentLineNumber(locator) {
+  if (typeof locator !== "string" || !/^line:[1-9]\d*$/.test(locator)) return NaN;
+  const number = Number(locator.slice(5));
+  return Number.isSafeInteger(number) ? number : NaN;
+}
+
+function exactNamedVote(quote, name, position) {
+  if (typeof quote !== "string" || quote.length > 2000 || typeof name !== "string" ||
+      !name.trim() || name.length > 160 || /[\r\n]/.test(quote + name) ||
+      !["Yes", "No", "Aye", "Nay", "Abstain", "Absent", "Present"].includes(position)) return false;
+  return [[name, position], [position, name]].some(([first, second]) => {
+    const text = quote.trim();
+    if (!text.startsWith(first)) return false;
+    const rest = text.slice(first.length);
+    return /^[\s:—–-]/u.test(rest) && rest.replace(/^[\s:—–-]+/u, "") === second;
+  });
+}
+
+function containsCompletePhrase(text, phrase) {
+  let offset = text.indexOf(phrase);
+  while (offset !== -1) {
+    const before = Array.from(text.slice(0, offset)).at(-1) ?? "";
+    const after = Array.from(text.slice(offset + phrase.length))[0] ?? "";
+    if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
+    offset = text.indexOf(phrase, offset + 1);
+  }
+  return false;
+}
+
+function checkedDocumentVoteContext(entity, evidence, sources, entities) {
+  const context = entity.document_vote_context;
+  if (context === undefined) return null;
+  const matter = evidence.get(context?.matter_evidence_id);
+  const motion = evidence.get(context?.motion_evidence_id);
+  const matterLine = documentLineNumber(matter?.locator);
+  const motionLine = documentLineNumber(motion?.locator);
+  const attributes = entity.attributes ?? [];
+  const jurisdiction = entities.get(entity.jurisdiction_ids?.[0]);
+  const sameAttribute = (label, proof) => proof && attributes.some(item =>
+    item.label === label && item.evidence_id === proof.id && item.value === proof.claim);
+  // Raw-byte and intervening-line checks happen in the Rust producer. Here we
+  // keep its explicit, bounded same-source proof separate from API vote rows.
+  if (entity.type !== "DECISION" || entity.vote_record_state !== "direct" ||
+      context?.verification_method !== "bounded_exact_document_lines_v1" || context.scope !== "direct_item" ||
+      typeof entity.jurisdiction_ref !== "string" || !entity.jurisdiction_ref ||
+      entity.jurisdiction_ids?.length !== 1 || jurisdiction?.type !== "JURISDICTION" ||
+      jurisdiction.jurisdiction_ref !== entity.jurisdiction_ref ||
+      !sources.has(context.source_id) || !matter || !motion ||
+      matter.source_id !== context.source_id || motion.source_id !== context.source_id ||
+      !Number.isSafeInteger(matterLine) || !Number.isSafeInteger(motionLine) ||
+      motionLine <= matterLine || motionLine - matterLine > 25 ||
+      typeof matter.claim !== "string" || !matter.claim.trim() || typeof matter.quote !== "string" || matter.quote.trim() !== matter.claim.trim() ||
+      typeof motion.claim !== "string" || typeof motion.quote !== "string" || motion.quote.trim() !== motion.claim.trim() ||
+      /[\r\n]/.test(matter.claim + matter.quote + motion.claim + motion.quote) ||
+      !sameAttribute("Matter", matter) || !sameAttribute("Recorded motion", motion) ||
+      !/(motion|moved)/i.test(motion.claim) || /(;|consent|agenda|en bloc|all items|calendar)/i.test(motion.claim) ||
+      !containsCompletePhrase(motion.claim, matter.claim) ||
+      (matter.claim.toLowerCase().startsWith("item ") && (motion.claim.toLowerCase().match(/item /g) ?? []).length !== 1)) {
+    throw new Error(`Entity ${entity.id} has an invalid document vote context`);
+  }
+  return { source_id: context.source_id, motion_line: motionLine, jurisdiction_id: jurisdiction.id };
 }
 
 function validCount(value) {
