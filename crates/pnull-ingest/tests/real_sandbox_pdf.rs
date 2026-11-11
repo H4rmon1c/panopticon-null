@@ -87,9 +87,10 @@ fn scanned_pdf_is_ocr_extracted_in_the_real_sandbox() {
     let original = workspace.join("fixtures/pdf/scanned-surveillance-text.pdf");
     let combined = dir.path().join("six-scanned-pages.pdf");
     let mut builder = Command::new("pdfunite");
-    for _ in 0..6 {
+    for _ in 0..5 {
         builder.arg(&original);
     }
+    builder.arg(workspace.join("fixtures/pdf/scanned-sixth-page.pdf"));
     assert!(
         builder
             .arg(&combined)
@@ -137,5 +138,17 @@ fn scanned_pdf_is_ocr_extracted_in_the_real_sandbox() {
         "all pages must be rendered and checked"
     );
     assert_eq!(outcome.text_maps.last().unwrap().page_number, 6);
+    assert!(
+        outcome.text_maps.iter().all(|page| !page.words.is_empty()),
+        "each separately rendered page must contribute its own OCR words"
+    );
+    assert_eq!(outcome.extracted_text.lines().count(), 6);
+    assert!(
+        outcome.text_maps[5]
+            .words
+            .iter()
+            .any(|word| word.text.eq_ignore_ascii_case("SIXTH")),
+        "the unique sixth-page text must survive OCR"
+    );
     store.verify(&outcome.record.id).expect("stored digest");
 }

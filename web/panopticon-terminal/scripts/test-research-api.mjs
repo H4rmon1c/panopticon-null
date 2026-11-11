@@ -39,6 +39,7 @@ test('invalid confidence, source URL, identifiers, counts and text are rejected'
     (r) => { r.records[0].private_note = 'not for publication'; },
     (r) => { r.coverage.document_screening.internal_error = 2; },
     (r) => { r.coverage.non_surveillance_mentions_withheld = -1; },
+    (r) => { r.coverage.ocr_revalidation_pending = -1; },
   ];
   for (const change of changes) { const report = copy(); change(report); assert.throws(() => validateResearch(report)); }
 });
@@ -113,6 +114,9 @@ test('partial jurisdiction attempts cannot claim a complete time window', () => 
   for (const change of [
     (report) => { report.coverage.search_attempts[0].lookback_period = 'all time'; },
     (report) => { report.coverage.search_attempts[0].documents_screened = -1; },
+    (report) => { report.coverage.search_attempts[0].historical_index_pages_checked = -1; },
+    (report) => { report.coverage.search_attempts[0].historical_index_errors = -1; },
+    (report) => { report.coverage.search_attempts[0].ocr_revalidation_pending = 3; },
     (report) => { report.coverage.search_attempts[0].private_note = 'not for publication'; },
     (report) => { report.coverage.search_attempts.push(report.coverage.search_attempts[0]); },
   ]) {

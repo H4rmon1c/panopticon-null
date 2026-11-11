@@ -154,14 +154,19 @@ function render(report) {
 try {
   const response = await fetch('./public/research-signals.json', { cache: 'no-store' });
   const report = await readBoundedResearchResponse(response);
-  summary.textContent = `${report.records.length.toLocaleString()} preliminary references · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · complete search coverage is not established`;
+  const ocrStatus = report.coverage.ocr_revalidation_pending === undefined ? 'OCR rechecks not recorded' :
+    `${report.coverage.ocr_revalidation_pending.toLocaleString()} older scans awaiting OCR recheck`;
+  summary.textContent = `${report.records.length.toLocaleString()} preliminary references · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
   if (jurisdiction) {
     const attempt = report.coverage.search_attempts?.find((item) => item.jurisdiction_ref === jurisdiction);
     scope.hidden = false;
     scope.textContent = attempt ?
       `Website discovery ${attempt.website_check === 'site_checked' ? 'reached the site' : 'was unavailable'} on ${attempt.checked_at.slice(0, 10)}. ` +
-        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} failed · ${attempt.documents_queued} queued · ` +
-        `${attempt.portal_pages_checked} portal query pages checked · ${attempt.agenda_meeting_pages_screened} agenda-platform meeting pages screened. ` +
+        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued · ` +
+        `${attempt.portal_pages_checked} portal query pages checked · ` +
+        `${attempt.historical_index_pages_checked === undefined ? 'historical index checks not recorded' : `${attempt.historical_index_pages_checked} historical index pages checked`} · ` +
+        `${attempt.historical_index_errors === undefined ? 'historical index failures not recorded' : `${attempt.historical_index_errors} historical index checks failed`} · ` +
+        `${attempt.agenda_meeting_pages_screened} agenda-platform meeting pages screened. ` +
         'These are partial source checks; the dates covered are not established.' :
       'No website discovery attempt is recorded for this jurisdiction. Its search coverage is not established.';
   }

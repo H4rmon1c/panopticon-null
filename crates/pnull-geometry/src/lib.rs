@@ -232,6 +232,32 @@ pub fn parse_ocr_tsv(
     image_width: u32,
     image_height: u32,
 ) -> Result<TextMap, GeometryError> {
+    parse_ocr_tsv_page(tsv, spec, image_width, image_height, spec.page_number)
+}
+
+/// Parse TSV produced from one rendered image, whose Tesseract page number is
+/// always 1, while retaining the original PDF page number in the text map.
+pub fn parse_single_image_ocr_tsv(
+    tsv: &str,
+    spec: &PageSpec,
+    image_width: u32,
+    image_height: u32,
+) -> Result<TextMap, GeometryError> {
+    parse_ocr_tsv_page(tsv, spec, image_width, image_height, 1)
+}
+
+fn parse_ocr_tsv_page(
+    tsv: &str,
+    spec: &PageSpec,
+    image_width: u32,
+    image_height: u32,
+    input_page: u32,
+) -> Result<TextMap, GeometryError> {
+    if image_width == 0 || image_height == 0 {
+        return Err(GeometryError::Malformed(
+            "empty OCR image dimensions".to_owned(),
+        ));
+    }
     let mut words = Vec::new();
     let mut lines = tsv.lines();
     // Header row.
@@ -253,6 +279,10 @@ pub fn parse_ocr_tsv(
     let i_text = idx("text")?;
     let i_level = idx("level")?;
     let i_page = idx("page_num")?;
+    let max_column = *[i_left, i_top, i_width, i_height, i_text, i_level, i_page]
+        .iter()
+        .max()
+        .expect("fixed nonempty column list");
 
     let scale_x = spec.page_width / f64::from(image_width);
     let scale_y = spec.page_height / f64::from(image_height);
@@ -262,15 +292,19 @@ pub fn parse_ocr_tsv(
             continue;
         }
         let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() <= i_text {
-            continue;
+        if fields.len() <= max_column {
+            return Err(GeometryError::Malformed("short OCR TSV row".to_owned()));
         }
-        let level: i64 = fields[i_level].parse().unwrap_or(0);
+        let level: i64 = fields[i_level]
+            .parse()
+            .map_err(|_| GeometryError::Malformed("invalid OCR TSV level".to_owned()))?;
         if level != 5 {
             continue; // only word-level rows
         }
-        let page: i64 = fields[i_page].parse().unwrap_or(1);
-        if page != i64::from(spec.page_number) {
+        let page: i64 = fields[i_page]
+            .parse()
+            .map_err(|_| GeometryError::Malformed("invalid OCR TSV page number".to_owned()))?;
+        if page != i64::from(input_page) {
             continue;
         }
         let text = fields[i_text].trim();
@@ -706,6 +740,34 @@ mod tests {
         assert!((map.words[0].rect.x_max - 120.0).abs() < 0.001);
         assert!((map.words[0].rect.y_max - 160.0).abs() < 0.001);
         assert!((map.words[0].rect.y_min - 136.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn single_image_ocr_uses_the_pdf_page_number_for_its_map() {
+        let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n5\t1\t1\t1\t1\t1\t10\t20\t50\t12\t95\tFlock\n";
+        let spec = PageSpec::new("evidence:e", 6, 400.0, 200.0, 0, "5.0", "src");
+        assert!(
+            parse_ocr_tsv(tsv, &spec, 200, 100)
+                .unwrap()
+                .words
+                .is_empty()
+        );
+        let map = parse_single_image_ocr_tsv(tsv, &spec, 200, 100).unwrap();
+        assert_eq!(map.page_number, 6);
+        assert_eq!(map.words.len(), 1);
+        assert_eq!(map.words[0].text, "Flock");
+        assert!((map.words[0].rect.x_min - 20.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn malformed_ocr_rows_fail_closed_instead_of_panicking_or_assuming_page_one() {
+        let header = "text\tlevel\tleft\ttop\twidth\theight\tconf\tpage_num\n";
+        let spec = PageSpec::new("evidence:e", 6, 400.0, 200.0, 0, "5.0", "src");
+        let short = format!("{header}Flock\t5\t10\n");
+        assert!(parse_single_image_ocr_tsv(&short, &spec, 200, 100).is_err());
+        let invalid_page = format!("{header}Flock\t5\t10\t20\t50\t12\t95\tbad\n");
+        assert!(parse_single_image_ocr_tsv(&invalid_page, &spec, 200, 100).is_err());
+        assert!(parse_single_image_ocr_tsv(&invalid_page, &spec, 0, 100).is_err());
     }
 
     #[test]

@@ -109,10 +109,12 @@ export function validateResearch(report) {
       !Array.isArray(report.records) || report.records.length > 50000 ||
       !onlyKeys(report.coverage, ['lookback_period', 'jurisdictions_with_mentions', 'matter_references',
         'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
-        'refresh_failures_preserving_prior_results', 'non_surveillance_mentions_withheld', 'omitted_failed_provenance']) ||
+        'refresh_failures_preserving_prior_results', 'non_surveillance_mentions_withheld', 'omitted_failed_provenance', 'ocr_revalidation_pending']) ||
       report.coverage.lookback_period !== null ||
       !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match']) ||
       !Object.values(report.coverage.document_screening).every(nonnegative) ||
+      (report.coverage.ocr_revalidation_pending !== undefined &&
+        (!nonnegative(report.coverage.ocr_revalidation_pending) || report.coverage.ocr_revalidation_pending > (report.coverage.document_screening.error ?? 0))) ||
       (report.coverage.agenda_portal_screening !== undefined &&
         (!onlyKeys(report.coverage.agenda_portal_screening, ['pending', 'error', 'matched', 'no_match']) ||
           !Object.values(report.coverage.agenda_portal_screening).every(nonnegative))) ||
@@ -132,12 +134,16 @@ export function validateResearch(report) {
     const places = new Set();
     for (const attempt of report.coverage.search_attempts) {
       if (!onlyKeys(attempt, ['jurisdiction_ref', 'checked_at', 'website_check', 'documents_screened', 'documents_failed',
-        'documents_queued', 'portal_pages_checked', 'agenda_meeting_pages_screened', 'lookback_period']) ||
+        'documents_queued', 'ocr_revalidation_pending', 'portal_pages_checked', 'historical_index_pages_checked', 'historical_index_errors', 'agenda_meeting_pages_screened', 'lookback_period']) ||
           !/^us-co-[a-z0-9-]{1,100}$/.test(attempt.jurisdiction_ref) || places.has(attempt.jurisdiction_ref) ||
           typeof attempt.checked_at !== 'string' || !Number.isFinite(Date.parse(attempt.checked_at)) ||
           !['site_checked', 'unavailable'].includes(attempt.website_check) || attempt.lookback_period !== null ||
           ![attempt.documents_screened, attempt.documents_failed, attempt.documents_queued, attempt.portal_pages_checked,
-            attempt.agenda_meeting_pages_screened].every(nonnegative)) throw new Error('Invalid research attempt');
+            attempt.agenda_meeting_pages_screened].every(nonnegative) ||
+          (attempt.historical_index_pages_checked !== undefined && !nonnegative(attempt.historical_index_pages_checked)) ||
+          (attempt.historical_index_errors !== undefined && !nonnegative(attempt.historical_index_errors)) ||
+          (attempt.ocr_revalidation_pending !== undefined && (!nonnegative(attempt.ocr_revalidation_pending) ||
+            attempt.ocr_revalidation_pending > attempt.documents_failed))) throw new Error('Invalid research attempt');
       places.add(attempt.jurisdiction_ref);
     }
   }

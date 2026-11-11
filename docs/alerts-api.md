@@ -61,9 +61,13 @@ Records include a stable source-based ID, exact capture URL, digest, locator,
 timestamp, and relevant terms. `lookback_period` is null; do not infer complete
 jurisdiction coverage from an empty result. `coverage.search_attempts` records
 the last website-discovery attempt and counts of completed, failed, and queued
-document screens and checked portal pages by jurisdiction. These are partial
+document screens and checked portal pages by jurisdiction.
+`historical_index_pages_checked` counts successfully fetched year/category
+indexes, and `historical_index_errors` counts failed checks. Neither establishes
+a complete historical lookback. These are partial
 operational counts, not an exhaustive search or a statement that no relevant
-record exists. OCR-derived text is labeled. This
+record exists. `ocr_revalidation_pending` is the subset of incomplete screens
+awaiting corrected per-page OCR; it is not an additional error count. OCR-derived text is labeled. This
 dataset is not automatically added to the verified alerts/feed and must not be
 treated as an authorized posting queue. Raw documents and receipts are kept in
 private research state and rechecked during export.
