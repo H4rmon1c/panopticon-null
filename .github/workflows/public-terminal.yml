@@ -46,6 +46,7 @@ jobs:
           python3 scripts/test-colorado-research.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs
+          node --test web/panopticon-terminal/scripts/test-littleton-portraits.mjs
       - name: Test public coverage accounting
         run: node --test web/panopticon-terminal/scripts/test-coverage-api.mjs
       - name: Test alerts API revisions and withdrawals

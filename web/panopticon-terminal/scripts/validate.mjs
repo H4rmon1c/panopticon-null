@@ -62,13 +62,32 @@ try {
       createHash("sha256").update(await readFile(page)).digest("hex") !== proof.page_fixture_sha256) {
     throw new Error("Arapahoe source page digest mismatch");
   }
+  const littleton = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/littleton-2023-report-proof.json"), "utf8"));
+  if (littleton.source_url !== "https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2023-littleton-reports/2023-02-feb-littleton-report.pdf" ||
+      littleton.source_page !== 3 || littleton.source_sha256 !== "34a8dc30a20a37c23179b122722175be6cf3c253c825009db6fbdeb4cff6ea7e" ||
+      littleton.page_fixture !== "fixtures/atlas/portrait-sources/littleton-2023-report-page.pdf" ||
+      littleton.page_fixture_sha256 !== "b6be37f13111fc566f28900396619154179a4dce635529b538c67fe1a83c6ada" ||
+      !Array.isArray(littleton.portraits) || littleton.portraits.length !== 7) {
+    throw new Error("invalid Littleton portrait source proof");
+  }
+  const littletonPage = join(repositoryRoot, littleton.page_fixture);
+  const littletonMeta = await lstat(littletonPage);
+  if (!littletonMeta.isFile() || littletonMeta.isSymbolicLink() || littletonMeta.size > 2_000_000 ||
+      createHash("sha256").update(await readFile(littletonPage)).digest("hex") !== littleton.page_fixture_sha256) {
+    throw new Error("Littleton source page digest mismatch");
+  }
   for (const record of research.records) for (const motion of record.actions ?? []) for (const vote of motion.votes) {
     if (vote.portrait?.source_kind !== "embedded_pdf") continue;
-    const source = proof.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
-    if (!source || record.jurisdiction_ref !== "us-co-county-08005" ||
+    const isLittleton = record.jurisdiction_ref === "us-co-place-0845255";
+    const selected = isLittleton ? littleton : proof;
+    const source = selected.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
+    if (!source || (!isLittleton && record.jurisdiction_ref !== "us-co-county-08005") ||
         vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||
-        vote.portrait.source_url !== proof.source_url || vote.portrait.source_document_sha256 !== proof.source_sha256 ||
-        vote.portrait.source_page !== 7) throw new Error("Arapahoe portrait identity does not match its source proof");
+        vote.portrait.source_url !== selected.source_url || vote.portrait.source_document_sha256 !== selected.source_sha256 ||
+        vote.portrait.source_page !== selected.source_page ||
+        (isLittleton && vote.portrait.embedded_original_sha256 !== source.original_sha256)) {
+      throw new Error("Embedded portrait identity does not match its source proof");
+    }
   }
   for (const [path, portrait] of portraits) {
     const meta = await lstat(join(root, path));

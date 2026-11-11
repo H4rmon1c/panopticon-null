@@ -18,7 +18,8 @@ export function matchesResearchQuery(item, value) {
 
 function validatePortrait(portrait, context = null) {
   if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date',
-      'source_kind', 'source_document_sha256', 'source_page', 'embedded_image_index']) ||
+      'source_kind', 'source_document_sha256', 'source_page', 'embedded_image_index',
+      'embedded_original_sha256', 'image_transform']) ||
       !digest(portrait.sha256) ||
       !new RegExp(`^\\./research-portraits/${portrait.sha256}\\.(?:jpg|png|webp)$`).test(portrait.src) ||
       portrait.portrait_date !== 'not_established' || !safeText(portrait.caption, 250)) throw new Error('Invalid research portrait');
@@ -32,6 +33,29 @@ function validatePortrait(portrait, context = null) {
     throw new Error('Unsafe portrait source URL');
   }
   if (portrait.source_kind === 'embedded_pdf') {
+    if (context?.client === 'littletongov' && context.jurisdiction === 'us-co-place-0845255') {
+      const identities = new Map([
+        [333, ['Kyle Schlachter', 4, '4c8e72d6b9a00294f00614e0d030fc82623036e02d15d0afb203ed01c9f72d13', '0ae1bb1e3a43bf42fc30b6c05f11e718db02a7cb0f214888b8f61f3ad50b49b1']],
+        [434, ['Stephen Barr', 8, 'fb3d52ef289ce7f52fd4b64a7d1783357cbb25e516fd0c7a57a9a95be0414d7e', '3c58613ff481ebfbe0009eab2c7642c2c28deac56104643532320878316966ca']],
+        [352, ['Patrick Driscoll', 6, '11953d17e0c19a435d314b2780e677d31195e673cb313d4009fb534861561347', '2909cc283b189e99e31eb9b6e1de68d416910b1f00c7039cd1f3e40af1e9b750']],
+        [228, ['Pam Grove', 5, '85f19484eba25681fa2d6bc75ba784c7dbbc330f614ee205bd99179e71063620', '9c8ae4afeecfd4a01d66e582cffe3ec5b7eb59bba13aace90455df181f97330d']],
+        [406, ['Kelly Milliman', 2, 'be0781d7095f3e6aa71984bb76765475136adf540b8c19db323c119a992f02b7', '889170a57533c8ac0339b47fbbcdca6c787667f79e1ddcad31be3c00f9b21224']],
+        [433, ['Gretchen Rydin', 7, 'e48e2401ecefc1c3c875c40681d70c595c42913bc70cb189895faaf0e9c9a628', 'b3bd9b0e108b7a84e4d261e2c0a1547212031f6314a3ec71e0e41899682e88ba']],
+        [186, ['Jerry Valdes', 3, '5a6bda61589fcdfb906111edf0a9f5ebad7dbd67f6cad9c0f8ed38483253ef58', '97f2a02aa35185be8d8c204ca849047324cc5f917442a53aef39c19f1abc3c1a']],
+      ]);
+      const expected = identities.get(context.personId);
+      if (!expected || context.name !== expected[0] || portrait.embedded_image_index !== expected[1] ||
+          portrait.sha256 !== expected[2] || portrait.embedded_original_sha256 !== expected[3] ||
+          portrait.src !== `./research-portraits/${expected[2]}.png` ||
+          portrait.image_transform !== 'lossless_png_from_jpeg2000' ||
+          portrait.caption !== `2023 city council; source labels this portrait ${expected[0]}.` ||
+          portrait.image_url !== undefined || portrait.source_page !== 3 ||
+          portrait.source_document_sha256 !== '34a8dc30a20a37c23179b122722175be6cf3c253c825009db6fbdeb4cff6ea7e' ||
+          portrait.source_url !== 'https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2023-littleton-reports/2023-02-feb-littleton-report.pdf') {
+        throw new Error('Embedded portrait does not match the recorded voter and source');
+      }
+      return;
+    }
     const identities = new Map([
       [513, ['Carrie Warren-Gully', 6, '84202caa2919b815df89984e12ad15f4de4289a35b74f048f54f0e68f0954174', 'Carrie Warren Gully']],
       [225, ['Nancy Sharpe', 7, '6555e2248f94d78cd16f6f4688f61c69da5029755f3da2ed9a982f6639588a8e', 'Nancy N. Sharpe']],
@@ -44,6 +68,8 @@ function validatePortrait(portrait, context = null) {
         context.name !== expected[0] || portrait.embedded_image_index !== expected[1] || portrait.sha256 !== expected[2] ||
         portrait.caption !== `2022 county board; source labels this portrait ${expected[3]}.` ||
         portrait.image_url !== undefined || portrait.source_page !== 7 ||
+        portrait.embedded_original_sha256 !== undefined || portrait.image_transform !== undefined ||
+        portrait.src !== `./research-portraits/${expected[2]}.jpg` ||
         portrait.source_document_sha256 !== 'dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43' ||
         portrait.source_url !== 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf') {
       throw new Error('Embedded portrait does not match the recorded voter and source');
@@ -51,7 +77,8 @@ function validatePortrait(portrait, context = null) {
     return;
   }
   if (portrait.source_kind !== undefined || portrait.source_document_sha256 !== undefined ||
-      portrait.source_page !== undefined || portrait.embedded_image_index !== undefined) throw new Error('Unknown portrait source kind');
+      portrait.source_page !== undefined || portrait.embedded_image_index !== undefined ||
+      portrait.embedded_original_sha256 !== undefined || portrait.image_transform !== undefined) throw new Error('Unknown portrait source kind');
   let image;
   try { image = new URL(portrait.image_url); }
   catch { throw new Error('Invalid portrait image URL'); }
