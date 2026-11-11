@@ -1896,10 +1896,42 @@ class ResearchTests(unittest.TestCase):
                 receipts = module.observation_keys(root)
                 vote = {'name': 'Kathy Henson', 'person_id': 796}
                 motion = {'body': 'Urban Renewal Authority'}
-                result = module.henson_authority_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, vote, root / 'assets')
+                result = module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, vote, root / 'assets')
                 self.assertEqual(result['sha256'], module.sha(image))
-                self.assertIsNone(module.henson_authority_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', {'body': 'City Council'}, vote, root / 'assets'))
-                self.assertIsNone(module.henson_authority_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, {**vote, 'person_id': 1}, root / 'assets'))
+                self.assertIsNone(module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', {'body': 'City Council'}, vote, root / 'assets'))
+                self.assertIsNone(module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, {**vote, 'person_id': 1}, root / 'assets'))
+            finally:
+                db.close()
+
+    def test_school_board_member_portrait_requires_the_exact_authority_and_portal_person(self):
+        image_url = 'https://www.adams14.org/uploaded/faculty/James_Amador_Headshot_Adams_14_260x320.png'
+        body = (b'<div class="fsConstituentProfile"><img src="/uploaded/faculty/James_Amador_Headshot_Adams_14_260x320.png">'
+                b'<h3 class="fsFullName">James Amador</h3><div>Board of Education Treasurer</div>'
+                b'<div>Commerce City Urban Renewal Authority (CCURA)</div></div>')
+        image = b'\x89PNG\r\n\x1a\nfixture'
+        self.assertEqual(module.adams14_amador_image(body)[0], image_url)
+        self.assertIsNone(module.adams14_amador_image(body.replace(b'Urban Renewal Authority', b'Other Agency')))
+        self.assertIsNone(module.adams14_amador_image(body.replace(b'James Amador</h3>', b'Other Person</h3>')))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            page_obs, image_obs = receipt(module.ADAMS14_BOARD_PROFILE, body), receipt(image_url, image)
+            page_obs['content_type'] = 'text/html'
+            try:
+                with db:
+                    db.execute('insert into discovery values (?,?,?,?)',
+                               ('us-co-school-0801950', 'https://www.adams14.org/', module.utcnow(), '{}'))
+                with patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'html_page', return_value=(body, [(page_obs, body)])), \
+                     patch.object(module, 'get', return_value=[(image_obs, image)]):
+                    self.assertEqual(module.collect_adams14_amador(root, db, {'James Amador'}, module.DownloadBudget(10_000_000)), 1)
+                receipts = module.observation_keys(root)
+                vote = {'name': 'James Amador', 'person_id': 668}
+                motion = {'body': 'Urban Renewal Authority'}
+                portrait = module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, vote, root / 'assets')
+                self.assertEqual(portrait['sha256'], module.sha(image))
+                self.assertIsNone(module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', {'body': 'City Council'}, vote, root / 'assets'))
+                self.assertIsNone(module.authority_external_portrait(root, db, receipts, 'us-co-place-0816495', 'commerce', motion, {**vote, 'person_id': 669}, root / 'assets'))
             finally:
                 db.close()
 

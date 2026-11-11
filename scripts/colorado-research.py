@@ -2462,6 +2462,94 @@ def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
 DOUGLAS_GALLERY = 'https://www.douglasco.gov/board-county-commissioners/current-and-former-commissioners/'
 ARAPAHOE_FIELDS_PROFILE = 'https://files.arapahoeco.gov/your_county/board_of_county_commissioners/commissioner_rhonda_fields.php'
 ADAMS_HENSON_PROFILE = 'https://adamscountyco.gov/our-county/elected-officials/board-of-county-commissioners/commissioner-kathy-henson-district-2/'
+ADAMS14_BOARD_PROFILE = 'https://www.adams14.org/about/boe'
+
+
+class Adams14Board(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.hidden = 0
+        self.current = None
+        self.cards = []
+        self.name = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = (attrs.get('class') or '').split()
+        if tag == 'div':
+            if self.depth:
+                self.depth += 1
+            elif 'fsConstituentProfile' in classes and len(self.cards) < 100:
+                self.depth = 1
+                self.current = {'names': [], 'text': [], 'images': []}
+        if self.depth and tag in ('script', 'style'):
+            self.hidden += 1
+        if self.depth and not self.hidden and tag == 'img' and attrs.get('src'):
+            self.current['images'].append(attrs['src'])
+        if self.depth and not self.hidden and tag == 'h3' and 'fsFullName' in classes:
+            self.name = ''
+
+    def handle_endtag(self, tag):
+        if self.depth and tag in ('script', 'style') and self.hidden:
+            self.hidden -= 1
+        if self.depth and tag == 'h3' and self.name is not None:
+            self.current['names'].append(' '.join(self.name.split()))
+            self.name = None
+        if tag == 'div' and self.depth:
+            self.depth -= 1
+            if not self.depth:
+                self.cards.append(self.current)
+                self.current = None
+
+    def handle_data(self, data):
+        if self.depth and not self.hidden:
+            if self.name is not None:
+                self.name += data[:500]
+            if data.strip() and len(self.current['text']) < 1000:
+                self.current['text'].append(' '.join(data.split()))
+
+
+def adams14_amador_image(body):
+    parser = Adams14Board()
+    parser.feed(body.decode('utf8', 'replace'))
+    matches = []
+    for card in parser.cards:
+        if (card['names'] != ['James Amador'] or 'Board of Education Treasurer' not in card['text']
+                or 'Commerce City Urban Renewal Authority (CCURA)' not in card['text']):
+            continue
+        images = [urljoin(ADAMS14_BOARD_PROFILE, src) for src in card['images'] if re.fullmatch(
+            r'/uploaded/faculty/James_Amador_Headshot_Adams_14_260x320\.png', src)]
+        if len(images) == 1:
+            matches.append((images[0], 'James Amador — Adams 14 Board; Commerce City Urban Renewal Authority'))
+    return matches[0] if len(matches) == 1 else None
+
+
+def collect_adams14_amador(data_dir, db, people, budget):
+    if 'James Amador' not in people:
+        return 0
+    host = 'www.adams14.org'
+    rules, observations = get_robots(host, budget=budget)
+    archive(data_dir, observations)
+    page, observations = html_page(ADAMS14_BOARD_PROFILE, host, rules, budget)
+    archive(data_dir, observations)
+    match = adams14_amador_image(page)
+    if not match or not allowed(rules, match[0]):
+        return 0
+    image_url, caption = match
+    observations = get(image_url, {host}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
+    archive(data_dir, observations)
+    image_receipt, image = observations[-1]
+    if image_receipt['status'] != 200 or not image.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 0
+    info = {'kind': 'adams14_amador_profile', 'source_url': ADAMS14_BOARD_PROFILE,
+            'source_sha256': sha(page), 'image_url': image_url, 'image_sha256': sha(image),
+            'caption': caption, 'extension': 'png', 'image_receipt': image_receipt}
+    with db:
+        db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)',
+                   ('us-co-school-0801950', 'James Amador', json.dumps(info)))
+    people.discard('James Amador')
+    return 1
 
 
 class AdamsContact(HTMLParser):
@@ -2782,12 +2870,13 @@ def collect_portraits(data_dir, db, limit):
                 except (OSError, UnicodeError, ValueError, RuntimeError):
                     pass
             if ref == 'us-co-place-0816495':
-                try:
-                    stored += collect_adams_henson(data_dir, db, people, budget)
-                except BudgetExhausted:
-                    raise
-                except (OSError, UnicodeError, ValueError, RuntimeError):
-                    pass
+                for collect in (collect_adams_henson, collect_adams14_amador):
+                    try:
+                        stored += collect(data_dir, db, people, budget)
+                    except BudgetExhausted:
+                        raise
+                    except (OSError, UnicodeError, ValueError, RuntimeError):
+                        continue
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
@@ -2878,6 +2967,10 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
         if (ref != 'us-co-county-08001' or name != 'Kathy Henson' or page_url != ADAMS_HENSON_PROFILE
                 or adams_henson_image(page) != (image_url, info['caption'])):
             raise ValueError('county agency profile does not bind the person and image')
+    elif info.get('kind') == 'adams14_amador_profile':
+        if (ref != 'us-co-school-0801950' or name != 'James Amador' or page_url != ADAMS14_BOARD_PROFILE
+                or adams14_amador_image(page) != (image_url, info['caption'])):
+            raise ValueError('school board agency profile does not bind the person and image')
     else:
         _, base = page_links(page, page_url)
         if not any(resolve_page_link(page_url, base, src) == image_url and alt == info['caption']
@@ -2924,11 +3017,13 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
             'portrait_date': 'not_established'}
 
 
-def henson_authority_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir):
-    if (ref != 'us-co-place-0816495' or client != 'commerce' or motion.get('body') != 'Urban Renewal Authority'
-            or vote.get('person_id') != 796 or vote.get('name') != 'Kathy Henson'):
+def authority_external_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir):
+    if ref != 'us-co-place-0816495' or client != 'commerce' or motion.get('body') != 'Urban Renewal Authority':
         return None
-    return checked_portrait(data_dir, db, receipts, 'us-co-county-08001', 'Kathy Henson', assets_dir)
+    identities = {(796, 'Kathy Henson'): 'us-co-county-08001', (668, 'James Amador'): 'us-co-school-0801950'}
+    name = vote.get('name')
+    source_ref = identities.get((vote.get('person_id'), name))
+    return checked_portrait(data_dir, db, receipts, source_ref, name, assets_dir) if source_ref else None
 
 
 def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
@@ -3425,7 +3520,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                             if not portrait:
                                 portrait = denver_2020_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if not portrait:
-                                portrait = henson_authority_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir)
+                                portrait = authority_external_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
