@@ -6,6 +6,12 @@ Panopticon Null is lawful, nonviolent, evidence infrastructure for dismantling t
 
 > The machinery of mass surveillance depends on invisibility. This project records what is purchased, what is promised, what changes, and who authorized it.
 
+## Start with a documented decision
+
+[Commerce City: two Flock votes, 7–2 each](docs/launch/commerce-city-2026.md) is a short evidence card with the council's final minutes, separate roll calls, the $608,900 expansion appropriation, and all nine city-published original portraits. It states the unresolved signature, spending, and deployment questions. The [manual X draft](docs/launch/commerce-city-x-draft.md) links to that public GitHub card while the planned website is offline.
+
+The current Colorado atlas static release also contains Colorado Springs and Denver decisions. See the [four-case release](docs/four-case-release.md) and [statewide coverage inventory](docs/colorado-coverage.md) for the exact publication boundary.
+
 Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It builds a verifiable institutional money trail — solicitation → amendment → award → contract → expenditure — connecting official records only when the evidence supports the connection. Missing records, inaccessible portals, ambiguous vendor names, contradictory amounts, and incomplete coverage remain visible as explicit evidence gaps.
 
 Version 0.0.4 ("The Public Ledger") turns the procurement chain public. Changes to official records become alerts; the chain is published to a static site and Atom feed; and the records-request loop closes with a local, append-only CORA request ledger — all behind the existing human review and privacy gates.

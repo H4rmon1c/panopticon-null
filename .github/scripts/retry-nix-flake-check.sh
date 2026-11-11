@@ -37,6 +37,7 @@ is_transient_download_failure() {
         -e "(timed out|timeout|connection (reset|refused|closed))" \
         -e "error 5[0-9][0-9]" \
         -e "while fetching.*\.crate" \
+        "$1" \
         || return 1
 }
 
@@ -48,8 +49,9 @@ while :; do
         rm -f "$log"
         echo "nix flake check succeeded on attempt $attempt."
         exit 0
+    else
+        status=$?
     fi
-    status=$?
     if ! is_transient_download_failure "$log"; then
         # A genuine source-code / evaluation / build failure: surface it now.
         cat "$log"
