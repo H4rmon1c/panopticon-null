@@ -2461,6 +2461,92 @@ def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
 
 DOUGLAS_GALLERY = 'https://www.douglasco.gov/board-county-commissioners/current-and-former-commissioners/'
 ARAPAHOE_FIELDS_PROFILE = 'https://files.arapahoeco.gov/your_county/board_of_county_commissioners/commissioner_rhonda_fields.php'
+ADAMS_HENSON_PROFILE = 'https://adamscountyco.gov/our-county/elected-officials/board-of-county-commissioners/commissioner-kathy-henson-district-2/'
+
+
+class AdamsContact(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.cards = 0
+        self.headings = []
+        self.names = []
+        self.images = []
+        self.current = None
+        self.text = ''
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'div':
+            if self.depth:
+                self.depth += 1
+            elif attrs.get('data-component') == 'card_contact':
+                self.depth = 1
+                self.cards += 1
+        if tag == 'img' and self.depth and attrs.get('src'):
+            self.images.append(attrs['src'])
+        if self.current is None and (tag == 'h1' or (tag == 'h3' and self.depth)):
+            self.current, self.text = tag, ''
+
+    def handle_endtag(self, tag):
+        if tag == self.current:
+            (self.headings if tag == 'h1' else self.names).append(' '.join(self.text.split()))
+            self.current = None
+        if tag == 'div' and self.depth:
+            self.depth -= 1
+
+    def handle_data(self, data):
+        if self.current:
+            self.text += data[:500]
+
+
+def adams_henson_image(body):
+    parser = AdamsContact()
+    parser.feed(body.decode('utf8', 'replace'))
+    if (parser.cards != 1 or parser.headings != ['Commissioner Kathy Henson, District 2']
+            or parser.names != ['Kathy Henson']
+            or 'Commerce City Urban Renewal Authority' not in visible_text(body)):
+        return None
+    images = [url for url in parser.images if re.fullmatch(
+        r'https://adamscountyco\.gov/wp-content/uploads/[0-9]{4}/[0-9]{2}/[A-Za-z0-9._-]+\.png', url)]
+    if len(images) != 1:
+        return None
+    return images[0], 'Kathy Henson — Adams County Commissioner; Commerce City Urban Renewal Authority'
+
+
+def collect_adams_henson(data_dir, db, people, budget):
+    if 'Kathy Henson' not in people:
+        return 0
+    host = 'adamscountyco.gov'
+    rules, observations = get_robots(host, budget=budget)
+    archive(data_dir, observations)
+    page, observations = html_page(ADAMS_HENSON_PROFILE, host, rules, budget)
+    archive(data_dir, observations)
+    match = adams_henson_image(page)
+    if not match or not allowed(rules, match[0]):
+        return 0
+    image_url, caption = match
+    observations = get(image_url, {host}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
+    archive(data_dir, observations)
+    image_receipt, image = observations[-1]
+    if image_receipt['status'] != 200:
+        return 0
+    if image.startswith(b'RIFF') and image[8:12] == b'WEBP':
+        extension = 'webp'
+    elif image.startswith(b'\x89PNG\r\n\x1a\n'):
+        extension = 'png'
+    elif image.startswith(b'\xff\xd8\xff'):
+        extension = 'jpg'
+    else:
+        return 0
+    info = {'kind': 'adams_henson_profile', 'source_url': ADAMS_HENSON_PROFILE,
+            'source_sha256': sha(page), 'image_url': image_url, 'image_sha256': sha(image),
+            'caption': caption, 'extension': extension, 'image_receipt': image_receipt}
+    with db:
+        db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)',
+                   ('us-co-county-08001', 'Kathy Henson', json.dumps(info)))
+    people.discard('Kathy Henson')
+    return 1
 
 
 class FieldsProfile(HTMLParser):
@@ -2695,6 +2781,13 @@ def collect_portraits(data_dir, db, limit):
                     raise
                 except (OSError, UnicodeError, ValueError, RuntimeError):
                     pass
+            if ref == 'us-co-place-0816495':
+                try:
+                    stored += collect_adams_henson(data_dir, db, people, budget)
+                except BudgetExhausted:
+                    raise
+                except (OSError, UnicodeError, ValueError, RuntimeError):
+                    pass
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
@@ -2781,6 +2874,10 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
         if (ref != 'us-co-county-08005' or name != 'Rhonda Fields' or page_url != ARAPAHOE_FIELDS_PROFILE
                 or arapahoe_fields_image(page) != (image_url, info['caption'])):
             raise ValueError('county profile does not bind the person and image')
+    elif info.get('kind') == 'adams_henson_profile':
+        if (ref != 'us-co-county-08001' or name != 'Kathy Henson' or page_url != ADAMS_HENSON_PROFILE
+                or adams_henson_image(page) != (image_url, info['caption'])):
+            raise ValueError('county agency profile does not bind the person and image')
     else:
         _, base = page_links(page, page_url)
         if not any(resolve_page_link(page_url, base, src) == image_url and alt == info['caption']
@@ -2825,6 +2922,13 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
     return {'src': f'./research-portraits/{image_digest}.{extension}', 'sha256': image_digest,
             'source_url': page_url, 'image_url': image_url, 'caption': info['caption'],
             'portrait_date': 'not_established'}
+
+
+def henson_authority_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir):
+    if (ref != 'us-co-place-0816495' or client != 'commerce' or motion.get('body') != 'Urban Renewal Authority'
+            or vote.get('person_id') != 796 or vote.get('name') != 'Kathy Henson'):
+        return None
+    return checked_portrait(data_dir, db, receipts, 'us-co-county-08001', 'Kathy Henson', assets_dir)
 
 
 def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):
@@ -3320,6 +3424,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                                 portrait = denver_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
                             if not portrait:
                                 portrait = denver_2020_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir)
+                            if not portrait:
+                                portrait = henson_authority_portrait(data_dir, db, receipts, ref, client, motion, vote, assets_dir)
                             if portrait:
                                 vote['portrait'] = portrait
                         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
