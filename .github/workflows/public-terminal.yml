@@ -49,6 +49,8 @@ jobs:
           python3 scripts/test-colorado-cisc-2018-members.py
           python3 scripts/test-colorado-county-root-recon.py
           python3 scripts/test-colorado-large-pdf-private.py
+          python3 scripts/test-private-ocr-backlog.py
+          python3 scripts/test-private-research-page-paths.py
           python3 scripts/test-colorado-local-source-capture.py
           python3 scripts/test-colorado-district-tenants.py
           python3 scripts/test-colorado-tenant-followup.py

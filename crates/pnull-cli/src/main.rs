@@ -394,6 +394,19 @@ enum SourceCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Experimental private single-page native-text and forced-OCR extraction.
+    ScreenResearchPage {
+        #[arg(long)]
+        digest: String,
+        #[arg(long)]
+        source_url: String,
+        #[arg(long)]
+        jurisdiction_ref: String,
+        #[arg(long)]
+        retrieved_at: String,
+        #[arg(long)]
+        page: u32,
+    },
     /// Sandboxed screening of a private discovery PDF; never publishes a claim.
     ScreenResearchPdf {
         #[arg(long)]
@@ -644,6 +657,23 @@ fn run(cli: Cli) -> Result<()> {
             max_fetches,
             refresh_after_seconds,
             dry_run,
+        ),
+        Command::Source {
+            command:
+                SourceCommand::ScreenResearchPage {
+                    digest,
+                    source_url,
+                    jurisdiction_ref,
+                    retrieved_at,
+                    page,
+                },
+        } => research_screen::screen_page(
+            &cli.data_dir,
+            &digest,
+            &source_url,
+            &jurisdiction_ref,
+            &retrieved_at,
+            page,
         ),
         Command::Source {
             command:

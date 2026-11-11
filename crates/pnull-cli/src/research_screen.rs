@@ -166,6 +166,136 @@ pub(super) fn screen_pdf(
     Ok(())
 }
 
+fn validate_cgroup_limits(memory: &str, swap: &str, pids: &str, cpu: &str) -> Result<()> {
+    let memory: u64 = memory
+        .trim()
+        .parse()
+        .context("bounded cgroup memory.max required")?;
+    let pids: u64 = pids
+        .trim()
+        .parse()
+        .context("bounded cgroup pids.max required")?;
+    let values = cpu
+        .split_whitespace()
+        .map(str::parse::<u64>)
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("bounded cgroup cpu.max required")?;
+    if memory == 0
+        || memory > 512 * 1024 * 1024
+        || swap.trim() != "0"
+        || pids == 0
+        || pids > 16
+        || values.len() != 2
+        || values[0] == 0
+        || values[1] == 0
+        || values[0] > values[1]
+    {
+        bail!("private page OCR requires memory <=512 MiB, zero swap, <=16 tasks, and <=1 CPU");
+    }
+    Ok(())
+}
+
+fn require_bounded_cgroup() -> Result<()> {
+    use std::path::Component;
+    let membership = fs::read_to_string("/proc/self/cgroup")?;
+    let relative = membership
+        .lines()
+        .find_map(|line| line.strip_prefix("0::/"))
+        .context("cgroup v2 membership required")?;
+    let relative = Path::new(relative);
+    if !relative
+        .components()
+        .all(|part| matches!(part, Component::Normal(_)))
+    {
+        bail!("invalid cgroup path");
+    }
+    let dir = Path::new("/sys/fs/cgroup").join(relative);
+    validate_cgroup_limits(
+        &fs::read_to_string(dir.join("memory.max"))?,
+        &fs::read_to_string(dir.join("memory.swap.max"))?,
+        &fs::read_to_string(dir.join("pids.max"))?,
+        &fs::read_to_string(dir.join("cpu.max"))?,
+    )
+}
+
+fn require_bounded_scratch() -> Result<()> {
+    if std::env::temp_dir() != Path::new("/tmp") {
+        bail!("private page OCR requires /tmp as its isolated scratch directory");
+    }
+    let info = fs::read_to_string("/proc/self/mountinfo")?;
+    let entry = info
+        .lines()
+        .filter_map(|line| {
+            let (mount, fsinfo) = line.split_once(" - ")?;
+            if mount.split_whitespace().nth(4)? != "/tmp" {
+                return None;
+            }
+            let mut parts = fsinfo.split_whitespace();
+            if parts.next()? != "tmpfs" {
+                return Some(None);
+            }
+            let _source = parts.next()?;
+            let options = parts.next()?;
+            Some(
+                options
+                    .split(',')
+                    .find_map(|option| option.strip_prefix("size=")),
+            )
+        })
+        .next_back()
+        .flatten()
+        .context("bounded tmpfs mounted at /tmp required")?;
+    let (digits, multiplier) = if let Some(value) = entry.strip_suffix('k') {
+        (value, 1024u64)
+    } else if let Some(value) = entry.strip_suffix('m') {
+        (value, 1024u64 * 1024)
+    } else {
+        (entry, 1u64)
+    };
+    let size = digits
+        .parse::<u64>()?
+        .checked_mul(multiplier)
+        .context("tmpfs size overflow")?;
+    if size == 0 || size > 128 * 1024 * 1024 {
+        bail!("private page OCR tmpfs must be at most 128 MiB");
+    }
+    Ok(())
+}
+
+/// One isolated page; output is private and cannot be consumed as a release.
+pub(super) fn screen_page(
+    data_dir: &Path,
+    digest: &str,
+    source_url: &str,
+    jurisdiction_ref: &str,
+    retrieved_at: &str,
+    page: u32,
+) -> Result<()> {
+    require_bounded_cgroup()?;
+    require_bounded_scratch()?;
+    let bytes = read_input(data_dir, digest, source_url, jurisdiction_ref, retrieved_at)?;
+    let mut sandbox_config = pnull_ingest::ExtractionSandboxConfig::defaults();
+    sandbox_config.page_mode = true;
+    let sandbox =
+        RealSandbox::new(sandbox_config).map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let mut tracker = Tracker::new(Budgets::defaults());
+    let (pages, native_text, ocr_text) =
+        pnull_ingest::private_research_page(&sandbox, &mut tracker, &bytes, page)
+            .map_err(|error| anyhow::anyhow!(error))?;
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "state": "private_provisional_page",
+            "notice": "Native text and OCR attempted; OCR is imperfect and this is not publication or a no-match conclusion.",
+            "document_sha256": digest, "source_url": source_url, "jurisdiction_ref": jurisdiction_ref,
+            "retrieved_at": retrieved_at, "page": page, "page_count": pages,
+            "native_text": native_text, "ocr_text": ocr_text,
+            "method": "pnull-research-page-v1; poppler-pdftotext-layout; pdftoppm-200dpi-4000max; tesseract-eng-tsv"
+        }))?
+    );
+    Ok(())
+}
+
 fn preserve_extraction(data_dir: &Path, text: &str) -> Result<String> {
     let text_digest = sha256_hex(text.as_bytes());
     let extracted = data_dir.join("extracted");
@@ -204,7 +334,23 @@ fn preserve_extraction(data_dir: &Path, text: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_jurisdiction_ref;
+    use super::{valid_jurisdiction_ref, validate_cgroup_limits};
+
+    #[test]
+    fn private_page_rejects_unbounded_cgroup_settings() {
+        assert!(validate_cgroup_limits("536870912", "0", "16", "100000 100000").is_ok());
+        for (memory, swap, pids, cpu) in [
+            ("max", "0", "16", "100000 100000"),
+            ("536870913", "0", "16", "100000 100000"),
+            ("536870912", "max", "16", "100000 100000"),
+            ("536870912", "0", "max", "100000 100000"),
+            ("536870912", "0", "17", "100000 100000"),
+            ("536870912", "0", "16", "max 100000"),
+            ("536870912", "0", "16", "200000 100000"),
+        ] {
+            assert!(validate_cgroup_limits(memory, swap, pids, cpu).is_err());
+        }
+    }
 
     #[test]
     fn accepts_only_five_digit_dola_district_identifiers() {
