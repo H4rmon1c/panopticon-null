@@ -44,6 +44,7 @@ jobs:
       - name: Test preliminary research provenance and public API
         run: |
           python3 scripts/test-colorado-research.py
+          python3 scripts/test-colorado-official-context.py
           python3 scripts/test-colorado-local-source-capture.py
           python3 scripts/test-colorado-district-tenants.py
           python3 scripts/test-colorado-tenant-followup.py

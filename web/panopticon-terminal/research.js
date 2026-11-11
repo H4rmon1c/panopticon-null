@@ -34,7 +34,7 @@ function render(report) {
   for (const item of matches.slice(0, 100)) {
     const card = node('article', 'card');
     card.id = item.id;
-    card.append(node('p', 'label', 'PRELIMINARY SOURCE REFERENCE'));
+    card.append(node('p', 'label', item.kind === 'official_page_context' ? (item.context_state === 'withdrawn' ? 'CONTEXT WITHDRAWN · NO DECISION ESTABLISHED' : 'OFFICIAL AGENCY CONTEXT · NO DECISION ESTABLISHED') : 'PRELIMINARY SOURCE REFERENCE'));
     card.append(node('h2', '', item.jurisdiction));
     if (item.file) card.append(node('p', 'file', item.file));
     card.append(node('p', 'title', item.title || 'A relevant term was found in this source.'));
@@ -149,7 +149,8 @@ function render(report) {
       card.append(people);
     }
     const hasRecordedVotes = (item.actions ?? []).some((motion) => motion.votes.length > 0);
-    card.append(node('p', 'note', hasRecordedVotes
+    card.append(node('p', 'note', item.kind === 'official_page_context'
+      ? (item.context_state === 'withdrawn' ? 'The captured agency page changed and no longer matches our validation. No approval or individual vote was established.' : 'This agency page describes technology. It does not establish an approval decision, contract, or individual vote.') : hasRecordedVotes
       ? 'Recorded votes are shown with their scope above. A specific contract approval or deployment is not yet established.'
       : 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
@@ -157,7 +158,7 @@ function render(report) {
       card.append(node('p', 'meta', 'The government website links this meeting document; the responsible public body is not established.'));
     }
     const sourceLabel = item.kind === 'meeting_document' ? `Open live ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
-      item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open live source query ↗';
+      item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : item.kind === 'official_page_context' ? 'Open official agency page ↗' : 'Open live source query ↗';
     card.append(external(item.source_url, sourceLabel));
     card.append(node('p', 'meta', 'The live source may have changed since capture; the recorded digest is below.'));
     if (item.capture_adjustment) {
@@ -200,7 +201,9 @@ try {
   const report = await readBoundedResearchResponse(response);
   const ocrStatus = report.coverage.ocr_revalidation_pending === undefined ? 'OCR rechecks not recorded' :
     `${report.coverage.ocr_revalidation_pending.toLocaleString()} older scans awaiting OCR recheck`;
-  summary.textContent = `${report.records.length.toLocaleString()} preliminary references · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
+  const activeReferences = report.records.filter((item) => item.context_state !== 'withdrawn').length;
+  const withdrawnContexts = report.records.length - activeReferences;
+  summary.textContent = `${activeReferences.toLocaleString()} preliminary references${withdrawnContexts ? ` · ${withdrawnContexts} withdrawn context${withdrawnContexts === 1 ? '' : 's'}` : ''} · ${report.coverage.jurisdictions_with_mentions} jurisdictions · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
   if (jurisdiction) {
     const attempt = report.coverage.search_attempts?.find((item) => item.jurisdiction_ref === jurisdiction);
     scope.hidden = false;

@@ -223,7 +223,7 @@ export function validateResearch(report) {
       report.schema_version !== 'pnull-research-v1' || report.state !== 'preliminary' ||
       !Array.isArray(report.records) || report.records.length > 50000 ||
       !onlyKeys(report.coverage, ['lookback_period', 'jurisdictions_with_mentions', 'matter_references',
-        'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
+        'document_references', 'agenda_portal_references', 'official_page_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
         'refresh_failures_preserving_prior_results', 'non_surveillance_mentions_withheld', 'omitted_failed_provenance', 'ocr_revalidation_pending']) ||
       report.coverage.lookback_period !== null ||
       !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match', 'redirected']) ||
@@ -267,9 +267,9 @@ export function validateResearch(report) {
     if (!onlyKeys(record, ['id', 'kind', 'confidence', 'jurisdiction_ref', 'jurisdiction', 'file', 'title', 'signals',
       'source_status', 'source_url', 'matter_url', 'source_sha256', 'locator', 'captured_at', 'last_screened_at',
       'people_context', 'historical', 'ocr', 'actions', 'document_format',
-      'capture_adjustment', 'indexed_source_url', 'source_index_url', 'document_highlights', 'springs_source_chain']) ||
+      'capture_adjustment', 'indexed_source_url', 'source_index_url', 'document_highlights', 'springs_source_chain', 'context_state']) ||
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
-        !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
+        !['matter_reference', 'meeting_document', 'agenda_portal_reference', 'official_page_context'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
         !validResearchJurisdiction(record.jurisdiction_ref) ||
         typeof record.jurisdiction !== 'string' || !record.jurisdiction.trim() || record.jurisdiction.length > 300 ||
@@ -279,7 +279,7 @@ export function validateResearch(report) {
         !Array.isArray(record.signals) || !record.signals.length || record.signals.length > 24 ||
         record.signals.some((item) => typeof item !== 'string' || !item.trim() || item.length > 100) ||
         !/^[0-9a-f]{64}$/.test(record.source_sha256) ||
-        !/^(?:\$\[\d+\]\.MatterTitle|extracted line [1-9]\d*|HTML text node [1-9]\d*)$/.test(record.locator) ||
+        !/^(?:\$\[\d+\]\.MatterTitle|extracted line [1-9]\d*|HTML text node [1-9]\d*|Source response \(withdrawal\))$/.test(record.locator) ||
         typeof record.captured_at !== 'string' || !Number.isFinite(Date.parse(record.captured_at)) ||
         typeof record.last_screened_at !== 'string' || !Number.isFinite(Date.parse(record.last_screened_at))) {
       throw new Error('Invalid preliminary research record');
@@ -311,6 +311,25 @@ export function validateResearch(report) {
       if (parsedUrls[0].hostname !== 'www.agendasuite.org' || parsedUrls[0].search || !meeting ||
           record.jurisdiction_ref !== 'us-co-county-08041' || record.id !== `co-agendasuite-elpaso-${meeting[1]}-${record.source_sha256.slice(0, 12)}` ||
           !/^HTML text node [1-9]\d*$/.test(record.locator)) throw new Error('Agenda portal source is inconsistent');
+    }
+    else if (record.kind === 'official_page_context') {
+      const allowed = {
+        'co-official-context-broomfield-flock': ['us-co-place-0809280', 'Broomfield', 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers', 'Broomfield police describe their Flock Safety license-plate-reader program.', ['Flock Safety', 'Automated License Plate Readers']],
+        'co-official-context-boulder-uas': ['us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/unmanned-aircraft-system', 'Boulder police describe their unmanned-aircraft program.', ['Police drone']],
+        'co-official-context-westminster-axon': ['us-co-place-0883835', 'Westminster', 'https://www.westminsterco.gov/180/Engagement-Transparency', 'Westminster police describe their Axon body-worn-camera program.', ['Axon', 'Body-worn cameras']],
+      }[record.id];
+      const withdrawn = record.context_state === 'withdrawn';
+      if (!allowed || !['active', 'withdrawn'].includes(record.context_state) || record.jurisdiction_ref !== allowed[0] || record.jurisdiction !== allowed[1] ||
+          record.source_url !== allowed[2] || record.title !== (withdrawn ? 'Official agency page changed; prior technology context withdrawn.' : allowed[3]) ||
+          JSON.stringify(record.signals) !== JSON.stringify(withdrawn ? ['Source changed'] : allowed[4]) ||
+          record.file !== 'Official police technology page' || record.source_status !== '' ||
+          (withdrawn ? record.locator !== 'Source response (withdrawal)' : !/^HTML text node [1-9]\d*$/.test(record.locator)) || record.actions !== undefined ||
+          record.people_context !== undefined || record.ocr !== undefined || record.historical !== undefined) {
+        throw new Error('Official context identity is inconsistent');
+      }
+    }
+    if (record.kind !== 'official_page_context' && (record.context_state !== undefined || record.locator === 'Source response (withdrawal)')) {
+      throw new Error('Unexpected official context state');
     }
     if (record.kind !== 'matter_reference' && record.matter_url !== undefined) throw new Error('Unexpected matter URL');
     if (record.document_highlights !== undefined) {
@@ -434,7 +453,8 @@ export function validateResearch(report) {
   if (report.coverage.matter_references !== count('matter_reference') ||
       report.coverage.document_references !== count('meeting_document') ||
       (report.coverage.agenda_portal_references ?? 0) !== count('agenda_portal_reference') ||
-      report.coverage.jurisdictions_with_mentions !== new Set(report.records.map((item) => item.jurisdiction_ref)).size) {
+      (report.coverage.official_page_references ?? 0) !== count('official_page_context') ||
+      report.coverage.jurisdictions_with_mentions !== new Set(report.records.filter((item) => item.context_state !== 'withdrawn').map((item) => item.jurisdiction_ref)).size) {
     throw new Error('Research counts do not match records');
   }
   const motions = report.records.flatMap((item) => item.actions ?? []);
