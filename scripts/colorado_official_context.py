@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 SEEDS = {
     'sterling-bwc': {
+        'jurisdiction': 'Sterling',
         'jurisdiction_ref': 'us-co-place-0873935',
         'url': 'https://www.sterlingcolo.com/departments/police_department/officer_body-worn_cameras.php',
         'agency': 'The Sterling Police Department issues body worn cameras to all sworn members',
@@ -18,6 +19,7 @@ SEEDS = {
         'signals': ['Body-worn cameras'],
     },
     'greeley-flock': {
+        'jurisdiction': 'Greeley',
         'jurisdiction_ref': 'us-co-place-0832155',
         'url': 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/',
         'agency': 'The Greeley Police Department uses Flock Safety cameras',
@@ -28,6 +30,7 @@ SEEDS = {
         'signals': ['Flock Safety'],
     },
     'boulder-flock': {
+        'jurisdiction': 'Boulder',
         'jurisdiction_ref': 'us-co-place-0807850',
         'url': 'https://bouldercolorado.gov/services/flock-safety-cameras-and-boulder-police-department',
         'agency': 'Boulder Police Department selected Flock Safety',
@@ -38,6 +41,7 @@ SEEDS = {
         'signals': ['Flock Safety'],
     },
     'broomfield-flock': {
+        'jurisdiction': 'Broomfield',
         'jurisdiction_ref': 'us-co-place-0809280',
         'url': 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers',
         'agency': 'The City and County of Broomfield (CCOB) Police Department',
@@ -48,6 +52,7 @@ SEEDS = {
         'signals': ['Flock Safety', 'Automated License Plate Readers'],
     },
     'boulder-uas': {
+        'jurisdiction': 'Boulder',
         'jurisdiction_ref': 'us-co-place-0807850',
         'url': 'https://bouldercolorado.gov/services/unmanned-aircraft-system',
         'agency': 'The Boulder Police Department’s Unmanned Aircraft System (UAS) Team',
@@ -58,6 +63,7 @@ SEEDS = {
         'signals': ['Police drone'],
     },
     'westminster-axon': {
+        'jurisdiction': 'Westminster',
         'jurisdiction_ref': 'us-co-place-0883835',
         'url': 'https://www.westminsterco.gov/180/Engagement-Transparency',
         'agency': 'Westminster PD has fully implemented the BWC program',
@@ -254,8 +260,7 @@ def materialize(research, data_dir, db, receipts, name, raw, updated, state='act
     return {'id': 'co-official-context-' + name, 'kind': 'official_page_context',
             'context_state': state,
             'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
-            'jurisdiction': {'broomfield-flock': 'Broomfield', 'boulder-uas': 'Boulder', 'westminster-axon': 'Westminster',
-                             'greeley-flock': 'Greeley', 'boulder-flock': 'Boulder', 'sterling-bwc': 'Sterling'}[name],
+            'jurisdiction': seed['jurisdiction'],
             'file': 'Official police technology page', 'title': title, 'signals': signals,
             'source_status': '', 'source_url': url, 'source_sha256': digest,
             'locator': locator, 'captured_at': receipt['retrieved_at'],
