@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { matchesResearchQuery, readBoundedResearchResponse, validateResearch } from '../research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse, validateResearch, validResearchJurisdiction } from '../research-api.js';
 
 const original = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(original);
@@ -13,6 +13,26 @@ test('real research output remains explicitly preliminary and counts source refe
   assert.ok(report.records.length > 0);
   assert.ok(report.records.every((record) => record.confidence === 'unconfirmed_source_reference'));
   assert.equal(new Set(report.records.map((record) => record.id)).size, report.records.length);
+});
+
+test('special-district references and jurisdiction filters use exact five-digit IDs', () => {
+  const report = copy();
+  const record = report.records.find((item) => item.kind === 'meeting_document');
+  assert.ok(record);
+  record.jurisdiction_ref = 'dola-district-18053';
+  report.coverage.jurisdictions_with_mentions = new Set(report.records.map((item) => item.jurisdiction_ref)).size;
+  report.coverage.search_attempts ??= [];
+  report.coverage.search_attempts.push({ jurisdiction_ref: record.jurisdiction_ref, checked_at: '2026-11-11T00:00:00Z',
+    website_check: 'site_checked', documents_screened: 1, documents_failed: 0, documents_queued: 0,
+    portal_pages_checked: 0, agenda_meeting_pages_screened: 0, lookback_period: null });
+  assert.equal(validResearchJurisdiction(record.jurisdiction_ref), true);
+  validateResearch(report);
+  for (const bad of ['dola-district-1805', 'dola-district-180530', 'dola-district-18x53', 'dola-district-18053/other']) {
+    assert.equal(validResearchJurisdiction(bad), false);
+    const changed = structuredClone(report);
+    changed.coverage.search_attempts.at(-1).jurisdiction_ref = bad;
+    assert.throws(() => validateResearch(changed));
+  }
 });
 
 test('research search includes people named in recorded votes', () => {

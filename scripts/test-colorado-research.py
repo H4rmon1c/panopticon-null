@@ -227,6 +227,31 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_document_screening_rotates_toward_untried_and_oldest_jurisdictions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            refs = ['dola-district-01001', 'dola-district-01002', 'dola-district-01003']
+            attempted = []
+            try:
+                with db:
+                    for i, ref in enumerate(refs):
+                        url = f'https://site{i}.example/agenda.pdf'
+                        db.execute('''insert into document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                      values (?,?,?,'pending',?)''', (ref, url, json.dumps({'url': url}), module.utcnow()))
+                    for ref, timestamp in [(refs[0], '2021-01-01T00:00:00+00:00'), (refs[1], '2019-01-01T00:00:00+00:00')]:
+                        url = f'https://{ref}.example/prior.pdf'
+                        db.execute('''insert into document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at,last_attempt_at)
+                                      values (?,?,?,'no_match',?,?)''', (ref, url, json.dumps({'url': url}), timestamp, timestamp))
+                def screen(_root, ref, _candidate, _binary, _lock, _budget, _ocr, _cache):
+                    attempted.append(ref)
+                    return {'state': 'error', 'error': 'fixture'}, []
+                with patch.object(module, 'screen_one', side_effect=screen):
+                    module.screen_documents(root, db, '/usr/bin/true', limit=2, per_place=1, workers=1)
+                self.assertEqual(attempted, [refs[2], refs[1]])
+            finally:
+                db.close()
+
     def test_school_website_links_do_not_automatically_bind_another_agency_portal(self):
         home = 'https://school.example.org/'
         body = b'<a href="https://city.legistar.com/Calendar.aspx">City council agenda</a>'

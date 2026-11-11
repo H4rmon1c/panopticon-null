@@ -1668,7 +1668,10 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     else:
         condition, parameters = "state='pending'", ()
     rows = db.execute(f'''
-      SELECT jurisdiction_ref,candidate_json,state FROM (
+      WITH last_by_place AS (
+        SELECT jurisdiction_ref,MAX(last_attempt_at) AS last_place_attempt
+        FROM document_candidates GROUP BY jurisdiction_ref
+      ), ranked AS (
         SELECT jurisdiction_ref,candidate_json,url,state,last_attempt_at,
           ROW_NUMBER() OVER (PARTITION BY jurisdiction_ref ORDER BY
             COALESCE(last_attempt_at,''),
@@ -1676,7 +1679,11 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
             CASE WHEN lower(url) LIKE '%/minutes/%' THEN 0 ELSE 1 END,
             COALESCE(json_extract(candidate_json,'$.meeting_date'),'') DESC, url DESC) AS turn
         FROM document_candidates WHERE {condition}
-      ) WHERE turn <= ? ORDER BY turn,COALESCE(last_attempt_at,''),jurisdiction_ref LIMIT ?
+      )
+      SELECT ranked.jurisdiction_ref,candidate_json,state FROM ranked
+      LEFT JOIN last_by_place USING (jurisdiction_ref)
+      WHERE turn <= ? ORDER BY turn,COALESCE(last_place_attempt,''),COALESCE(last_attempt_at,''),
+                               ranked.jurisdiction_ref LIMIT ?
     ''', (*parameters, per_place, limit)).fetchall()
     hosts = {urlsplit(json.loads(raw)['url']).hostname for _, raw, _ in rows}
     locks = {host: threading.Lock() for host in hosts}

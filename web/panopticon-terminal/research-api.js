@@ -152,6 +152,10 @@ function validatePortrait(portrait, context = null) {
   }
 }
 
+export function validResearchJurisdiction(value) {
+  return typeof value === 'string' && /^(?:us-co-[a-z0-9-]{1,100}|dola-district-[0-9]{5})$/.test(value);
+}
+
 export function validateResearch(report) {
   if (!onlyKeys(report, ['schema_version', 'state', 'generated_at', 'notice', 'coverage', 'records']) ||
       report.schema_version !== 'pnull-research-v1' || report.state !== 'preliminary' ||
@@ -184,7 +188,7 @@ export function validateResearch(report) {
     for (const attempt of report.coverage.search_attempts) {
       if (!onlyKeys(attempt, ['jurisdiction_ref', 'checked_at', 'website_check', 'documents_screened', 'documents_failed',
         'documents_queued', 'documents_redirected', 'ocr_revalidation_pending', 'portal_pages_checked', 'historical_index_pages_checked', 'historical_index_errors', 'agenda_meeting_pages_screened', 'lookback_period']) ||
-          !/^us-co-[a-z0-9-]{1,100}$/.test(attempt.jurisdiction_ref) || places.has(attempt.jurisdiction_ref) ||
+          !validResearchJurisdiction(attempt.jurisdiction_ref) || places.has(attempt.jurisdiction_ref) ||
           typeof attempt.checked_at !== 'string' || !Number.isFinite(Date.parse(attempt.checked_at)) ||
           !['site_checked', 'unavailable'].includes(attempt.website_check) || attempt.lookback_period !== null ||
           ![attempt.documents_screened, attempt.documents_failed, attempt.documents_queued, attempt.portal_pages_checked,
@@ -205,7 +209,7 @@ export function validateResearch(report) {
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
         !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
-        !/^us-co-[a-z0-9-]{1,100}$/.test(record.jurisdiction_ref) ||
+        !validResearchJurisdiction(record.jurisdiction_ref) ||
         typeof record.jurisdiction !== 'string' || !record.jurisdiction.trim() || record.jurisdiction.length > 300 ||
         typeof record.title !== 'string' || record.title.length > 400 ||
         typeof record.file !== 'string' || record.file.length > 120 ||
