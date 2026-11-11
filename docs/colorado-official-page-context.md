@@ -1,8 +1,9 @@
 # Official technology-page context
 
-Five explicitly scoped municipal police pages provide technology context for
+Six explicitly scoped municipal police pages provide technology context for
 Broomfield (Flock ALPR), Boulder (police unmanned-aircraft team), and Westminster
-(Axon body-worn cameras), as well as Greeley (Flock cameras) and Boulder (selection of Flock Safety).
+(Axon body-worn cameras), as well as Greeley (Flock cameras), Boulder (selection of Flock Safety),
+and Sterling (police body-worn cameras).
 These records are preliminary agency statements;
 they do not establish a decision, an individual vote, a contract award or
 execution, or independent verification that a deployment remains current.
@@ -33,3 +34,8 @@ EFF discovery leads or other page text to this type without a new exact
 jurisdiction/agency binding, source-specific parser, adversarial tests, and a
 public API/UI definition. The source and technology connection does not fill
 the decision, contract, signature, official or vote fields.
+
+The public validator keeps an explicit allowlist of official context records.
+External `pnull-research-v1` consumers that copy that strict allowlist must
+update it before accepting snapshots containing the Sterling reference. The
+research page versions both JavaScript modules together when this list changes.

@@ -1,4 +1,4 @@
-import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=county-scope-1';
+import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=sterling-context-1';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 

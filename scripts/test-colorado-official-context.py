@@ -115,6 +115,43 @@ class ContextTests(unittest.TestCase):
                                    json.dumps(saved), self.receipt['retrieved_at'])
         self.assertEqual(record['signals'], ['Flock Safety'])
         self.assertEqual(record['title'], 'Greeley police describe their Flock Safety camera program.')
+    def test_sterling_fixed_passage_identity_and_withdrawal(self):
+        name = 'sterling-bwc'; seed = c.SEEDS[name]
+        passage = ('The Sterling Police Department issues body worn cameras to all sworn members to enhance the mission '
+                   'of the Department by accurately capturing contacts between members of the Department and the public. '
+                   'Body worn cameras are activated any time an officer conducts enforcement activities such as traffic stops, '
+                   'field interviews and contacts, dispatched calls for service or any time an officer would normally notify '
+                   'dispatch of a law enforcement activity in which the officer is in contact with the public.')
+        body = ('<html><body><p>' + passage + '</p></body></html>').encode()
+        self.assertEqual(c.locate(r, seed, body), 0)
+        for changed in (body.replace(b'<p>', b'<p hidden>'), body.replace(b'Sterling Police', b'Other Police'),
+                        body.replace(b'all sworn members', b'some sworn members'),
+                        body.replace(b'traffic stops', b'other incidents'), body + body):
+            with self.assertRaises(ValueError): c.locate(r, seed, changed)
+        split = ('<p>The Sterling Police Department runs traffic safety.</p><p>Other City Police Department issues '
+                 'body worn cameras to all sworn members.</p>').encode()
+        with self.assertRaises(ValueError): c.locate(r, seed, split)
+        saved = dict(self.receipt, url=seed['url'], sha256=r.sha(body), bytes=len(body), content_type='text/html')
+        r.archive(self.path, [(saved, body)])
+        with self.db:
+            self.db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (seed['jurisdiction_ref'],
+                'https://www.sterlingcolo.com/', self.receipt['retrieved_at'], '{}'))
+            self.db.execute('INSERT INTO official_context_pages(seed_id,receipt_json,updated_at) VALUES (?,?,?)',
+                            (name, json.dumps(saved), saved['retrieved_at']))
+        record = c.materialize(r, self.path, self.db, r.observation_keys(self.path), name, json.dumps(saved), saved['retrieved_at'])
+        self.assertEqual(record['jurisdiction'], 'Sterling')
+        self.assertEqual(record['signals'], ['Body-worn cameras'])
+        self.assertNotIn('actions', record)
+        changed = b'<html><body>Unrelated page</body></html>'
+        changed_receipt = dict(saved, sha256=r.sha(changed), bytes=len(changed))
+        with patch.dict(c.SEEDS, {name: seed}, clear=True), patch.object(r, 'get_robots', return_value=(None, [])), \
+             patch.object(r, 'get', return_value=[(changed_receipt, changed)]):
+            c.capture(r, self.path, self.db)
+        row = self.db.execute('SELECT receipt_json,updated_at,state FROM official_context_pages WHERE seed_id=?', (name,)).fetchone()
+        self.assertEqual(row[2], 'withdrawn')
+        tombstone = c.materialize(r, self.path, self.db, r.observation_keys(self.path), name, *row)
+        self.assertEqual(tombstone['id'], record['id'])
+        self.assertEqual(tombstone['signals'], ['Source changed'])
     def test_only_exact_known_collapsed_tab_can_supply_context(self):
         seed = dict(c.SEEDS['westminster-axon']); panel = seed['tab_panel_id']; labelled = 'tabBtn' + panel[3:]
         body = (f'<div id="{panel}" class="tabbedWidget cpTabPanel" role="region" '
