@@ -268,10 +268,16 @@ export function validateResearch(report) {
       const index = publicResearchUrl(record.source_index_url);
       const capture = parsedUrls[0];
       const prefix = capture.pathname.endsWith(linked.pathname) ? capture.pathname.slice(0, -linked.pathname.length) : '';
-      if (linked.hostname !== index.hostname || capture.search ||
-          !/^(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com$/i.test(capture.hostname) ||
-          !/^\/(?:revize\/)?[a-z0-9_-]{1,80}$/i.test(prefix) ||
-          (record.capture_adjustment === 'timestamp_omitted' ? !/^\?t=[0-9]{1,20}$/.test(linked.search) : Boolean(linked.search))) {
+      const revize = linked.hostname === index.hostname && !capture.search &&
+        /^(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com$/i.test(capture.hostname) &&
+        /^\/(?:revize\/)?[a-z0-9_-]{1,80}$/i.test(prefix) &&
+        (record.capture_adjustment === 'timestamp_omitted' ? /^\?t=[0-9]{1,20}$/.test(linked.search) : !linked.search);
+      const tenant = /^\/go\/([a-z0-9][a-z0-9-]{0,79})\/agendas\/[1-9][0-9]{0,11}\/PDF\/get_agenda_document_link$/.exec(linked.pathname)?.[1];
+      const towncloud = record.capture_adjustment === 'direct_redirect' && tenant &&
+        linked.hostname === 'towncloud.io' && index.hostname !== linked.hostname && !linked.search &&
+        capture.hostname === 'towncloud-core-prod.s3.us-west-2.amazonaws.com' && !capture.search &&
+        new RegExp(`^/uploads/${tenant}/meetings/agenda_packet/pdf/[1-9][0-9]{0,11}/[A-Za-z0-9._~-]{1,180}\\.pdf$`).test(capture.pathname);
+      if (!revize && !towncloud) {
         throw new Error('Alternate document does not match its indexed source');
       }
     }

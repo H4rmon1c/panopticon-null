@@ -106,12 +106,18 @@ no relevant decision exists.
 
 The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release
-gates. Source policy is checked for each captured site. Explicit robots
-disallows, access denials, CAPTCHAs, and login requirements are not bypassed.
+gates. Source policy is checked for each captured site. The self-hosted
+research schedule enables the project owner's requested exception for public
+TownCloud agenda links explicitly present on a municipality website, including
+the same-tenant PDF redirect. Set `PNUL_ALLOW_TOWNCLOUD_PUBLIC=0` to honor that
+service's robots exclusion. Other explicit robots disallows, content access
+denials, CAPTCHAs, and login requirements remain blocked; the five previously
+excluded Granicus attachment URLs remain excluded.
 The collector understands robots wildcard and longest-match rules using the
 pinned, vendored Protego parser. A municipality may redirect its robots file
 to a narrowly scoped Revize host. A vendor document is only followed when an
-archived redirect from the government site binds it to the same document path;
+archived government link and vendor redirect bind it to the same document or
+TownCloud tenant;
 the vendor does not become a general trusted source for that jurisdiction.
 The collector uses TLS verification, public-IP-only DNS checks with connection
 pinning, bounded reads, per-host pacing, and restricted redirects. Archive

@@ -112,6 +112,29 @@ test('redirected documents expose the exact source link and timestamp uncertaint
   assert.throws(() => validateResearch(base));
 });
 
+test('TownCloud redirects stay bound to the government link and exact tenant', () => {
+  const base = copy();
+  const record = base.records.find((item) => item.kind === 'meeting_document');
+  record.document_format = 'pdf';
+  record.source_url = 'https://towncloud-core-prod.s3.us-west-2.amazonaws.com/uploads/walden-co/meetings/agenda_packet/pdf/289/meeting.pdf';
+  record.indexed_source_url = 'https://towncloud.io/go/walden-co/agendas/293/PDF/get_agenda_document_link';
+  record.source_index_url = 'https://town.example.org/agendas';
+  record.capture_adjustment = 'direct_redirect';
+  validateResearch(base);
+  for (const change of [
+    (item) => { item.source_url = item.source_url.replace('/walden-co/', '/other/'); },
+    (item) => { item.source_url = item.source_url.replace('towncloud-core-prod.s3.us-west-2.amazonaws.com', 'attacker.example'); },
+    (item) => { item.indexed_source_url = item.indexed_source_url.replace('towncloud.io', 'attacker.example'); },
+    (item) => { item.indexed_source_url += '?other=1'; },
+    (item) => { item.capture_adjustment = 'timestamp_omitted'; },
+    (item) => { item.source_url += '?secret=1'; },
+  ]) {
+    const changed = structuredClone(base);
+    change(changed.records.find((item) => item.id === record.id));
+    assert.throws(() => validateResearch(changed));
+  }
+});
+
 test('additional document passages remain bounded, distinct and source-located', () => {
   const base = copy();
   const record = base.records.find((item) => item.kind === 'meeting_document' && !item.ocr);

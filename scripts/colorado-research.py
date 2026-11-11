@@ -541,8 +541,45 @@ def canonical_gov_host(name, host):
     return len(identity) >= 4 and identity in re.sub(r'[^a-z0-9]', '', label)
 
 
+def towncloud_tenant(url):
+    """Recognize only a public agenda PDF endpoint, not arbitrary vendor URLs."""
+    try:
+        parsed = urlsplit(url)
+        if (parsed.scheme != 'https' or parsed.hostname != 'towncloud.io' or parsed.port not in (None, 443)
+                or parsed.username or parsed.password or parsed.query or parsed.fragment):
+            return None
+        match = re.fullmatch(r'/go/([a-z0-9][a-z0-9-]{0,79})/agendas/[1-9][0-9]{0,11}/PDF/get_agenda_document_link',
+                             parsed.path)
+        return match.group(1) if match else None
+    except ValueError:
+        return None
+
+
+def towncloud_file_redirect(origin, target):
+    """Bind a public agenda endpoint to its same-tenant vendor PDF redirect."""
+    tenant = towncloud_tenant(origin)
+    if not tenant:
+        return False
+    try:
+        parsed = urlsplit(target)
+        return bool(parsed.scheme == 'https' and parsed.hostname == 'towncloud-core-prod.s3.us-west-2.amazonaws.com'
+                    and parsed.port in (None, 443) and not parsed.username and not parsed.password
+                    and not parsed.query and not parsed.fragment
+                    and re.fullmatch(r'/uploads/' + re.escape(tenant) +
+                                     r'/meetings/agenda_packet/pdf/[1-9][0-9]{0,11}/[A-Za-z0-9._~-]{1,180}\.pdf', parsed.path))
+    except (TypeError, ValueError):
+        return False
+
+
 def candidate_kind(url, index_url, label):
     parsed, index = urlsplit(url), urlsplit(index_url)
+    try:
+        if (towncloud_tenant(url) and index.scheme == 'https' and index.hostname
+                and index.port in (None, 443) and not index.username and not index.password and not index.fragment
+                and index.hostname != 'towncloud.io' and re.search(r'agenda|meeting', label, re.I)):
+            return 'agenda', None
+    except ValueError:
+        return None
     # Admit ordinary encoded filename spaces without admitting encoded path
     # separators, dot segments, controls, or double-encoded escapes.
     if (parsed.scheme != 'https' or parsed.hostname != index.hostname or parsed.port not in (None, 443)
@@ -1283,6 +1320,18 @@ def cached_robots(host, cache):
     return cache[host], []
 
 
+def towncloud_override(candidate, url):
+    """An explicit operator setting applies only to source-bound public PDFs."""
+    if os.environ.get('PNUL_ALLOW_TOWNCLOUD_PUBLIC') != '1':
+        return False
+    if candidate.get('url') != url:
+        return False
+    if towncloud_tenant(url) and 'redirect_receipt' not in candidate:
+        return True
+    return ('redirect_receipt' in candidate and candidate.get('linked_url') is not None
+            and towncloud_file_redirect(candidate['linked_url'], url))
+
+
 def extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr):
     if not receipt_valid(receipt, candidate['url'], receipt.get('sha256')) or not source_blob(data_dir, receipt['sha256'], 20 * 1024 * 1024).startswith(b'%PDF-'):
         raise ValueError('archived PDF does not match its public capture receipt')
@@ -1336,7 +1385,7 @@ def checked_document_candidate(data_dir, url, candidate):
         origin, adjustment = linked, 'direct_redirect'
     if (candidate.get('linked_url') != linked or candidate.get('origin_url') != origin
             or candidate.get('capture_adjustment') != adjustment
-            or not revize_file_redirect(origin, url)
+            or not (revize_file_redirect(origin, url) or towncloud_file_redirect(origin, url))
             or not verified_redirect_receipt(data_dir, candidate['redirect_receipt'], origin, url)):
         raise ValueError('vendor document redirect is not bound to its preserved source')
     if parsed.query:
@@ -1351,7 +1400,7 @@ def alternate_document(candidate, receipt, rules, budget, observations):
     """Queue a source-directed vendor PDF; retain any timestamp uncertainty."""
     linked = candidate['url']
     target = receipt.get('redirect_target', '')
-    if not revize_file_redirect(linked, target):
+    if not (revize_file_redirect(linked, target) or towncloud_file_redirect(linked, target)):
         return None
     parsed = urlsplit(linked)
     if parsed.query:
@@ -1376,7 +1425,7 @@ def alternate_document(candidate, receipt, rules, budget, observations):
     else:
         origin, redirect, adjustment = linked, receipt, 'direct_redirect'
     target = redirect.get('redirect_target', '')
-    if redirect['status'] not in (301, 302, 303, 307, 308) or not revize_file_redirect(origin, target):
+    if redirect['status'] not in (301, 302, 303, 307, 308) or not (revize_file_redirect(origin, target) or towncloud_file_redirect(origin, target)):
         return None
     if parsed.query:
         initial = urlsplit(receipt['redirect_target'])
@@ -1400,9 +1449,15 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
         host = parsed.hostname
         # Serialize calls for the same host, including its robots check.
         with host_lock:
-            rules, robots = cached_robots(host, robots_cache)
-            observations.extend(robots)
-            if not allowed(rules, url):
+            try:
+                rules, robots = cached_robots(host, robots_cache)
+                observations.extend(robots)
+            except RobotsDenied as error:
+                if not towncloud_override(candidate, url):
+                    raise
+                observations.extend(error.observations)
+                rules = None
+            if not allowed(rules, url) and not towncloud_override(candidate, url):
                 raise ValueError('robots disallows this document')
             reserved = budget.reserve()
             if not reserved:

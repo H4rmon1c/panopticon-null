@@ -19,6 +19,8 @@ if sys.argv[1].endswith('/locked-run.py'):
     os.execv('/usr/bin/python3', ['/usr/bin/python3', *sys.argv[1:]])
 if sys.argv[1] != 'scripts/colorado-research.py':
     raise SystemExit('unexpected command')
+if os.environ.get('PNUL_ALLOW_TOWNCLOUD_PUBLIC') != os.environ['PNUL_TEST_POLICY_EXPECTED']:
+    raise SystemExit('TownCloud policy setting not forwarded')
 with open(os.environ['PNUL_TEST_LOG'], 'a', encoding='utf8') as output:
     output.write(json.dumps(sys.argv[1:]) + '\\n')
 raise SystemExit(1 if sys.argv[4] == os.environ.get('PNUL_TEST_FAIL') else 0)
@@ -31,6 +33,8 @@ raise SystemExit(1 if sys.argv[4] == os.environ.get('PNUL_TEST_FAIL') else 0)
                        'PNUL_DATA_DIR': str(data), 'PNUL_BIN': '/usr/bin/true', 'PNUL_TEST_LOG': str(log)}
         environment.pop('PNUL_HELD_LOCKS', None)
         environment.pop('PNUL_TEST_FAIL', None)
+        environment.pop('PNUL_ALLOW_TOWNCLOUD_PUBLIC', None)
+        environment['PNUL_TEST_POLICY_EXPECTED'] = '1'
         script = ROOT / 'deploy/selfhost/research.sh'
 
         def run():
@@ -49,6 +53,8 @@ raise SystemExit(1 if sys.argv[4] == os.environ.get('PNUL_TEST_FAIL') else 0)
         assert commands.count('screen-documents') == 3 and commands[-1] == 'portraits'
 
         log.unlink()
+        environment['PNUL_ALLOW_TOWNCLOUD_PUBLIC'] = '0'
+        environment['PNUL_TEST_POLICY_EXPECTED'] = '0'
         environment['PNUL_TEST_FAIL'] = 'civic-history'
         result, calls = run()
         assert result.returncode == 1
