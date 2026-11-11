@@ -33,8 +33,9 @@ function validatePortrait(portrait, context = null) {
       !digest(portrait.sha256) ||
       !new RegExp(`^\\./research-portraits/${portrait.sha256}\\.(?:jpg|png|webp)$`).test(portrait.src) ||
       portrait.portrait_date !== 'not_established' || !safeText(portrait.caption, 250)) throw new Error('Invalid research portrait');
-  if (portrait.identity_source_url !== undefined && (context?.client !== 'arapahoe' ||
-      context.jurisdiction !== 'us-co-county-08005' || context.personId !== 572)) {
+  if (portrait.identity_source_url !== undefined && !(
+      (context?.client === 'arapahoe' && context.jurisdiction === 'us-co-county-08005' && context.personId === 572) ||
+      (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000' && context.personId === 282))) {
     throw new Error('Unexpected portrait identity source');
   }
   let page;
@@ -47,6 +48,30 @@ function validatePortrait(portrait, context = null) {
     throw new Error('Unsafe portrait source URL');
   }
   if (portrait.source_kind === 'embedded_pdf') {
+    if (context?.client === 'denver' && context.jurisdiction === 'us-co-place-0820000') {
+      const expected = new Map([
+        [280, ['Jolon Clark', 0, '0727c6f5be8eac62e77cebc8205ef0cce1ce135ff97660a4b2c56203a9c11cab', 'Jolon Clark, President']],
+        [251, ['Rafael Espinoza', 2, '65cd497bae1eb0dc690861a35a677d5c31617e0f89a4a983ada3ea1c4ac7c368', 'Rafael Espinoza']],
+        [267, ['Paul López', 4, '93678a634b6f7aadd1856e910dd779da41e472349b9e5129027375bc26b9e109', 'Paul D. López']],
+        [270, ['Kendra Black', 5, '0702ffac28e24b926c78f7742e22f9716287475c2bed4cc4c4c981d4385c92a5', 'Kendra Black']],
+        [275, ['Mary Beth Susman', 6, '39b60a76c699fe3cca797fac5fc740264cdc6acbfd8f083992f36486ef81ecde', 'Mary Beth Susman']],
+        [282, ['Chris Herndon', 8, 'b1fee6543bec39b61756f6fae16d526678bfa52d1cfadafe48729f5ce99a5f40', 'Christopher Herndon', 'https://herndon-leadership.squarespace.com/meet-chris']],
+        [286, ['Albus Brooks', 9, '574e42284d797c38e762b4d0610275abcb5391b412667182bbc2ddebc9dbbbc6', 'Albus Brooks']],
+        [254, ['Wayne New', 10, '9f5ae85940f49171d75261367ae50d5b07960473436568268e0aa9f32ff9e52f', 'Wayne New']],
+        [260, ['Robin Kniech', 11, '127567b9dcda9d28b615bd8af7f84889fbf13ceb4153e13920012c74631c9e30', 'Robin Kniech']],
+        [263, ['Debbie Ortega', 13, '3743068bf74365a5601edae654256ee441890ad3755bbabd57fdb4b950f5a2c3', 'Deborah "Debbie" Ortega']],
+      ]).get(context.personId);
+      if (!expected || context.name !== expected[0] || portrait.embedded_image_index !== expected[1] ||
+          portrait.sha256 !== expected[2] || portrait.src !== `./research-portraits/${expected[2]}.jpg` ||
+          portrait.caption !== `2019 Denver budget; source labels this portrait ${expected[3]}.` ||
+          portrait.identity_source_url !== expected[4] || portrait.image_url !== undefined || portrait.embedded_original_sha256 !== undefined ||
+          portrait.image_transform !== undefined || portrait.source_page !== 6 ||
+          portrait.source_document_sha256 !== '95c42fc5f567b3e4527166ff502b2e6145fce0a6bf5f8949d4df8ebc46b03fa2' ||
+          portrait.source_url !== 'https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2019/2019_Budget%20Book_V1-OnlineVersion-compressed.pdf') {
+        throw new Error('Embedded portrait does not match the recorded voter and source');
+      }
+      return;
+    }
     if (context?.client === 'commerce' && context.jurisdiction === 'us-co-place-0816495') {
       const expected = new Map([
         [402, ['Benjamin Huseman', 0, '8e5dcdeeb2c2f3888626d2e57ac2a9ae14ef69e688ea546ce77164f13683ee1e']],

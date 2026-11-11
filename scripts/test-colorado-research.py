@@ -1772,6 +1772,31 @@ class ResearchTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.commerce_report_portrait(root, set(), 'us-co-place-0816495', 'commerce', vote, root / 'assets')
 
+    def test_denver_budget_portrait_requires_source_receipt_and_exact_portal_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/denver-2019-budget-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Paul López', 'person_id': 267}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.denver_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (6, 4))
+                self.assertIn('Paul D. López', result['caption'])
+                self.assertIsNone(module.denver_budget_portrait(root, {key}, 'us-co-place-0820000', 'other', vote, root / 'assets'))
+                self.assertIsNone(module.denver_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', {**vote, 'person_id': 280}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.denver_budget_portrait(root, set(), 'us-co-place-0820000', 'denver', vote, root / 'assets')
+            alias = ('<title>Meet Chris — Chris Herndon</title>'
+                     '<p>Served on Denver City Council for 12 years, with four years as Council President and Vice President</p>'
+                     '<p>For Councilman Christopher Herndon, his public service career started long before the Denver City Council.</p>').encode()
+            alias_key = (proof['alias_source_url'], proof['alias_source_sha256'])
+            chris = {'name': 'Chris Herndon', 'person_id': 282}
+            with patch.object(module, 'source_blob', side_effect=lambda _root, value, *_args: alias if value == alias_key[1] else b'%PDF-fixture'):
+                result = module.denver_budget_portrait(root, {key, alias_key}, 'us-co-place-0820000', 'denver', chris, root / 'assets')
+                self.assertEqual(result['identity_source_url'], alias_key[0])
+                with self.assertRaises(ValueError):
+                    module.denver_budget_portrait(root, {key}, 'us-co-place-0820000', 'denver', chris, root / 'assets')
+
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'
                   b'<img alt="Commissioner Abe Laydon" srcset="https://www.douglasco.gov/a-small.jpg 480w, '

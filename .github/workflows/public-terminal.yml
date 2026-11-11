@@ -48,6 +48,7 @@ jobs:
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-littleton-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-commerce-portraits.mjs
+          node --test web/panopticon-terminal/scripts/test-denver-2019-portraits.mjs
       - name: Test public coverage accounting
         run: node --test web/panopticon-terminal/scripts/test-coverage-api.mjs
       - name: Test alerts API revisions and withdrawals

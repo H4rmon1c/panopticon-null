@@ -89,6 +89,11 @@ no relevant decision exists.
    commissioners gallery. It accepts an image only when the exact official name
    and image occur in the same unique gallery card, and revalidates that card,
    the original image bytes, and both fetch receipts before export.
+   Ten historical Denver voters can also use original, individually labeled
+   JPEGs from the [2019 city budget](https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2019/2019_Budget%20Book_V1-OnlineVersion-compressed.pdf).
+   The pinned proof binds each Denver portal person ID and name to the budget's
+   label, page position, original embedded image index, and digest. A sandboxed
+   test rechecks both the page fixture and the complete archived source.
    Five Arapahoe County research voters also reuse the original JPEG streams
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture
