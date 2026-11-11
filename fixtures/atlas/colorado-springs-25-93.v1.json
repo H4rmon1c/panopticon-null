@@ -1,0 +1,315 @@
+{
+  "schema_version": 1,
+  "case_id": "co-colorado-springs-25-581-2025-11-25",
+  "synthetic": false,
+  "review_state": "approved",
+  "jurisdiction": {
+    "id": "co-colorado-springs",
+    "name": "Colorado Springs, Colorado",
+    "proof": {
+      "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "locator": "PDF p. 1, enacting clause: City Council of the City of Colorado Springs",
+      "quote": "City Council of the City of Colorado Springs",
+      "fixture": "fixtures/co/ordinance-25-93-signed.pdf"
+    }
+  },
+  "agency": {
+    "id": "colorado-springs-police-department",
+    "name": "Colorado Springs Police Department",
+    "relationship": "agency named in signed ordinance",
+    "proof": {
+      "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+      "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+      "locator": "PDF p. 1, title and Section 1(H)(1)",
+      "quote": "police department technology surcharge",
+      "fixture": "fixtures/co/ordinance-25-93-signed.pdf"
+    }
+  },
+  "decision": {
+    "official_matter": "25-581",
+    "ordinance": "25-93",
+    "body": "Colorado Springs City Council",
+    "date": "2025-11-25",
+    "action": "finally passed",
+    "outcome": "Pass",
+    "tally": {
+      "aye": 6,
+      "no": 3,
+      "abstain": 0,
+      "absent": 0
+    },
+    "summary": "The City Council finally passed Ordinance 25-93, amending city code to assess a Police Department Technology Surcharge.",
+    "proofs": [
+      {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1",
+        "sha256": "f11a5712daf21f8f7d345d772995efb1cbeb495da7981bd1a1a6aa22b57a6759",
+        "locators": [
+          "$.EventItems[38].EventItemId",
+          "$.EventItems[38].EventItemMatterFile",
+          "$.EventItems[38].EventItemActionText",
+          "$.EventItems[38].EventItemPassedFlagName"
+        ],
+        "fixture": "fixtures/co/event-2660-final-vote.json",
+        "quote": "Motion by Councilmember Henjum, seconded by Councilmember Gold, that the Ordinance 25-93 amending Section 201 (General Penalty) of Part 2 (General Penalty) of Article 1 (Administration) of Chapter 1 (Administration, Personnel And Finance) of the Code of the City of Colorado Springs 2001, as amended be finally passed. The motion passed by a vote of 6-3-0-0"
+      },
+      {
+        "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14995655&GUID=00173B3A-1CD9-4839-9AD5-93B3C8E4EE03",
+        "sha256": "f364d09dbbb29a0b8d89c53002eb4bb757ddf0b942f245f4d70738543b4dc1fb",
+        "locators": [
+          "PDF p. 1, Section 1(H)(1)",
+          "PDF p. 2, finally passed date"
+        ],
+        "fixture": "fixtures/co/ordinance-25-93-signed.pdf"
+      }
+    ]
+  },
+  "votes": [
+    {
+      "person_name": "Tom Bailey",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84633,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[0].VotePersonName",
+        "vote_locator": "$[0].VoteValueName",
+        "event_item_locator": "$[0].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Tom Bailey",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[0].VotePersonId",
+        "person_id_quote": "678"
+      },
+      "official_person_id": 678
+    },
+    {
+      "person_name": "Lynette Crow-Iverson",
+      "recorded_vote": "No",
+      "official_vote_id": 84634,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[1].VotePersonName",
+        "vote_locator": "$[1].VoteValueName",
+        "event_item_locator": "$[1].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Lynette Crow-Iverson",
+        "vote_quote": "No",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[1].VotePersonId",
+        "person_id_quote": "610"
+      },
+      "official_person_id": 610
+    },
+    {
+      "person_name": "Dave Donelson",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84635,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[2].VotePersonName",
+        "vote_locator": "$[2].VoteValueName",
+        "event_item_locator": "$[2].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Dave Donelson",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[2].VotePersonId",
+        "person_id_quote": "549"
+      },
+      "official_person_id": 549
+    },
+    {
+      "person_name": "Kimberly Gold",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84636,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[3].VotePersonName",
+        "vote_locator": "$[3].VoteValueName",
+        "event_item_locator": "$[3].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Kimberly Gold",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[3].VotePersonId",
+        "person_id_quote": "680"
+      },
+      "official_person_id": 680
+    },
+    {
+      "person_name": "Nancy Henjum",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84637,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[4].VotePersonName",
+        "vote_locator": "$[4].VoteValueName",
+        "event_item_locator": "$[4].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Nancy Henjum",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[4].VotePersonId",
+        "person_id_quote": "551"
+      },
+      "official_person_id": 551
+    },
+    {
+      "person_name": "David Leinweber",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84638,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[5].VotePersonName",
+        "vote_locator": "$[5].VoteValueName",
+        "event_item_locator": "$[5].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "David Leinweber",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[5].VotePersonId",
+        "person_id_quote": "611"
+      },
+      "official_person_id": 611
+    },
+    {
+      "person_name": "Roland Rainey Jr.",
+      "recorded_vote": "Aye",
+      "official_vote_id": 84639,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[6].VotePersonName",
+        "vote_locator": "$[6].VoteValueName",
+        "event_item_locator": "$[6].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Roland Rainey Jr.",
+        "vote_quote": "Aye",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[6].VotePersonId",
+        "person_id_quote": "681"
+      },
+      "official_person_id": 681
+    },
+    {
+      "person_name": "Brian Risley",
+      "recorded_vote": "No",
+      "official_vote_id": 84640,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[7].VotePersonName",
+        "vote_locator": "$[7].VoteValueName",
+        "event_item_locator": "$[7].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Brian Risley",
+        "vote_quote": "No",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[7].VotePersonId",
+        "person_id_quote": "609"
+      },
+      "official_person_id": 609
+    },
+    {
+      "person_name": "Brandy Williams",
+      "recorded_vote": "No",
+      "official_vote_id": 84641,
+      "office_role": {
+        "state": "not_established"
+      },
+      "office_term": {
+        "state": "not_established"
+      },
+      "proof": {
+        "url": "https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes",
+        "sha256": "99bbdb2394a1e30ad7761bea917a0700472604bab613b33b7ce4368327182c80",
+        "name_locator": "$[8].VotePersonName",
+        "vote_locator": "$[8].VoteValueName",
+        "event_item_locator": "$[8].VoteEventItemId",
+        "fixture": "fixtures/co/votes-103550-final-vote.json",
+        "name_quote": "Brandy Williams",
+        "vote_quote": "No",
+        "event_item_quote": "103550",
+        "person_id_locator": "$[8].VotePersonId",
+        "person_id_quote": "679"
+      },
+      "official_person_id": 679
+    }
+  ],
+  "contract_link": {
+    "state": "not_established",
+    "detail": "These checked records do not establish a named Axon or Flock contract, award, or payment authorized by this ordinance."
+  },
+  "technology_context": {
+    "relationship": "systems named in a supporting staff cost presentation; not contracts approved by this vote",
+    "systems": [
+      "Body Worn Camera (Axon)",
+      "Digital Evidence System & Storage (Axon)",
+      "AI Transcription & Reporting (Axon)",
+      "Vehicle Intelligence Cameras (Flock)"
+    ],
+    "proof": {
+      "url": "https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D",
+      "sha256": "7612843a72f957413f5eb7d0be71d27a47406e398816f80219c470e18387e6a8",
+      "locator": "PDF p. 7, 2026 Major Systems Costs table",
+      "fixture": "fixtures/co/police-technology-surcharge-presentation.pdf"
+    }
+  },
+  "unresolved_question": "Which specific contracts and payments, if any, will be funded from the surcharge proceeds?",
+  "publication_note": "Case-level public release approved by h4rmon1c in Codex chat on 2026-11-09; individual claims are source-verified by the exporter."
+}

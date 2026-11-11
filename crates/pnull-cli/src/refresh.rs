@@ -4,8 +4,8 @@
 //! be fetched and compared with zero network activity. `--live` fetches the
 //! reviewed surface, records a new snapshot (or 304 provenance), runs Item 1
 //! change detection, prints the alert count and affected matter ids, and writes
-//! a coverage-ledger entry. Any refusal or failure fails closed: state the
-//! reason and change nothing.
+//! a coverage-ledger entry. A refusal or parse failure creates no new
+//! snapshot or alert; successful fetch observations remain in the audit log.
 //!
 //! The transport is behind a trait so tests inject a fake that never touches
 //! the network. The real transport performs a DNS-safe conditional HTTPS GET
@@ -14,12 +14,16 @@
 
 use anyhow::{Result, anyhow, bail};
 use pnull_core::{
-    CoverageState, FetchObservation, SourceAuthority, SourceReview, Store, sha256_hex,
+    CoverageState, FetchObservation, ProcurementAlert, ProcurementChangeKind,
+    ProcurementRecordChange, SourceAuthority, SourceReview, SourceSnapshot, Store, sha256_hex,
 };
 use pnull_procurement::{
-    Acquisition, build_change_alerts, ensure_matter, latest_snapshot, matter_id_for_identifier,
-    parse_awards_table, persist_change_alerts, record_snapshot, record_unchanged,
+    Acquisition, RecordRow, build_change_alerts, ensure_matter, latest_snapshot,
+    matter_id_for_identifier, parse_awards_table, parse_solicitations, persist_change_alerts,
+    record_diff, record_snapshot, record_unchanged, solicitation_record_rows,
 };
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 /// What a transport fetch returned for a surface.
 pub struct TransportFetch {
@@ -39,7 +43,13 @@ pub struct TransportFetch {
 /// caller supplies the surface URL and any prior `ETag` so the transport can
 /// issue a conditional request.
 pub trait ProcurementTransport {
-    fn fetch(&mut self, url: &str, prior_etag: Option<&str>) -> Result<TransportFetch, String>;
+    fn fetch(
+        &mut self,
+        source_id: &str,
+        url: &str,
+        prior_etag: Option<&str>,
+        retrieved_at: &str,
+    ) -> Result<TransportFetch, String>;
 }
 
 /// The offline dry-run result: the planned comparison with zero network.
@@ -48,6 +58,139 @@ pub struct DryRunPlan {
     pub source_url: String,
     pub latest_snapshot_digest: Option<String>,
     pub planned_comparison: String,
+}
+
+enum ParsedSurface {
+    Awards(Vec<pnull_procurement::AwardRow>),
+    Solicitations(Vec<pnull_procurement::SolicitationRecord>),
+}
+
+impl ParsedSurface {
+    const fn label(&self) -> &'static str {
+        match self {
+            Self::Awards(_) => "award",
+            Self::Solicitations(_) => "solicitation",
+        }
+    }
+}
+
+fn prior_blob_verified(store: &Store, snapshot: &pnull_core::SourceSnapshot) -> bool {
+    store
+        .content_path(&snapshot.persisted_digest)
+        .ok()
+        .and_then(|path| std::fs::read(path).ok())
+        .is_some_and(|bytes| sha256_hex(&bytes) == snapshot.persisted_digest)
+}
+
+fn redirect_history(observations: &[FetchObservation]) -> Vec<String> {
+    observations
+        .iter()
+        .skip(1)
+        .map(|observation| observation.requested_url.clone())
+        .collect()
+}
+
+/// Resolve an alert to the matter created from the row's actual identifier.
+/// A digest fallback key is not an identifier and must not create a phantom
+/// matter. Removed rows can still resolve through the prior snapshot's rows.
+fn alert_matter_id(
+    source_id: &str,
+    row_key: &str,
+    new_rows: &[RecordRow],
+    prior_rows: Option<&[RecordRow]>,
+) -> Option<String> {
+    let row = new_rows
+        .iter()
+        .chain(prior_rows.into_iter().flatten())
+        .find(|row| row.key == row_key)?;
+    let identifier = match source_id {
+        "colorado-springs-contract-awards" => {
+            serde_json::from_str::<pnull_procurement::AwardRow>(&row.raw_json)
+                .ok()?
+                .solicitation_id
+        }
+        "colorado-springs-solicitation-mirror" => {
+            serde_json::from_str::<pnull_procurement::SolicitationRecord>(&row.raw_json)
+                .ok()?
+                .identifier
+        }
+        _ => return None,
+    };
+    pnull_core::normalize_identifier(&identifier)
+        .map(|(normalized, _)| matter_id_for_identifier(&normalized))
+}
+
+fn solicitation_change_alerts(
+    prior: &SourceSnapshot,
+    current: &SourceSnapshot,
+    prior_rows: &[RecordRow],
+    current_rows: &[RecordRow],
+    retrieved_at: &str,
+) -> Vec<ProcurementAlert> {
+    let diff = record_diff(
+        &prior.id,
+        &current.id,
+        &current.source_id,
+        prior_rows,
+        current_rows,
+    );
+    diff.changes
+        .into_iter()
+        .filter_map(|change| {
+            let (kind, description) = match change.kind.as_str() {
+                "added" => (
+                    ProcurementChangeKind::RecordAdded,
+                    "appeared in the later checked solicitation mirror snapshot",
+                ),
+                "changed" => (
+                    ProcurementChangeKind::RecordModified,
+                    "differs between two checked solicitation mirror snapshots",
+                ),
+                "removed" => (
+                    ProcurementChangeKind::RecordRemoved,
+                    "was present in the earlier checked solicitation mirror snapshot but is not present in the later one",
+                ),
+                _ => return None,
+            };
+            let summary = format!(
+                "Solicitation row {} {description}. This informational mirror may be incomplete; the comparison does not establish a procurement outcome or prove absence.",
+                change.row_key
+            );
+            let record_change = ProcurementRecordChange {
+                change_kind: kind,
+                row_identity: change.row_key.clone(),
+                field_diffs: Vec::new(),
+                old_snapshot_id: prior.id.clone(),
+                old_snapshot_digest: prior.persisted_digest.clone(),
+                new_snapshot_id: current.id.clone(),
+                new_snapshot_digest: current.persisted_digest.clone(),
+                summary: summary.clone(),
+            };
+            Some(ProcurementAlert {
+                id: ProcurementAlert::id_for(
+                    &current.source_id,
+                    "solicitation-mirror",
+                    &change.row_key,
+                    kind,
+                    &prior.id,
+                    &current.id,
+                ),
+                source_id: current.source_id.clone(),
+                surface: "solicitation-mirror".to_owned(),
+                old_snapshot_id: prior.id.clone(),
+                old_snapshot_digest: prior.persisted_digest.clone(),
+                new_snapshot_id: current.id.clone(),
+                new_snapshot_digest: current.persisted_digest.clone(),
+                changes: vec![record_change],
+                retrieved_at: retrieved_at.to_owned(),
+                coverage_state: current.coverage_state,
+                matter_ids: Vec::new(),
+                identifier_ids: Vec::new(),
+                taxonomy_matches: Vec::new(),
+                summary,
+            })
+        })
+        .collect()
 }
 
 /// The URL and fixture filename for a reviewed procurement surface.
@@ -94,15 +237,32 @@ pub fn dry_run_plan(store: &Store, source_id: &str) -> Result<DryRunPlan, String
 /// expired review refuses) and additionally fails closed on a host outside the
 /// reviewed scope or on any announced restrictions. `surface_url` is validated
 /// as in-scope before the transport is ever constructed.
-fn check_live_gate(store: &Store, source_id: &str) -> Result<SourceReview> {
+fn check_live_gate<'a>(
+    store: &Store,
+    config: &'a crate::StateConfig,
+    source_id: &str,
+    now: OffsetDateTime,
+) -> Result<(&'a crate::SourceConfig, SourceReview)> {
     let (url, _) = surface_url(source_id)
         .ok_or_else(|| anyhow::anyhow!("unknown procurement source: {source_id}"))?;
-    let review = crate::procurement_cmd::require_review_for_live(store, source_id)?;
-    let host = url
-        .split("://")
-        .nth(1)
-        .and_then(|rest| rest.split('/').next())
-        .unwrap_or_default();
+    let source = config
+        .sources
+        .iter()
+        .find(|source| source.id == source_id)
+        .ok_or_else(|| anyhow!("procurement source {source_id} is not configured"))?;
+    if source.url != url {
+        bail!(
+            "live retrieval refused: configured URL differs from reviewed surface for {source_id}"
+        );
+    }
+    let review = crate::procurement_cmd::require_review_for_live_at(store, source_id, now)?;
+    if review.source_config_digest != crate::source_config_digest(source) {
+        bail!("live retrieval refused: source configuration changed since review for {source_id}");
+    }
+    let parsed = url::Url::parse(url)?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow!("source URL has no host"))?;
     if !review
         .reviewed_hosts
         .iter()
@@ -115,26 +275,55 @@ fn check_live_gate(store: &Store, source_id: &str) -> Result<SourceReview> {
     if !review.restrictions.is_empty() {
         bail!("live retrieval refused: a prior response announced restrictions for {source_id}");
     }
-    Ok(review)
+    if !review
+        .endpoint_patterns
+        .iter()
+        .any(|path| path == parsed.path())
+    {
+        bail!("live retrieval refused: endpoint is outside reviewed scope for {source_id}");
+    }
+    if !store.source_fetch_allowed(
+        source_id,
+        source.minimum_interval_seconds,
+        now.unix_timestamp(),
+    )? {
+        bail!("rate limit: source {source_id} was fetched within the configured interval");
+    }
+    Ok((source, review))
 }
 
 /// Runs the live refresh given a transport. Fails closed on any gate failure.
 #[allow(clippy::too_many_lines)]
 fn refresh_live_with(
     store: &Store,
+    config: &crate::StateConfig,
     source_id: &str,
     transport: &mut dyn ProcurementTransport,
+    now: OffsetDateTime,
 ) -> Result<()> {
-    let _review = check_live_gate(store, source_id)?;
+    let (source, _review) = check_live_gate(store, config, source_id, now)?;
     let (url, _) = surface_url(source_id)
         .ok_or_else(|| anyhow::anyhow!("unknown procurement source: {source_id}"))?;
+    let retrieved_at = now.format(&Rfc3339)?;
 
     // Prior evidence for a conditional request, if a prior snapshot exists.
     let latest = latest_snapshot(store, source_id).map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    let prior_etag = latest.as_ref().and_then(|s| s.etag.clone());
+    let prior_etag = latest
+        .as_ref()
+        .filter(|snapshot| prior_blob_verified(store, snapshot))
+        .and_then(|snapshot| snapshot.etag.clone());
 
+    // Claim the interval atomically before transport. Failed HTTP responses,
+    // oversized bodies, and parser errors still consume the fetch attempt.
+    if !store.try_record_source_fetch(
+        source_id,
+        source.minimum_interval_seconds,
+        now.unix_timestamp(),
+    )? {
+        bail!("rate limit: source {source_id} was fetched within the configured interval");
+    }
     let fetched = transport
-        .fetch(url, prior_etag.as_deref())
+        .fetch(source_id, url, prior_etag.as_deref(), &retrieved_at)
         .map_err(|e| anyhow::anyhow!("live fetch failed for {source_id}: {e}"))?;
 
     // Persist provenance observations first, before any state change.
@@ -149,16 +338,19 @@ fn refresh_live_with(
         let existing = latest.as_ref().ok_or_else(|| {
             anyhow::anyhow!("304 without a prior snapshot for {source_id}: refusing to record")
         })?;
+        if !prior_blob_verified(store, existing) {
+            bail!("304 without preserved original bytes for {source_id}: refusing to record");
+        }
         let acquisition = Acquisition {
             source_id: source_id.to_owned(),
             source_url: url.to_owned(),
-            retrieved_at: fetched_retrieved_at(),
+            retrieved_at: retrieved_at.clone(),
             bytes_digest: existing.persisted_digest.clone(),
             content_type: fetched.content_type.clone(),
             etag: fetched.etag.clone(),
             last_modified: fetched.last_modified.clone(),
             final_url: fetched.final_url.clone(),
-            redirect_history: Vec::new(),
+            redirect_history: redirect_history(&fetched.observations),
             parser_version: parser_version(source_id),
             schema_version: 2,
             authority: SourceAuthority::OfficialInformationalMirror,
@@ -177,20 +369,40 @@ fn refresh_live_with(
 
     // Changed bytes: parse, record a supersession snapshot, run change alerts.
     let digest = sha256_hex(&fetched.bytes);
+    // Preserve the exact response even when parsing or row quarantine fails.
+    // Its fetch observation can then be audited without publishing a snapshot.
+    store.persist_content(&digest, &fetched.bytes)?;
     let html = String::from_utf8_lossy(&fetched.bytes);
-    let rows = parse_awards_table(&html, &digest)
-        .map_err(|e| anyhow::anyhow!("parse refreshed awards snapshot: {e}"))?;
-
+    let parsed = match source_id {
+        "colorado-springs-contract-awards" => ParsedSurface::Awards(
+            parse_awards_table(&html, &digest)
+                .map_err(|e| anyhow!("parse refreshed awards snapshot: {e}"))?,
+        ),
+        "colorado-springs-solicitation-mirror" => ParsedSurface::Solicitations(
+            parse_solicitations(&html, &digest)
+                .map_err(|e| anyhow!("parse refreshed solicitation snapshot: {e}"))?,
+        ),
+        _ => bail!("unknown procurement source: {source_id}"),
+    };
+    let parsed_count = match &parsed {
+        ParsedSurface::Awards(rows) => rows.len(),
+        ParsedSurface::Solicitations(rows) => rows.len(),
+    };
+    if parsed_count == 0 {
+        bail!(
+            "refreshed {source_id} contains no parsed rows; quarantining capture to avoid unsupported mass-removal alerts"
+        );
+    }
     let acquisition = Acquisition {
         source_id: source_id.to_owned(),
         source_url: url.to_owned(),
-        retrieved_at: fetched_retrieved_at(),
+        retrieved_at: retrieved_at.clone(),
         bytes_digest: digest.clone(),
         content_type: fetched.content_type.clone(),
         etag: fetched.etag.clone(),
         last_modified: fetched.last_modified.clone(),
         final_url: fetched.final_url.clone(),
-        redirect_history: Vec::new(),
+        redirect_history: redirect_history(&fetched.observations),
         parser_version: parser_version(source_id),
         schema_version: 2,
         authority: SourceAuthority::OfficialInformationalMirror,
@@ -204,65 +416,111 @@ fn refresh_live_with(
     // (a legacy capture), no prior rows are available and change detection
     // cannot fabricate a diff; the snapshot is still recorded and its own rows
     // are persisted for future comparisons.
-    let prior_stored = latest
+    let prior_stored = match latest
         .as_ref()
-        .and_then(|p| pnull_procurement::snapshot_rows(store, &p.id).ok());
-    let new_rows = pnull_procurement::award_record_rows(&rows);
+        .map(|snapshot| pnull_procurement::snapshot_rows(store, &snapshot.id))
+    {
+        Some(Ok(rows)) => Some(rows),
+        Some(Err(pnull_procurement::SnapshotError::LegacyOrIncomplete(_))) | None => None,
+        Some(Err(error)) => return Err(anyhow!("prior snapshot row integrity failed: {error}")),
+    };
+    let new_rows = match &parsed {
+        ParsedSurface::Awards(rows) => pnull_procurement::award_record_rows(rows),
+        ParsedSurface::Solicitations(records) => solicitation_record_rows(records),
+    };
     let (new_snapshot, _) = record_snapshot(
         store,
         &acquisition,
         latest.as_ref(),
-        Some(rows.len() as u64),
+        Some(new_rows.len() as u64),
         &prior_stored.clone().unwrap_or_default(),
         &new_rows,
     )
     .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
+    match &parsed {
+        ParsedSurface::Awards(rows) => {
+            for row in rows {
+                pnull_procurement::attach_award_row(
+                    store,
+                    row,
+                    std::slice::from_ref(&new_snapshot.id),
+                )?;
+            }
+        }
+        ParsedSurface::Solicitations(records) => {
+            for record in records {
+                pnull_procurement::attach_solicitation_record(
+                    store,
+                    record,
+                    std::slice::from_ref(&new_snapshot.id),
+                )?;
+            }
+        }
+    }
+
     // Change detection only applies against a prior snapshot whose rows were
-    // preserved in the database. The stored rows are reconstructed back into
-    // award rows from their persisted raw JSON. Rows without a raw value source
-    // are skipped (never fabricated); if that leaves no comparable prior rows,
-    // no alerts are produced.
+    // preserved in the database. Award field-level changes require their
+    // persisted raw values; solicitation changes use canonical stored rows.
     let mut alerts = Vec::new();
     let mut prior_for_alerts: Option<pnull_core::SourceSnapshot> = None;
-    if let (Some(prior), Some(prior_rows)) = (latest.as_ref(), prior_stored)
+    if let (Some(prior), Some(prior_rows)) = (latest.as_ref(), prior_stored.as_ref())
         && prior.persisted_digest != new_snapshot.persisted_digest
     {
-        let prior_award_rows: Vec<pnull_procurement::AwardRow> = prior_rows
-            .iter()
-            .filter_map(pnull_procurement::award_row_from_record_row)
-            .collect();
-        if !prior_award_rows.is_empty() {
-            let built = build_change_alerts(
-                source_id,
-                "contract-award-table",
-                &prior.id,
-                &prior.persisted_digest,
-                &new_snapshot.id,
-                &new_snapshot.persisted_digest,
-                &fetched_retrieved_at(),
-                new_snapshot.coverage_state,
-                &prior_award_rows,
-                &rows,
-                &[],
-                &[],
-            );
-            alerts = built;
+        match &parsed {
+            ParsedSurface::Awards(rows) => {
+                let prior_award_rows: Vec<pnull_procurement::AwardRow> = prior_rows
+                    .iter()
+                    .filter_map(pnull_procurement::award_row_from_record_row)
+                    .collect();
+                if !prior_award_rows.is_empty() {
+                    alerts = build_change_alerts(
+                        source_id,
+                        "contract-award-table",
+                        &prior.id,
+                        &prior.persisted_digest,
+                        &new_snapshot.id,
+                        &new_snapshot.persisted_digest,
+                        &retrieved_at,
+                        new_snapshot.coverage_state,
+                        &prior_award_rows,
+                        rows,
+                        &[],
+                        &[],
+                    );
+                }
+            }
+            ParsedSurface::Solicitations(_) => {
+                alerts = solicitation_change_alerts(
+                    prior,
+                    &new_snapshot,
+                    prior_rows,
+                    &new_rows,
+                    &retrieved_at,
+                );
+            }
+        }
+        if !alerts.is_empty() {
             prior_for_alerts = Some(prior.clone());
         }
     }
 
-    // Resolve affected matter ids by the exact-identifier rule (never similarity).
+    // Resolve affected matter ids from the stored row's actual identifier.
     let mut affected = Vec::new();
     for alert in &mut alerts {
-        let normalized = alert
-            .changes
-            .first()
-            .map(|c| matter_id_for_identifier(&c.row_identity))
-            .unwrap_or_default();
-        alert.matter_ids = vec![normalized.clone()];
-        if !normalized.is_empty() && !affected.contains(&normalized) {
-            affected.push(normalized);
+        let matter_id = alert.changes.first().and_then(|change| {
+            alert_matter_id(
+                source_id,
+                &change.row_identity,
+                &new_rows,
+                prior_stored.as_deref(),
+            )
+        });
+        if let Some(matter_id) = matter_id {
+            alert.matter_ids = vec![matter_id.clone()];
+            if !affected.contains(&matter_id) {
+                affected.push(matter_id);
+            }
         }
     }
     let inserted =
@@ -274,7 +532,7 @@ fn refresh_live_with(
         ensure_matter(
             store,
             matter_id,
-            &format!("{matter_id} — affected award record"),
+            &format!("{matter_id} — affected procurement record"),
         )
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     }
@@ -289,7 +547,7 @@ fn refresh_live_with(
             prior.persisted_digest
         );
     }
-    println!("  parsed {} award row(s)", rows.len());
+    println!("  parsed {} {} row(s)", new_rows.len(), parsed.label());
     println!(
         "  change alerts: {inserted} new ({} total produced)",
         alerts.len()
@@ -302,13 +560,6 @@ fn refresh_live_with(
     Ok(())
 }
 
-/// The deterministic retrieval timestamp used by the offline live-refresh path.
-/// Real `--live` refresh would use the actual clock; the offline fixtures use a
-/// fixed timestamp so the ledger stays reproducible.
-fn fetched_retrieved_at() -> String {
-    "2026-08-31T00:00:00Z".to_owned()
-}
-
 fn parser_version(source_id: &str) -> String {
     match source_id {
         "colorado-springs-solicitation-mirror" => "solicitations-1.0".to_owned(),
@@ -317,7 +568,12 @@ fn parser_version(source_id: &str) -> String {
 }
 
 /// Runs the refresh command. `live=false` is the dry-run default (no network).
-pub fn refresh_procurement(store: &Store, source_id: &str, live: bool) -> Result<()> {
+pub fn refresh_procurement(
+    store: &Store,
+    config: &crate::StateConfig,
+    source_id: &str,
+    live: bool,
+) -> Result<()> {
     if !live {
         let plan = dry_run_plan(store, source_id).map_err(|e| anyhow!(e))?;
         println!(
@@ -332,32 +588,41 @@ pub fn refresh_procurement(store: &Store, source_id: &str, live: bool) -> Result
         println!("dry run: zero network activity.");
         return Ok(());
     }
-    // Real live path: construct a DNS-safe HTTPS transport behind the review
-    // gate and perform the refresh.
-    let mut transport = HttpTransport::new().map_err(|e| anyhow!(e))?;
-    refresh_live_with(store, source_id, &mut transport)
+    let now = OffsetDateTime::now_utc();
+    let (source, _) = check_live_gate(store, config, source_id, now)?;
+    let mut transport = HttpTransport::new(store, source.maximum_bytes.min(MAX_FETCH_BYTES))
+        .map_err(|e| anyhow!(e))?;
+    refresh_live_with(store, config, source_id, &mut transport, now)
 }
 
 /// The real DNS-safe conditional HTTPS transport. Only constructed on the
 /// `--live` path (never in tests or the demo). Wraps `pnull_http`'s
 /// provenance-aware fetch.
-struct HttpTransport {
+struct HttpTransport<'a> {
+    store: &'a Store,
     client: pnull_http::ReqwestTransport,
+    max_bytes: usize,
 }
 
-impl HttpTransport {
-    fn new() -> Result<Self, String> {
-        let client =
-            pnull_http::ReqwestTransport::new(MAX_FETCH_BYTES).map_err(|e| e.to_string())?;
-        Ok(Self { client })
+impl<'a> HttpTransport<'a> {
+    fn new(store: &'a Store, max_bytes: usize) -> Result<Self, String> {
+        let client = pnull_http::ReqwestTransport::new(max_bytes).map_err(|e| e.to_string())?;
+        Ok(Self {
+            store,
+            client,
+            max_bytes,
+        })
     }
-}
 
-/// Cap on the bytes fetched for a refreshed surface.
-const MAX_FETCH_BYTES: usize = 8 * 1024 * 1024;
-
-impl ProcurementTransport for HttpTransport {
-    fn fetch(&mut self, url: &str, prior_etag: Option<&str>) -> Result<TransportFetch, String> {
+    fn fetch_with(
+        &self,
+        source_id: &str,
+        url: &str,
+        prior_etag: Option<&str>,
+        retrieved_at: &str,
+        resolver: &dyn pnull_http::Resolver,
+        transport: &dyn pnull_http::Transport,
+    ) -> Result<TransportFetch, String> {
         let parsed = url::Url::parse(url).map_err(|e| e.to_string())?;
         let host = parsed
             .host_str()
@@ -365,22 +630,32 @@ impl ProcurementTransport for HttpTransport {
             .to_owned();
         let config = pnull_http::FetchConfig {
             reviewed_hosts: vec![host.clone()],
-            max_bytes: MAX_FETCH_BYTES,
+            reviewed_paths: Some(vec![parsed.path().to_owned()]),
+            max_bytes: self.max_bytes,
         };
-        let resolver = pnull_http::SystemResolver;
         let prior = prior_etag.map(|etag| pnull_http::PriorEvidence {
             evidence_id: etag.to_owned(),
             etag: Some(etag.to_owned()),
             last_modified: None,
         });
         let request = pnull_http::FetchRequest {
-            source_id: None,
+            source_id: Some(source_id.to_owned()),
             requested_url: url.to_owned(),
-            retrieved_at: fetched_retrieved_at(),
+            retrieved_at: retrieved_at.to_owned(),
             prior,
         };
-        let result = pnull_http::provenance_fetch(&config, &resolver, &self.client, &request)
-            .map_err(|e| e.to_string())?;
+        let result =
+            match pnull_http::provenance_fetch_detailed(&config, resolver, transport, &request) {
+                Ok(result) => result,
+                Err(failure) => {
+                    for observation in &failure.observations {
+                        self.store
+                            .insert_fetch_observation(observation)
+                            .map_err(|error| error.to_string())?;
+                    }
+                    return Err(failure.error.to_string());
+                }
+            };
         let last = result.observations.last().cloned();
         Ok(TransportFetch {
             bytes: result.body.unwrap_or_default(),
@@ -394,22 +669,134 @@ impl ProcurementTransport for HttpTransport {
     }
 }
 
+/// Cap on the bytes fetched for a refreshed surface.
+const MAX_FETCH_BYTES: usize = 8 * 1024 * 1024;
+
+impl ProcurementTransport for HttpTransport<'_> {
+    fn fetch(
+        &mut self,
+        source_id: &str,
+        url: &str,
+        prior_etag: Option<&str>,
+        retrieved_at: &str,
+    ) -> Result<TransportFetch, String> {
+        self.fetch_with(
+            source_id,
+            url,
+            prior_etag,
+            retrieved_at,
+            &pnull_http::SystemResolver,
+            &self.client,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use pnull_core::SourceReview;
+    use pnull_http::{HttpError, Resolver, Transport, TransportRequest, TransportResponse};
+    use std::net::IpAddr;
     use tempfile::tempdir;
 
-    fn review(source_id: &str, expires: &str, host: &str) -> SourceReview {
+    struct PublicResolver;
+
+    impl Resolver for PublicResolver {
+        fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, HttpError> {
+            Ok(vec!["93.184.216.34".parse().expect("public IP")])
+        }
+    }
+
+    struct FailedStatusTransport;
+
+    impl Transport for FailedStatusTransport {
+        fn request(&self, _request: &TransportRequest) -> Result<TransportResponse, HttpError> {
+            Ok(TransportResponse {
+                status_code: 503,
+                headers: vec![("retry-after".to_owned(), "120".to_owned())],
+                body: b"temporarily unavailable".to_vec(),
+            })
+        }
+    }
+
+    #[test]
+    fn real_procurement_transport_preserves_failed_http_receipt() {
+        let directory = tempdir().expect("temporary directory");
+        let store = Store::open(directory.path()).expect("store");
+        let transport = HttpTransport::new(&store, 1024).expect("transport");
+        let source_id = "colorado-springs-contract-awards";
+        let (url, _) = surface_url(source_id).expect("source URL");
+        let error = transport
+            .fetch_with(
+                source_id,
+                url,
+                None,
+                "2026-11-10T00:00:00Z",
+                &PublicResolver,
+                &FailedStatusTransport,
+            )
+            .err()
+            .expect("HTTP 503 must fail");
+        assert!(error.contains("network transport failed"));
+        let receipts = store.fetch_observations(source_id).expect("fetch receipts");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].status_code, 503);
+        assert_eq!(receipts[0].requested_url, url);
+        assert!(
+            receipts[0]
+                .allowlisted_headers
+                .iter()
+                .any(|(name, value)| name == "retry-after" && value == "120")
+        );
+    }
+
+    fn test_config() -> crate::StateConfig {
+        let mut config: crate::StateConfig = toml::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../configs/states/co.toml"
+        )))
+        .expect("state config");
+        for source in &mut config.sources {
+            source.minimum_interval_seconds = 0;
+        }
+        config
+    }
+
+    fn test_now(day: u8) -> OffsetDateTime {
+        OffsetDateTime::parse(&format!("2026-11-{day:02}T12:00:00Z"), &Rfc3339).expect("test time")
+    }
+
+    fn review(
+        config: &crate::StateConfig,
+        source_id: &str,
+        expires: &str,
+        host: &str,
+    ) -> SourceReview {
+        const ROBOTS_BYTES: &[u8] = b"User-agent: *\nAllow: /\n";
+        const CAPTURED_AT: &str = "2026-08-01T00:00:00Z";
+        let source = config
+            .sources
+            .iter()
+            .find(|source| source.id == source_id)
+            .expect("configured source");
         SourceReview {
             id: format!("review:{source_id}"),
             source_id: source_id.to_owned(),
-            source_config_digest: "cfg".to_owned(),
+            source_config_digest: crate::source_config_digest(source),
             reviewed_hosts: vec![host.to_owned()],
-            endpoint_patterns: Vec::new(),
+            endpoint_patterns: vec![
+                url::Url::parse(&source.url)
+                    .expect("source URL")
+                    .path()
+                    .to_owned(),
+            ],
             robots_url: format!("https://{host}/robots.txt"),
-            robots_snapshot_digest: "digest".to_owned(),
-            robots_provenance: None,
+            robots_snapshot_digest: sha256_hex(ROBOTS_BYTES),
+            robots_provenance: Some(FetchObservation::id_for(
+                &format!("https://{host}/robots.txt"),
+                CAPTURED_AT,
+                200,
+            )),
             terms_urls: Vec::new(),
             terms_snapshot_digests: Vec::new(),
             reviewer: "tester".to_owned(),
@@ -422,10 +809,50 @@ mod tests {
         }
     }
 
-    fn insert_review(store: &Store, source_id: &str, host: &str) {
+    fn insert_review_record(store: &Store, review: &SourceReview) {
+        const ROBOTS_BYTES: &[u8] = b"User-agent: *\nAllow: /\n";
+        const CAPTURED_AT: &str = "2026-08-01T00:00:00Z";
         store
-            .insert_source_review(&review(source_id, "2027-01-01T00:00:00Z", host))
-            .expect("insert review");
+            .persist_content(&review.robots_snapshot_digest, ROBOTS_BYTES)
+            .expect("preserved robots");
+        store
+            .insert_fetch_observation(&FetchObservation {
+                id: review.robots_provenance.clone().expect("robots fetch id"),
+                source_id: Some(review.source_id.clone()),
+                requested_url: review.robots_url.clone(),
+                resolved_ips: vec!["203.0.113.10".to_owned()],
+                retrieved_at: CAPTURED_AT.to_owned(),
+                method: "GET".to_owned(),
+                status_code: 200,
+                redirect_target: None,
+                final_url: review.robots_url.clone(),
+                allowlisted_headers: Vec::new(),
+                content_type: Some("text/plain".to_owned()),
+                content_length: Some(ROBOTS_BYTES.len() as u64),
+                etag: None,
+                last_modified: None,
+                body_digest: Some(review.robots_snapshot_digest.clone()),
+                error: None,
+            })
+            .expect("robots receipt");
+        store.insert_source_review(review).expect("review");
+    }
+
+    fn insert_review(store: &Store, source_id: &str, host: &str) {
+        let config = test_config();
+        insert_review_record(
+            store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", host),
+        );
+    }
+
+    fn refresh_test(
+        store: &Store,
+        source_id: &str,
+        transport: &mut dyn ProcurementTransport,
+        day: u8,
+    ) -> Result<()> {
+        refresh_live_with(store, &test_config(), source_id, transport, test_now(day))
     }
 
     /// A fake transport that serves fixed bytes, tracks whether it was called,
@@ -456,8 +883,10 @@ mod tests {
     impl ProcurementTransport for FakeTransport {
         fn fetch(
             &mut self,
+            _source_id: &str,
             url: &str,
             _prior_etag: Option<&str>,
+            _retrieved_at: &str,
         ) -> Result<TransportFetch, String> {
             self.calls += 1;
             Ok(TransportFetch {
@@ -476,6 +905,24 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct FailingTransport {
+        calls: usize,
+    }
+
+    impl ProcurementTransport for FailingTransport {
+        fn fetch(
+            &mut self,
+            _source_id: &str,
+            _url: &str,
+            _prior_etag: Option<&str>,
+            _retrieved_at: &str,
+        ) -> Result<TransportFetch, String> {
+            self.calls += 1;
+            Err("simulated network failure".to_owned())
+        }
+    }
+
     const AWARDS_HOST: &str = "coloradosprings.gov";
 
     /// Workspace-root-anchored path to a fixture (tests run from the crate dir).
@@ -489,6 +936,7 @@ mod tests {
 
     const AWARDS_FIXTURE: &str = "fixtures/procurement/contract-awards.html";
     const AWARDS_FIXTURE_2: &str = "fixtures/procurement/contract-awards-2.html";
+    const SOLICITATIONS_FIXTURE: &str = "fixtures/procurement/solicitations.html";
 
     fn baseline_path() -> String {
         workspace_fixture(AWARDS_FIXTURE)
@@ -512,7 +960,12 @@ mod tests {
         let store = Store::open(dir.path()).expect("open");
         let transport = FakeTransport::new(&awards_bytes());
         // refresh_procurement in dry-run mode must never construct or call a transport.
-        let out = refresh_procurement(&store, "colorado-springs-contract-awards", false);
+        let out = refresh_procurement(
+            &store,
+            &test_config(),
+            "colorado-springs-contract-awards",
+            false,
+        );
         assert!(out.is_ok());
         assert_eq!(transport.calls, 0, "dry run must make zero transport calls");
         assert_eq!(
@@ -538,7 +991,12 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let store = Store::open(dir.path()).expect("open");
         let mut transport = FakeTransport::new(&awards_bytes());
-        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        let out = refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut transport,
+            8,
+        );
         assert!(out.is_err());
         assert!(out.unwrap_err().to_string().contains("source review"));
         assert_eq!(
@@ -559,17 +1017,107 @@ mod tests {
     fn live_expired_review_is_refused() {
         let dir = tempdir().expect("tempdir");
         let store = Store::open(dir.path()).expect("open");
-        store
-            .insert_source_review(&review(
+        insert_review_record(
+            &store,
+            &review(
+                &test_config(),
                 "colorado-springs-contract-awards",
-                "2026-01-01T00:00:00Z",
+                "2026-09-01T00:00:00Z",
                 AWARDS_HOST,
-            ))
-            .expect("review");
+            ),
+        );
         let mut transport = FakeTransport::new(&awards_bytes());
-        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        let out = refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut transport,
+            8,
+        );
         assert!(out.is_err());
         assert_eq!(store.all_procurement_alerts().expect("alerts").len(), 0);
+    }
+
+    #[test]
+    fn live_refuses_unbound_or_changed_robots_review_before_transport() {
+        let source_id = "colorado-springs-contract-awards";
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let mut legacy = review(
+            &test_config(),
+            source_id,
+            "2027-01-01T00:00:00Z",
+            AWARDS_HOST,
+        );
+        legacy.robots_snapshot_digest.clear();
+        legacy.robots_provenance = None;
+        store.insert_source_review(&legacy).expect("legacy review");
+        let mut transport = FakeTransport::new(&awards_bytes());
+        let error = refresh_test(&store, source_id, &mut transport, 8).unwrap_err();
+        assert!(error.to_string().contains("robots snapshot digest"));
+        assert_eq!(transport.calls, 0);
+
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let valid = review(
+            &test_config(),
+            source_id,
+            "2027-01-01T00:00:00Z",
+            AWARDS_HOST,
+        );
+        insert_review_record(&store, &valid);
+        std::fs::write(
+            store
+                .content_path(&valid.robots_snapshot_digest)
+                .expect("path"),
+            b"changed",
+        )
+        .expect("tamper saved bytes");
+        let error = refresh_test(&store, source_id, &mut transport, 8).unwrap_err();
+        assert!(error.to_string().contains("do not match the review digest"));
+        assert_eq!(transport.calls, 0);
+    }
+
+    #[test]
+    fn changed_source_configuration_or_unreviewed_path_is_refused() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-contract-awards";
+        insert_review(&store, source_id, AWARDS_HOST);
+        let mut changed = test_config();
+        changed
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+            .expect("source")
+            .maximum_bytes += 1;
+        let mut transport = FakeTransport::new(&awards_bytes());
+        let result = refresh_live_with(&store, &changed, source_id, &mut transport, test_now(8));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("configuration changed")
+        );
+        assert_eq!(transport.calls, 0);
+
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let mut wrong_scope = review(
+            &test_config(),
+            source_id,
+            "2027-01-01T00:00:00Z",
+            AWARDS_HOST,
+        );
+        wrong_scope.endpoint_patterns = vec!["/some-other-page".to_owned()];
+        insert_review_record(&store, &wrong_scope);
+        let result = refresh_test(&store, source_id, &mut transport, 8);
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("outside reviewed scope")
+        );
+        assert_eq!(transport.calls, 0);
     }
 
     #[test]
@@ -589,7 +1137,12 @@ mod tests {
         // Refresh returns the second (changed) fixture -> new snapshot + alerts.
         let changed = std::fs::read(changed_path()).expect("read");
         let mut transport = FakeTransport::new(&changed);
-        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        let out = refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut transport,
+            8,
+        );
         assert!(out.is_ok(), "live refresh should succeed: {:?}", out.err());
 
         let snapshots = store
@@ -624,6 +1177,22 @@ mod tests {
         assert!(kinds.contains("record_added"));
         assert!(kinds.contains("record_modified"));
         assert!(kinds.contains("record_removed"));
+        assert!(alerts.iter().all(|alert| alert.matter_ids.len() == 1));
+        let added = alerts
+            .iter()
+            .find(|alert| {
+                alert.changes[0].change_kind == ProcurementChangeKind::RecordAdded
+                    && alert.changes[0].row_identity == "R25044AB"
+            })
+            .expect("added award alert");
+        assert!(
+            store
+                .procurement_events(&added.matter_ids[0])
+                .expect("attached award events")
+                .iter()
+                .any(|event| event.evidence_ids.contains(&snapshots[1].id)),
+            "live award rows must attach to the matter with this snapshot as evidence"
+        );
         assert!(
             alerts
                 .iter()
@@ -645,16 +1214,163 @@ mod tests {
         let changed = std::fs::read(changed_path()).expect("read");
 
         let mut t1 = FakeTransport::new(&changed);
-        refresh_live_with(&store, "colorado-springs-contract-awards", &mut t1).expect("refresh 1");
+        refresh_test(&store, "colorado-springs-contract-awards", &mut t1, 8).expect("refresh 1");
         let alerts_1 = store.all_procurement_alerts().expect("alerts").len();
 
         // Re-ingesting the same snapshot pair must not duplicate alerts.
         let mut t2 = FakeTransport::new(&changed);
-        refresh_live_with(&store, "colorado-springs-contract-awards", &mut t2).expect("refresh 2");
+        refresh_test(&store, "colorado-springs-contract-awards", &mut t2, 9).expect("refresh 2");
         let alerts_2 = store.all_procurement_alerts().expect("alerts").len();
         assert_eq!(
             alerts_1, alerts_2,
             "re-running the same refresh is idempotent"
+        );
+    }
+
+    #[test]
+    fn returned_bytes_create_a_new_head_and_reverse_change_alerts() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-contract-awards";
+        insert_review(&store, source_id, AWARDS_HOST);
+        let first_bytes = std::fs::read(baseline_path()).expect("first fixture");
+        let second_bytes = std::fs::read(changed_path()).expect("second fixture");
+        refresh_test(&store, source_id, &mut FakeTransport::new(&first_bytes), 8).expect("first A");
+        refresh_test(&store, source_id, &mut FakeTransport::new(&second_bytes), 9).expect("B");
+        refresh_test(&store, source_id, &mut FakeTransport::new(&first_bytes), 10)
+            .expect("returned A");
+
+        let snapshots = store.source_snapshots(source_id).expect("snapshots");
+        assert_eq!(snapshots.len(), 3);
+        assert_eq!(snapshots[0].persisted_digest, snapshots[2].persisted_digest);
+        assert_ne!(snapshots[0].id, snapshots[2].id);
+        assert_eq!(
+            snapshots[1].supersedes.as_deref(),
+            Some(snapshots[0].id.as_str())
+        );
+        assert_eq!(
+            snapshots[2].supersedes.as_deref(),
+            Some(snapshots[1].id.as_str())
+        );
+        assert_eq!(
+            latest_snapshot(&store, source_id)
+                .expect("latest")
+                .expect("head")
+                .id,
+            snapshots[2].id
+        );
+        assert!(
+            store
+                .all_procurement_alerts()
+                .expect("alerts")
+                .iter()
+                .any(|alert| {
+                    alert.old_snapshot_id == snapshots[1].id
+                        && alert.new_snapshot_id == snapshots[2].id
+                }),
+            "B-to-A must emit a new reverse change alert"
+        );
+        assert_eq!(
+            std::fs::read(
+                store
+                    .content_path(&snapshots[0].persisted_digest)
+                    .expect("A blob")
+            )
+            .expect("preserved A bytes"),
+            first_bytes
+        );
+        assert_eq!(
+            std::fs::read(
+                store
+                    .content_path(&snapshots[1].persisted_digest)
+                    .expect("B blob")
+            )
+            .expect("preserved B bytes"),
+            second_bytes
+        );
+    }
+
+    #[test]
+    fn failed_network_attempt_still_consumes_minimum_interval() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-contract-awards";
+        let mut config = test_config();
+        config
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+            .expect("source")
+            .minimum_interval_seconds = 86_400;
+        insert_review_record(
+            &store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST),
+        );
+        let mut failed = FailingTransport::default();
+        let first = refresh_live_with(&store, &config, source_id, &mut failed, test_now(8));
+        assert!(
+            first
+                .unwrap_err()
+                .to_string()
+                .contains("simulated network failure")
+        );
+        assert_eq!(failed.calls, 1);
+        let bytes = std::fs::read(baseline_path()).expect("valid awards fixture");
+        let mut retry = FakeTransport::new(&bytes);
+        let second = refresh_live_with(&store, &config, source_id, &mut retry, test_now(8));
+        assert!(second.unwrap_err().to_string().contains("rate limit"));
+        assert_eq!(retry.calls, 0);
+        assert!(
+            store
+                .source_snapshots(source_id)
+                .expect("snapshots")
+                .is_empty()
+        );
+        refresh_live_with(&store, &config, source_id, &mut retry, test_now(9))
+            .expect("retry after a full interval");
+        assert_eq!(retry.calls, 1);
+    }
+
+    #[test]
+    fn failed_parse_attempt_still_consumes_minimum_interval() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-contract-awards";
+        let mut config = test_config();
+        config
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+            .expect("source")
+            .minimum_interval_seconds = 86_400;
+        insert_review_record(
+            &store,
+            &review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST),
+        );
+        let mut malformed = FakeTransport::new(b"<main>no award table</main>");
+        assert!(
+            refresh_live_with(&store, &config, source_id, &mut malformed, test_now(8)).is_err()
+        );
+        assert_eq!(malformed.calls, 1);
+        let mut retry = FakeTransport::new(&awards_bytes());
+        let second = refresh_live_with(&store, &config, source_id, &mut retry, test_now(8));
+        assert!(second.unwrap_err().to_string().contains("rate limit"));
+        assert_eq!(retry.calls, 0);
+        assert!(
+            store
+                .source_snapshots(source_id)
+                .expect("snapshots")
+                .is_empty()
+        );
+        let malformed_bytes = b"<main>no award table</main>";
+        assert_eq!(
+            std::fs::read(
+                store
+                    .content_path(&sha256_hex(malformed_bytes))
+                    .expect("quarantined blob path")
+            )
+            .expect("quarantined original bytes"),
+            malformed_bytes
         );
     }
 
@@ -674,7 +1390,12 @@ mod tests {
         // The fake returns identical (unchanged) bytes -> 304-style provenance.
         let baseline_bytes = std::fs::read(baseline_path()).expect("read");
         let mut transport = FakeTransport::not_modified(&baseline_bytes);
-        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        let out = refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut transport,
+            8,
+        );
         assert!(out.is_ok());
         let after = store
             .source_snapshots("colorado-springs-contract-awards")
@@ -686,6 +1407,170 @@ mod tests {
             0,
             "a 304 must create no alerts"
         );
+        let coverage = store
+            .coverage_entries("colorado-springs-contract-awards")
+            .expect("coverage");
+        assert!(coverage.iter().any(|entry| {
+            entry.http_status == Some(304)
+                && entry.state == CoverageState::InformationalOnly
+                && entry.retrieved_at == "2026-11-08T12:00:00Z"
+        }));
+    }
+
+    #[test]
+    fn repeated_refreshes_keep_distinct_coverage_and_real_timestamps() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        insert_review(&store, "colorado-springs-contract-awards", AWARDS_HOST);
+        let bytes = std::fs::read(baseline_path()).expect("baseline fixture");
+        refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut FakeTransport::new(&bytes),
+            8,
+        )
+        .expect("first refresh");
+        refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut FakeTransport::not_modified(&bytes),
+            9,
+        )
+        .expect("second refresh");
+        let coverage = store
+            .coverage_entries("colorado-springs-contract-awards")
+            .expect("coverage");
+        assert_eq!(coverage.len(), 2);
+        assert_eq!(coverage[0].retrieved_at, "2026-11-08T12:00:00Z");
+        assert_eq!(coverage[1].retrieved_at, "2026-11-09T12:00:00Z");
+    }
+
+    #[test]
+    fn live_solicitation_refresh_uses_its_parser_and_preserves_original_bytes() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-solicitation-mirror";
+        insert_review(&store, source_id, AWARDS_HOST);
+        let bytes = std::fs::read(workspace_fixture(SOLICITATIONS_FIXTURE)).expect("fixture");
+        refresh_test(&store, source_id, &mut FakeTransport::new(&bytes), 8)
+            .expect("solicitation refresh");
+        let snapshot = store
+            .source_snapshots(source_id)
+            .expect("snapshots")
+            .pop()
+            .expect("snapshot");
+        assert_eq!(snapshot.record_count, Some(3));
+        assert_eq!(snapshot.parser_version, "solicitations-1.0");
+        assert_eq!(
+            std::fs::read(
+                store
+                    .content_path(&snapshot.persisted_digest)
+                    .expect("blob path")
+            )
+            .expect("preserved original bytes"),
+            bytes
+        );
+        assert_eq!(
+            pnull_procurement::snapshot_rows(&store, &snapshot.id)
+                .expect("stored rows")
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn changed_solicitation_rows_emit_cautious_idempotent_alerts() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let source_id = "colorado-springs-solicitation-mirror";
+        insert_review(&store, source_id, AWARDS_HOST);
+        let original = std::fs::read(workspace_fixture(SOLICITATIONS_FIXTURE)).expect("fixture");
+        refresh_test(&store, source_id, &mut FakeTransport::new(&original), 8)
+            .expect("first refresh");
+        let changed = String::from_utf8(original)
+            .expect("UTF-8 fixture")
+            .replace("Snow Removal Services", "Winter Road Services");
+        refresh_test(
+            &store,
+            source_id,
+            &mut FakeTransport::new(changed.as_bytes()),
+            9,
+        )
+        .expect("second refresh");
+        let alerts = store.all_procurement_alerts().expect("alerts");
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(
+            alerts[0].changes[0].change_kind,
+            ProcurementChangeKind::RecordModified
+        );
+        assert_eq!(alerts[0].matter_ids, vec!["proc:matter:co:r25301ab"]);
+        assert!(
+            store.procurement_matter(&alerts[0].matter_ids[0]).is_ok(),
+            "the alert must point to the attached normalized matter"
+        );
+        assert!(
+            alerts[0]
+                .summary
+                .contains("informational mirror may be incomplete")
+        );
+        assert!(!alerts[0].summary.contains("contract approved"));
+        refresh_test(
+            &store,
+            source_id,
+            &mut FakeTransport::new(changed.as_bytes()),
+            10,
+        )
+        .expect("repeat same bytes");
+        assert_eq!(store.all_procurement_alerts().expect("alerts").len(), 1);
+    }
+
+    #[test]
+    fn unnumbered_solicitation_row_does_not_create_an_identifier_matter() {
+        let records = parse_solicitations(
+            "<main><h2>Unnumbered procurement opportunity</h2></main>",
+            "digest",
+        )
+        .expect("parse");
+        let rows = solicitation_record_rows(&records);
+        assert_eq!(rows.len(), 1);
+        assert!(
+            alert_matter_id(
+                "colorado-springs-solicitation-mirror",
+                &rows[0].key,
+                &rows,
+                None,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn rate_limit_refuses_a_second_live_request_before_transport() {
+        let dir = tempdir().expect("tempdir");
+        let store = Store::open(dir.path()).expect("open");
+        let mut config = test_config();
+        let source_id = "colorado-springs-contract-awards";
+        let source = config
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+            .expect("source");
+        source.minimum_interval_seconds = 86_400;
+        let review = review(&config, source_id, "2027-01-01T00:00:00Z", AWARDS_HOST);
+        insert_review_record(&store, &review);
+        let bytes = std::fs::read(baseline_path()).expect("baseline fixture");
+        refresh_live_with(
+            &store,
+            &config,
+            source_id,
+            &mut FakeTransport::new(&bytes),
+            test_now(8),
+        )
+        .expect("first refresh");
+        let mut second = FakeTransport::new(&bytes);
+        let result = refresh_live_with(&store, &config, source_id, &mut second, test_now(8));
+        assert!(result.unwrap_err().to_string().contains("rate limit"));
+        assert_eq!(second.calls, 0);
     }
 
     #[test]
@@ -693,7 +1578,7 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let store = Store::open(dir.path()).expect("open");
         let mut transport = FakeTransport::new(&awards_bytes());
-        let out = refresh_live_with(&store, "not-a-source", &mut transport);
+        let out = refresh_test(&store, "not-a-source", &mut transport, 8);
         assert!(out.is_err());
     }
 
@@ -727,7 +1612,12 @@ mod tests {
         // Snapshot B differs from A: edit an amount, remove a row, add a row.
         let changed = std::fs::read(changed_path()).expect("read changed fixture");
         let mut transport = FakeTransport::new(&changed);
-        let out = refresh_live_with(&store, "colorado-springs-contract-awards", &mut transport);
+        let out = refresh_test(
+            &store,
+            "colorado-springs-contract-awards",
+            &mut transport,
+            8,
+        );
         assert!(out.is_ok(), "live refresh should succeed: {:?}", out.err());
 
         let alerts = store.all_procurement_alerts().expect("alerts");

@@ -1,0 +1,13 @@
+# Config path<TAB>source ID<TAB>adapter. Add a reviewed source per jurisdiction.
+# Official HTML calendars discover private meeting/document candidates. API
+# event feeds run only through the separate review-gated fallback matrix on failure.
+# Direct-document archive rows can be enabled after endpoint reviews are recorded.
+configs/states/co.toml	colorado-springs-calendar	discover-calendar
+configs/states/co.toml	colorado-springs-contract-awards	procurement
+configs/states/co.toml	colorado-springs-solicitation-mirror	procurement
+configs/states/co-denver.toml	denver-calendar	discover-calendar
+configs/states/co-commerce-city.toml	commerce-city-calendar	discover-calendar
+configs/states/co-castle-rock.toml	castle-rock-calendar	discover-calendar
+configs/states/co-arapahoe-county.toml	arapahoe-county-calendar	discover-calendar
+configs/states/co-douglas-county.toml	douglas-county-calendar	discover-calendar
+configs/states/co-littleton.toml	littleton-calendar	discover-calendar

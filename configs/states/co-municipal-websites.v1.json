@@ -1,0 +1,1634 @@
+{
+  "schema_version": 1,
+  "purpose": "Municipal website discovery leads only; no site, source policy, decision, vote, contract, or case has been verified by this directory.",
+  "source": {
+    "url": "https://www.cml.org/home/networking-events/membership/membership",
+    "sha256": "eb6e541a9e14b100db8b5d46fc628bbdfd9ff554a76858bb8f9e5cbc37e4f9ec",
+    "archived_on": "2026-11-10"
+  },
+  "counts": {
+    "census_municipalities": 273,
+    "listed": 269,
+    "with_website": 241,
+    "without_website": 28,
+    "http_leads": 142,
+    "https_leads": 99,
+    "not_listed": 4
+  },
+  "municipalities": [
+    {
+      "jurisdiction_ref": "us-co-place-0800760",
+      "listing_name": "Aguilar",
+      "website_url": "http://www.aguilarco.us/",
+      "source_locator": "Links to Colorado cities and towns > Aguilar"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0800925",
+      "listing_name": "Akron",
+      "website_url": "https://townofakron.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Akron"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0801090",
+      "listing_name": "Alamosa",
+      "website_url": "http://www.cityofalamosa.org/",
+      "source_locator": "Links to Colorado cities and towns > Alamosa"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0801530",
+      "listing_name": "Alma",
+      "website_url": "http://www.townofalma.com/",
+      "source_locator": "Links to Colorado cities and towns > Alma"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0802355",
+      "listing_name": "Antonito",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Antonito"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0803235",
+      "listing_name": "Arriba",
+      "website_url": "https://townofarriba.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Arriba"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0803455",
+      "listing_name": "Arvada",
+      "website_url": "http://www.arvada.org/",
+      "source_locator": "Links to Colorado cities and towns > Arvada"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0803620",
+      "listing_name": "Aspen",
+      "website_url": "https://www.cityofaspen.com/",
+      "source_locator": "Links to Colorado cities and towns > Aspen"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0803950",
+      "listing_name": "Ault",
+      "website_url": "http://www.townofault.org/",
+      "source_locator": "Links to Colorado cities and towns > Ault"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0804000",
+      "listing_name": "Aurora",
+      "website_url": "https://www.auroragov.org/",
+      "source_locator": "Links to Colorado cities and towns > Aurora"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0804110",
+      "listing_name": "Avon",
+      "website_url": "http://www.avon.org/",
+      "source_locator": "Links to Colorado cities and towns > Avon"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0804935",
+      "listing_name": "Basalt",
+      "website_url": "http://www.basalt.net/",
+      "source_locator": "Links to Colorado cities and towns > Basalt"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0805265",
+      "listing_name": "Bayfield",
+      "website_url": "http://www.bayfieldgov.org/",
+      "source_locator": "Links to Colorado cities and towns > Bayfield"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0806090",
+      "listing_name": "Bennett",
+      "website_url": "https://townofbennett.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Bennett"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0806255",
+      "listing_name": "Berthoud",
+      "website_url": "http://www.berthoud.org/",
+      "source_locator": "Links to Colorado cities and towns > Berthoud"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0806530",
+      "listing_name": "Bethune",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Bethune"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0807025",
+      "listing_name": "Black Hawk",
+      "website_url": "http://www.cityofblackhawk.org/",
+      "source_locator": "Links to Colorado cities and towns > Black Hawk"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0807190",
+      "listing_name": "Blanca",
+      "website_url": "http://users.gojade.org/~blancaco",
+      "source_locator": "Links to Colorado cities and towns > Blanca"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0807410",
+      "listing_name": "Blue River",
+      "website_url": "https://townofblueriver.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Blue River"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0807795",
+      "listing_name": "Boone",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Boone"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0807850",
+      "listing_name": "Boulder",
+      "website_url": "http://www.bouldercolorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Boulder"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0808070",
+      "listing_name": "Bow Mar",
+      "website_url": "https://townofbowmar.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Bow Mar"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0808345",
+      "listing_name": "Branson",
+      "website_url": "http://www.bransoncolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Branson"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0808400",
+      "listing_name": "Breckenridge",
+      "website_url": "http://www.townofbreckenridge.com/",
+      "source_locator": "Links to Colorado cities and towns > Breckenridge"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0808675",
+      "listing_name": "Brighton",
+      "website_url": "http://www.brightonco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Brighton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0809115",
+      "listing_name": "Brookside",
+      "website_url": "https://townofbrookside.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Brookside"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0809280",
+      "listing_name": "Broomfield",
+      "website_url": "http://www.broomfield.org/",
+      "source_locator": "Links to Colorado cities and towns > Broomfield"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0809555",
+      "listing_name": "Brush",
+      "website_url": "http://www.brushcolo.com/",
+      "source_locator": "Links to Colorado cities and towns > Brush"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0810105",
+      "listing_name": "Buena Vista",
+      "website_url": "http://www.buenavistaco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Buena Vista"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0810600",
+      "listing_name": "Burlington",
+      "website_url": "http://www.burlingtoncolo.com/",
+      "source_locator": "Links to Colorado cities and towns > Burlington"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0811260",
+      "listing_name": "Calhan",
+      "website_url": "http://www.calhan.co/",
+      "source_locator": "Links to Colorado cities and towns > Calhan"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0811645",
+      "listing_name": "Campo",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Campo"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0811810",
+      "listing_name": "Canon City",
+      "website_url": "http://www.canoncity.org/",
+      "source_locator": "Links to Colorado cities and towns > Canon City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812045",
+      "listing_name": "Carbondale",
+      "website_url": "http://www.carbondalegov.org/",
+      "source_locator": "Links to Colorado cities and towns > Carbondale"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812387",
+      "listing_name": "Castle Pines",
+      "website_url": "https://www.castlepinesco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Castle Pines"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812415",
+      "listing_name": "Castle Rock",
+      "website_url": "http://www.crgov.com",
+      "source_locator": "Links to Colorado cities and towns > Castle Rock"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812635",
+      "listing_name": "Cedaredge",
+      "website_url": "http://www.cedaredgecolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Cedaredge"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812815",
+      "listing_name": "Centennial",
+      "website_url": "http://www.centennialco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Centennial"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812855",
+      "listing_name": "Center",
+      "website_url": "https://townofcenter.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Center"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0812900",
+      "listing_name": "Central City",
+      "website_url": "https://centralcity.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Central City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0813460",
+      "listing_name": "Cheraw",
+      "website_url": "https://townofcheraw.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Cheraw"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0813845",
+      "listing_name": "Cherry Hills Village",
+      "website_url": "http://www.cherryhillsvillage.com/",
+      "source_locator": "Links to Colorado cities and towns > Cherry Hills Village"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0814175",
+      "listing_name": "Cheyenne Wells",
+      "website_url": "http://www.townofcheyennewells.com/",
+      "source_locator": "Links to Colorado cities and towns > Cheyenne Wells"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0814765",
+      "listing_name": "Creede",
+      "website_url": "https://cityofcreede.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Creede"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0815330",
+      "listing_name": "Coal Creek",
+      "website_url": "https://townofcoalcreek.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Coal Creek"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0815550",
+      "listing_name": "Cokedale",
+      "website_url": "https://townofcokedale.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Cokedale"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0815605",
+      "listing_name": "Collbran",
+      "website_url": "https://townofcollbran.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Collbran"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0816000",
+      "listing_name": "Colorado Springs",
+      "website_url": "http://www.coloradosprings.gov",
+      "source_locator": "Links to Colorado cities and towns > Colorado Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0816385",
+      "listing_name": "Columbine Valley",
+      "website_url": "http://www.columbinevalley.org/",
+      "source_locator": "Links to Colorado cities and towns > Columbine Valley"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0816495",
+      "listing_name": "Commerce City",
+      "website_url": "http://www.c3gov.com/",
+      "source_locator": "Links to Colorado cities and towns > Commerce City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0817375",
+      "listing_name": "Cortez",
+      "website_url": "https://www.cortezco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Cortez"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0817760",
+      "listing_name": "Craig",
+      "website_url": "http://www.ci.craig.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Craig"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0817925",
+      "listing_name": "Crawford",
+      "website_url": "https://townofcrawford.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Crawford"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0818310",
+      "listing_name": "Crested Butte",
+      "website_url": "https://www.crestedbutte-co.gov/",
+      "source_locator": "Links to Colorado cities and towns > Crested Butte"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0818420",
+      "listing_name": "Crestone",
+      "website_url": "https://townofcrestone.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Crestone"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0818530",
+      "listing_name": "Cripple Creek",
+      "website_url": "http://www.cityofcripplecreek.com/",
+      "source_locator": "Links to Colorado cities and towns > Cripple Creek"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0818640",
+      "listing_name": "Crook",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Crook"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0818750",
+      "listing_name": "Crowley",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Crowley"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0819080",
+      "listing_name": "Dacono",
+      "website_url": "http://www.cityofdacono.com",
+      "source_locator": "Links to Colorado cities and towns > Dacono"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0819355",
+      "listing_name": "De Beque",
+      "website_url": "http://debeque.org/",
+      "source_locator": "Links to Colorado cities and towns > De Beque"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0819630",
+      "listing_name": "Deer Trail",
+      "website_url": "https://townofdeertrail.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Deer Trail"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0819795",
+      "listing_name": "Del Norte",
+      "website_url": "http://www.delnortecolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Del Norte"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0819850",
+      "listing_name": "Delta",
+      "website_url": "http://cityofdelta.net/",
+      "source_locator": "Links to Colorado cities and towns > Delta"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0820440",
+      "listing_name": "Dillon",
+      "website_url": "https://www.townofdillon.com/",
+      "source_locator": "Links to Colorado cities and towns > Dillon"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0820495",
+      "listing_name": "Dinosaur",
+      "website_url": "https://townofdinosaur.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Dinosaur"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0820770",
+      "listing_name": "Dolores",
+      "website_url": "https://townofdolores.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Dolores"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0821265",
+      "listing_name": "Dove Creek",
+      "website_url": "https://townofdovecreek.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Dove Creek"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0822035",
+      "listing_name": "Durango",
+      "website_url": "http://www.durangogov.org/",
+      "source_locator": "Links to Colorado cities and towns > Durango"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0822145",
+      "listing_name": "Eads",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Eads"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0822200",
+      "listing_name": "Eagle",
+      "website_url": "http://www.townofeagle.org/",
+      "source_locator": "Links to Colorado cities and towns > Eagle"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0822860",
+      "listing_name": "Eaton",
+      "website_url": "http://www.eatonco.org/",
+      "source_locator": "Links to Colorado cities and towns > Eaton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0823025",
+      "listing_name": "Eckley",
+      "website_url": "https://townofeckley.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Eckley"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0823135",
+      "listing_name": "Edgewater",
+      "website_url": "http://www.edgewaterco.com/",
+      "source_locator": "Links to Colorado cities and towns > Edgewater"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0823740",
+      "listing_name": "Elizabeth",
+      "website_url": "http://www.townofelizabeth.org/",
+      "source_locator": "Links to Colorado cities and towns > Elizabeth"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0824620",
+      "listing_name": "Empire",
+      "website_url": "https://townofempire.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Empire"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0824785",
+      "listing_name": "Englewood",
+      "website_url": "https://www.englewoodco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Englewood"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0824950",
+      "listing_name": "Erie",
+      "website_url": "http://www.erieco.gov/index.cfm",
+      "source_locator": "Links to Colorado cities and towns > Erie"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0825115",
+      "listing_name": "Estes Park",
+      "website_url": "https://estespark.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Estes Park"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0825280",
+      "listing_name": "Evans",
+      "website_url": "https://www.evanscolorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Evans"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0825610",
+      "listing_name": "Fairplay",
+      "website_url": "http://fairplayco.us/",
+      "source_locator": "Links to Colorado cities and towns > Fairplay"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0826270",
+      "listing_name": "Federal Heights",
+      "website_url": "http://www.fedheights.org/",
+      "source_locator": "Links to Colorado cities and towns > Federal Heights"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0826600",
+      "listing_name": "Firestone",
+      "website_url": "https://www.firestoneco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Firestone"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0826765",
+      "listing_name": "Flagler",
+      "website_url": "http://www.flaglercolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Flagler"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0826875",
+      "listing_name": "Fleming",
+      "website_url": "https://www.flemingcolorado.us/",
+      "source_locator": "Links to Colorado cities and towns > Fleming"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827040",
+      "listing_name": "Florence",
+      "website_url": "https://www.cityofflorenceco.gov/.",
+      "source_locator": "Links to Colorado cities and towns > Florence"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827425",
+      "listing_name": "Fort Collins",
+      "website_url": "http://www.fcgov.com/",
+      "source_locator": "Links to Colorado cities and towns > Fort Collins"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827700",
+      "listing_name": "Fort Lupton",
+      "website_url": "http://www.fortlupton.org/",
+      "source_locator": "Links to Colorado cities and towns > Fort Lupton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827810",
+      "listing_name": "Fort Morgan",
+      "website_url": "http://www.cityoffortmorgan.com/",
+      "source_locator": "Links to Colorado cities and towns > Fort Morgan"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827865",
+      "listing_name": "Fountain",
+      "website_url": "http://www.fountaincolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > Fountain"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0827975",
+      "listing_name": "Fowler",
+      "website_url": "http://www.fowlercolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Fowler"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0828105",
+      "listing_name": "Foxfield",
+      "website_url": "https://townoffoxfield.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Foxfield"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0828305",
+      "listing_name": "Fraser",
+      "website_url": "http://www.frasercolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Fraser"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0828360",
+      "listing_name": "Frederick",
+      "website_url": "http://www.frederickco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Frederick"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0828690",
+      "listing_name": "Frisco",
+      "website_url": "http://www.friscogov.com/",
+      "source_locator": "Links to Colorado cities and towns > Frisco"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0828745",
+      "listing_name": "Fruita",
+      "website_url": "http://fruita.org/",
+      "source_locator": "Links to Colorado cities and towns > Fruita"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0829185",
+      "listing_name": "Garden City",
+      "website_url": "http://townofgardencity.com/",
+      "source_locator": "Links to Colorado cities and towns > Garden City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0829680",
+      "listing_name": "Genoa",
+      "website_url": "https://townofgenoa.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Genoa"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0829735",
+      "listing_name": "Georgetown",
+      "website_url": "http://www.townofgeorgetown.us/",
+      "source_locator": "Links to Colorado cities and towns > Georgetown"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0829955",
+      "listing_name": "Gilcrest",
+      "website_url": "http://www.townofgilcrest.org/",
+      "source_locator": "Links to Colorado cities and towns > Gilcrest"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0830340",
+      "listing_name": "Glendale",
+      "website_url": "http://www.glendale.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Glendale"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0830780",
+      "listing_name": "Glenwood Springs * .",
+      "website_url": "http://www.cogs.us/",
+      "source_locator": "Links to Colorado cities and towns > Glenwood Springs * ."
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0830835",
+      "listing_name": "Golden",
+      "website_url": "http://www.cityofgolden.net/",
+      "source_locator": "Links to Colorado cities and towns > Golden"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0831550",
+      "listing_name": "Granada",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Granada"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0831605",
+      "listing_name": "Granby",
+      "website_url": "http://www.townofgranby.com/",
+      "source_locator": "Links to Colorado cities and towns > Granby"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0831660",
+      "listing_name": "Grand Junction",
+      "website_url": "http://gjcity.org/",
+      "source_locator": "Links to Colorado cities and towns > Grand Junction"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0831715",
+      "listing_name": "Grand Lake",
+      "website_url": "http://www.townofgrandlake.com/",
+      "source_locator": "Links to Colorado cities and towns > Grand Lake"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0832155",
+      "listing_name": "Greeley",
+      "website_url": "http://www.greeleygov.com/",
+      "source_locator": "Links to Colorado cities and towns > Greeley"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0832650",
+      "listing_name": "Green Mountain Falls",
+      "website_url": "https://greenmountainfalls.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Green Mountain Falls"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0833035",
+      "listing_name": "Greenwood Village",
+      "website_url": "http://www.greenwoodvillage.com/",
+      "source_locator": "Links to Colorado cities and towns > Greenwood Village"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0833310",
+      "listing_name": "Grover",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Grover"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0833640",
+      "listing_name": "Gunnison",
+      "website_url": "https://www.gunnisonco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Gunnison"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0833695",
+      "listing_name": "Gypsum",
+      "website_url": "http://www.townofgypsum.com/",
+      "source_locator": "Links to Colorado cities and towns > Gypsum"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0834740",
+      "listing_name": "Haswell",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Haswell"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0834960",
+      "listing_name": "Haxtun",
+      "website_url": "https://townofhaxtun.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Haxtun"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0835070",
+      "listing_name": "Hayden",
+      "website_url": "https://www.haydencolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Hayden"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0836610",
+      "listing_name": "Hillrose",
+      "website_url": "http://www.hillrosecolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > Hillrose"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837215",
+      "listing_name": "Holly",
+      "website_url": "http://www.townofholly.com/",
+      "source_locator": "Links to Colorado cities and towns > Holly"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837270",
+      "listing_name": "Holyoke",
+      "website_url": "http://www.cityofholyoke-co.gov/",
+      "source_locator": "Links to Colorado cities and towns > Holyoke"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837380",
+      "listing_name": "Hooper",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Hooper"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837545",
+      "listing_name": "Hotchkiss",
+      "website_url": "http://www.townofhotchkiss.com/",
+      "source_locator": "Links to Colorado cities and towns > Hotchkiss"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837600",
+      "listing_name": "Hot Sulphur Springs",
+      "website_url": "http://www.hotsulphurspringsco.com/",
+      "source_locator": "Links to Colorado cities and towns > Hot Sulphur Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837820",
+      "listing_name": "Hudson",
+      "website_url": "https://hudsoncolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > Hudson"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0837875",
+      "listing_name": "Hugo",
+      "website_url": "http://www.townhugo.com/",
+      "source_locator": "Links to Colorado cities and towns > Hugo"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0838370",
+      "listing_name": "Idaho Springs",
+      "website_url": "http://www.idahospringsco.com/",
+      "source_locator": "Links to Colorado cities and towns > Idaho Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0838535",
+      "listing_name": "Ignacio",
+      "website_url": "https://townofignacio.colorado.gov/#main-content",
+      "source_locator": "Links to Colorado cities and towns > Ignacio"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0838590",
+      "listing_name": "Iliff",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Iliff"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0839195",
+      "listing_name": "Jamestown",
+      "website_url": "http://www.jamestownco.org/",
+      "source_locator": "Links to Colorado cities and towns > Jamestown"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0839855",
+      "listing_name": "Johnstown",
+      "website_url": "https://johnstown.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Johnstown"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0839965",
+      "listing_name": "Julesburg",
+      "website_url": "http://www.townofjulesburg.com/",
+      "source_locator": "Links to Colorado cities and towns > Julesburg"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0840185",
+      "listing_name": "Keenesburg",
+      "website_url": "https://www.townofkeenesburg.com/",
+      "source_locator": "Links to Colorado cities and towns > Keenesburg"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0840515",
+      "listing_name": "Kersey",
+      "website_url": "http://www.townofkersey.com/",
+      "source_locator": "Links to Colorado cities and towns > Kersey"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0840550",
+      "listing_name": "Keystone",
+      "website_url": "https://keystone.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Keystone"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0840570",
+      "listing_name": "Kim",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Kim"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0840790",
+      "listing_name": "Kiowa",
+      "website_url": "https://townofkiowa.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Kiowa"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0841010",
+      "listing_name": "Kit Carson",
+      "website_url": "https://www.townofkitcarson.com/",
+      "source_locator": "Links to Colorado cities and towns > Kit Carson"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0841560",
+      "listing_name": "Kremmling",
+      "website_url": "http://www.townofkremmling.org/",
+      "source_locator": "Links to Colorado cities and towns > Kremmling"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0841835",
+      "listing_name": "Lafayette",
+      "website_url": "https://lafayetteco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Lafayette"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0842055",
+      "listing_name": "La Jara",
+      "website_url": "https://townoflajara.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > La Jara"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0842110",
+      "listing_name": "La Junta",
+      "website_url": "http://www.lajuntacolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > La Junta"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0842330",
+      "listing_name": "Lake City",
+      "website_url": "http://www.townoflakecity.co",
+      "source_locator": "Links to Colorado cities and towns > Lake City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0842495",
+      "listing_name": "Lakeside",
+      "website_url": "https://www.townoflakesideco.org/",
+      "source_locator": "Links to Colorado cities and towns > Lakeside"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0843000",
+      "listing_name": "Lakewood",
+      "website_url": "https://www.lakewood.org",
+      "source_locator": "Links to Colorado cities and towns > Lakewood"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0843110",
+      "listing_name": "Lamar",
+      "website_url": "http://www.ci.lamar.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Lamar"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0843550",
+      "listing_name": "Larkspur",
+      "website_url": "http://www.townoflarkspur.org/",
+      "source_locator": "Links to Colorado cities and towns > Larkspur"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0843605",
+      "listing_name": "La Salle",
+      "website_url": "http://www.lasalletown.com/",
+      "source_locator": "Links to Colorado cities and towns > La Salle"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0843660",
+      "listing_name": "Las Animas",
+      "website_url": "https://cityoflasanimas.colorado.gov/#main-content",
+      "source_locator": "Links to Colorado cities and towns > Las Animas"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0844100",
+      "listing_name": "La Veta",
+      "website_url": "http://www.townoflaveta-co.gov/",
+      "source_locator": "Links to Colorado cities and towns > La Veta"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0844320",
+      "listing_name": "Leadville",
+      "website_url": "https://cityofleadville.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Leadville"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0844980",
+      "listing_name": "Limon",
+      "website_url": "http://www.townoflimon.com/",
+      "source_locator": "Links to Colorado cities and towns > Limon"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0845255",
+      "listing_name": "Littleton",
+      "website_url": "http://www.littletonco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Littleton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0845530",
+      "listing_name": "Lochbuie",
+      "website_url": "http://www.lochbuie.org/",
+      "source_locator": "Links to Colorado cities and towns > Lochbuie"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0845695",
+      "listing_name": "Log Lane Village",
+      "website_url": "https://www.townofllv.com/",
+      "source_locator": "Links to Colorado cities and towns > Log Lane Village"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0845955",
+      "listing_name": "Lone Tree",
+      "website_url": "http://www.cityoflonetree.com/",
+      "source_locator": "Links to Colorado cities and towns > Lone Tree"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0845970",
+      "listing_name": "Longmont",
+      "website_url": "https://www.longmontcolorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Longmont"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0846355",
+      "listing_name": "Louisville",
+      "website_url": "http://www.louisvilleco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Louisville"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0846465",
+      "listing_name": "Loveland",
+      "website_url": "https://www.lovgov.org/",
+      "source_locator": "Links to Colorado cities and towns > Loveland"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0847070",
+      "listing_name": "Lyons",
+      "website_url": "http://www.townoflyons.com/",
+      "source_locator": "Links to Colorado cities and towns > Lyons"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0848060",
+      "listing_name": "Manassa",
+      "website_url": "http://www.manassa.com/",
+      "source_locator": "Links to Colorado cities and towns > Manassa"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0848115",
+      "listing_name": "Mancos",
+      "website_url": "http://www.mancoscolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Mancos"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0848445",
+      "listing_name": "Manitou Springs",
+      "website_url": "http://www.manitouspringsgov.com/",
+      "source_locator": "Links to Colorado cities and towns > Manitou Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0848500",
+      "listing_name": "Manzanola",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Manzanola"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0848555",
+      "listing_name": "Marble",
+      "website_url": "http://www.townofmarble.com/",
+      "source_locator": "Links to Colorado cities and towns > Marble"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0849600",
+      "listing_name": "Mead",
+      "website_url": "http://www.townofmead.org/",
+      "source_locator": "Links to Colorado cities and towns > Mead"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0849875",
+      "listing_name": "Meeker",
+      "website_url": "http://www.townofmeeker.org/",
+      "source_locator": "Links to Colorado cities and towns > Meeker"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0850040",
+      "listing_name": "Merino",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Merino"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0850480",
+      "listing_name": "Milliken",
+      "website_url": "http://www.millikenco.gov/",
+      "source_locator": "Links to Colorado cities and towns > Milliken"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0850920",
+      "listing_name": "Minturn",
+      "website_url": "http://www.minturn.org/",
+      "source_locator": "Links to Colorado cities and towns > Minturn"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0851250",
+      "listing_name": "Moffat",
+      "website_url": "https://townofmoffat.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Moffat"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0851635",
+      "listing_name": "Monte Vista",
+      "website_url": "https://cityofmontevista.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Monte Vista"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0851690",
+      "listing_name": "Montezuma",
+      "website_url": "https://www.townofmontezuma.com/",
+      "source_locator": "Links to Colorado cities and towns > Montezuma"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0851745",
+      "listing_name": "Montrose",
+      "website_url": "http://www.cityofmontrose.org/",
+      "source_locator": "Links to Colorado cities and towns > Montrose"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0851800",
+      "listing_name": "Monument",
+      "website_url": "http://www.townofmonument.org/",
+      "source_locator": "Links to Colorado cities and towns > Monument"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0852075",
+      "listing_name": "Morrison",
+      "website_url": "https://www.morrisonco.us/",
+      "source_locator": "Links to Colorado cities and towns > Morrison"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0852350",
+      "listing_name": "Mountain View",
+      "website_url": "http://www.townofmountainviewcolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > Mountain View"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0852550",
+      "listing_name": "Mountain Village",
+      "website_url": "https://townofmountainvillage.com/",
+      "source_locator": "Links to Colorado cities and towns > Mountain Village"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0852570",
+      "listing_name": "Mt. Crested Butte",
+      "website_url": "https://mtcb.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Mt. Crested Butte"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0853120",
+      "listing_name": "Naturita",
+      "website_url": "http://townofnaturita.org/ubweb/",
+      "source_locator": "Links to Colorado cities and towns > Naturita"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0853175",
+      "listing_name": "Nederland",
+      "website_url": "https://townofnederland.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Nederland"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0853395",
+      "listing_name": "New Castle",
+      "website_url": "http://www.newcastlecolorado.org/",
+      "source_locator": "Links to Colorado cities and towns > New Castle"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0854330",
+      "listing_name": "Northglenn",
+      "website_url": "http://www.northglenn.org/",
+      "source_locator": "Links to Colorado cities and towns > Northglenn"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0854880",
+      "listing_name": "Norwood",
+      "website_url": "http://www.norwoodtown.com/",
+      "source_locator": "Links to Colorado cities and towns > Norwood"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0854935",
+      "listing_name": "Nucla",
+      "website_url": "https://townofnucla.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Nucla"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855045",
+      "listing_name": "Nunn",
+      "website_url": "http://www.nunncolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Nunn"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855155",
+      "listing_name": "Oak Creek",
+      "website_url": "http://www.townofoakcreek.com/",
+      "source_locator": "Links to Colorado cities and towns > Oak Creek"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855540",
+      "listing_name": "Olathe",
+      "website_url": "http://www.townofolathe.org/",
+      "source_locator": "Links to Colorado cities and towns > Olathe"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855705",
+      "listing_name": "Olney Springs",
+      "website_url": "https://townofolneysprings.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Olney Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855870",
+      "listing_name": "Ophir",
+      "website_url": "https://townofophir.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Ophir"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0855980",
+      "listing_name": "Orchard City",
+      "website_url": "http://www.orchardcityco.org/",
+      "source_locator": "Links to Colorado cities and towns > Orchard City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856145",
+      "listing_name": "Ordway",
+      "website_url": "https://townofordway.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Ordway"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856365",
+      "listing_name": "Otis",
+      "website_url": "https://townofotis.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Otis"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856420",
+      "listing_name": "Ouray",
+      "website_url": "https://www.cityofouray.com/",
+      "source_locator": "Links to Colorado cities and towns > Ouray"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856475",
+      "listing_name": "Ovid",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Ovid"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856860",
+      "listing_name": "Pagosa Springs",
+      "website_url": "https://www.pagosasprings.co.gov/",
+      "source_locator": "Links to Colorado cities and towns > Pagosa Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0856970",
+      "listing_name": "Palisade",
+      "website_url": "http://www.townofpalisade.org/",
+      "source_locator": "Links to Colorado cities and towns > Palisade"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0857025",
+      "listing_name": "Palmer Lake",
+      "website_url": "https://www.townofpalmerlake.com/",
+      "source_locator": "Links to Colorado cities and towns > Palmer Lake"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0857245",
+      "listing_name": "Paoli",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Paoli"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0857300",
+      "listing_name": "Paonia",
+      "website_url": "http://townofpaonia.com/",
+      "source_locator": "Links to Colorado cities and towns > Paonia"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0857400",
+      "listing_name": "Parachute",
+      "website_url": "https://townofparachute.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Parachute"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0857630",
+      "listing_name": "Parker",
+      "website_url": "http://www.parkeronline.org/",
+      "source_locator": "Links to Colorado cities and towns > Parker"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0858235",
+      "listing_name": "Peetz",
+      "website_url": "https://www.townofpeetz.com/",
+      "source_locator": "Links to Colorado cities and towns > Peetz"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0859005",
+      "listing_name": "Pierce",
+      "website_url": "http://www.townofpierce.org/",
+      "source_locator": "Links to Colorado cities and towns > Pierce"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0859830",
+      "listing_name": "Pitkin",
+      "website_url": "https://townofpitkin.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Pitkin"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0860160",
+      "listing_name": "Platteville",
+      "website_url": "http://www.plattevillegov.org/",
+      "source_locator": "Links to Colorado cities and towns > Platteville"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0860600",
+      "listing_name": "Poncha Springs",
+      "website_url": "http://www.ponchaspringscolorado.us/",
+      "source_locator": "Links to Colorado cities and towns > Poncha Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0861315",
+      "listing_name": "Pritchett",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Pritchett"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0862000",
+      "listing_name": "Pueblo",
+      "website_url": "http://www.pueblo.us/",
+      "source_locator": "Links to Colorado cities and towns > Pueblo"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0862660",
+      "listing_name": "Ramah",
+      "website_url": "https://ramah.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Ramah"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0862880",
+      "listing_name": "Rangely",
+      "website_url": "https://townofrangely.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Rangely"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0863045",
+      "listing_name": "Raymer",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Raymer"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0863265",
+      "listing_name": "Red Cliff",
+      "website_url": "https://townofredcliff.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Red Cliff"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0864090",
+      "listing_name": "Rico",
+      "website_url": "https://townofrico.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Rico"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0864200",
+      "listing_name": "Ridgway",
+      "website_url": "http://town.ridgway.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Ridgway"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0864255",
+      "listing_name": "Rifle",
+      "website_url": "http://www.rifleco.org/",
+      "source_locator": "Links to Colorado cities and towns > Rifle"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0864970",
+      "listing_name": "Rockvale",
+      "website_url": "https://townofrockvale.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Rockvale"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0865190",
+      "listing_name": "Rocky Ford",
+      "website_url": "https://cityofrockyford.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Rocky Ford"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0865740",
+      "listing_name": "Romeo",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Romeo"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0866895",
+      "listing_name": "Rye",
+      "website_url": "https://townofrye.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Rye"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0867005",
+      "listing_name": "Saguache",
+      "website_url": "http://www.townofsaguache.org/",
+      "source_locator": "Links to Colorado cities and towns > Saguache"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0867280",
+      "listing_name": "Salida",
+      "website_url": "http://www.cityofsalida.com/",
+      "source_locator": "Links to Colorado cities and towns > Salida"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0867830",
+      "listing_name": "Sanford",
+      "website_url": "https://townofsanford.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Sanford"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0868105",
+      "listing_name": "San Luis",
+      "website_url": "http://townofsanluisco.org/index.html",
+      "source_locator": "Links to Colorado cities and towns > San Luis"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0868655",
+      "listing_name": "Sawpit",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Sawpit"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0868930",
+      "listing_name": "Sedgwick",
+      "website_url": "https://www.sedgwickcolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Sedgwick"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0869040",
+      "listing_name": "Seibert",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Seibert"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0869150",
+      "listing_name": "Severance",
+      "website_url": "http://www.townofseverance.org/",
+      "source_locator": "Links to Colorado cities and towns > Severance"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0869645",
+      "listing_name": "Sheridan",
+      "website_url": "http://www.ci.sheridan.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Sheridan"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0869700",
+      "listing_name": "Sheriden Lake",
+      "website_url": "https://kiowacounty-colorado.com/sheridan_lake.htm",
+      "source_locator": "Links to Colorado cities and towns > Sheriden Lake"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870195",
+      "listing_name": "Silt",
+      "website_url": "http://www.townofsilt.org/",
+      "source_locator": "Links to Colorado cities and towns > Silt"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870250",
+      "listing_name": "Silver Cliff",
+      "website_url": "http://silvercliffco.com/",
+      "source_locator": "Links to Colorado cities and towns > Silver Cliff"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870360",
+      "listing_name": "Silver Plume",
+      "website_url": "https://silverplumetown.com/",
+      "source_locator": "Links to Colorado cities and towns > Silver Plume"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870525",
+      "listing_name": "Silverthorne",
+      "website_url": "http://www.silverthorne.org/",
+      "source_locator": "Links to Colorado cities and towns > Silverthorne"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870580",
+      "listing_name": "Silverton",
+      "website_url": "https://townofsilverton.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Silverton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0870635",
+      "listing_name": "Simla",
+      "website_url": "http://www.townofsimla.com/",
+      "source_locator": "Links to Colorado cities and towns > Simla"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0871755",
+      "listing_name": "Snowmass Village",
+      "website_url": "http://tosv.com/",
+      "source_locator": "Links to Colorado cities and towns > Snowmass Village"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0872395",
+      "listing_name": "South Fork",
+      "website_url": "https://townofsouthfork.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > South Fork"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0873330",
+      "listing_name": "Springfield",
+      "website_url": "https://townofspringfield.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Springfield"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0873715",
+      "listing_name": "Starkville",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Starkville"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0873825",
+      "listing_name": "Steamboat Springs",
+      "website_url": "http://www.steamboatsprings.net/",
+      "source_locator": "Links to Colorado cities and towns > Steamboat Springs"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0873935",
+      "listing_name": "Sterling",
+      "website_url": "http://www.sterlingcolo.com/",
+      "source_locator": "Links to Colorado cities and towns > Sterling"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0874485",
+      "listing_name": "Stratton",
+      "website_url": "https://townofstratton.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Stratton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0874815",
+      "listing_name": "Sugar City",
+      "website_url": "https://sugarcitycolorado.com/",
+      "source_locator": "Links to Colorado cities and towns > Sugar City"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0875640",
+      "listing_name": "Superior",
+      "website_url": "https://www.superiorcolorado.gov/Home",
+      "source_locator": "Links to Colorado cities and towns > Superior"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0875970",
+      "listing_name": "Swink",
+      "website_url": "http://townofswinkco.ourlocalview.com/",
+      "source_locator": "Links to Colorado cities and towns > Swink"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0876795",
+      "listing_name": "Telluride",
+      "website_url": "http://www.telluride-co.gov/",
+      "source_locator": "Links to Colorado cities and towns > Telluride"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0877290",
+      "listing_name": "Thornton",
+      "website_url": "https://www.thorntonco.gov/Pages/default.aspx",
+      "source_locator": "Links to Colorado cities and towns > Thornton"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0877510",
+      "listing_name": "Timnath",
+      "website_url": "http://www.timnath.org/",
+      "source_locator": "Links to Colorado cities and towns > Timnath"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0878610",
+      "listing_name": "Trinidad",
+      "website_url": "http://www.trinidad.co.gov/",
+      "source_locator": "Links to Colorado cities and towns > Trinidad"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0879270",
+      "listing_name": "Two Buttes",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Two Buttes"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0880040",
+      "listing_name": "Vail",
+      "website_url": "http://vailgov.com/",
+      "source_locator": "Links to Colorado cities and towns > Vail"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0880865",
+      "listing_name": "Victor",
+      "website_url": "http://www.cityofvictor.com/",
+      "source_locator": "Links to Colorado cities and towns > Victor"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0881030",
+      "listing_name": "Vilas",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Vilas"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0881690",
+      "listing_name": "Vona",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Vona"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0882130",
+      "listing_name": "Walden",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Walden"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0882350",
+      "listing_name": "Walsenburg",
+      "website_url": "https://cityofwalsenburg.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Walsenburg"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0882460",
+      "listing_name": "Walsh",
+      "website_url": "https://townofwalsh.colorado.gov",
+      "source_locator": "Links to Colorado cities and towns > Walsh"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0882735",
+      "listing_name": "Ward",
+      "website_url": null,
+      "source_locator": "Links to Colorado cities and towns > Ward"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0883230",
+      "listing_name": "Wellington",
+      "website_url": "http://www.townofwellington.com/",
+      "source_locator": "Links to Colorado cities and towns > Wellington"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0883450",
+      "listing_name": "Westcliffe",
+      "website_url": "https://townofwestcliffe.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Westcliffe"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0883835",
+      "listing_name": "Westminster",
+      "website_url": "https://www.cityofwestminster.us/",
+      "source_locator": "Links to Colorado cities and towns > Westminster"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0884440",
+      "listing_name": "Wheat Ridge",
+      "website_url": "http://www.ci.wheatridge.co.us/",
+      "source_locator": "Links to Colorado cities and towns > Wheat Ridge"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0884770",
+      "listing_name": "Wiggins",
+      "website_url": "https://townofwiggins.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Wiggins"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0885045",
+      "listing_name": "Wiley",
+      "website_url": "http://www.townofwiley.us/",
+      "source_locator": "Links to Colorado cities and towns > Wiley"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0885155",
+      "listing_name": "Williamsburg",
+      "website_url": "https://townofwilliamsburg.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Williamsburg"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0885485",
+      "listing_name": "Windsor",
+      "website_url": "http://www.windsorgov.com/",
+      "source_locator": "Links to Colorado cities and towns > Windsor"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0885705",
+      "listing_name": "Winter Park",
+      "website_url": "http://www.wpgov.com/",
+      "source_locator": "Links to Colorado cities and towns > Winter Park"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0886090",
+      "listing_name": "Woodland Park",
+      "website_url": "http://www.city-woodlandpark.org/",
+      "source_locator": "Links to Colorado cities and towns > Woodland Park"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0886310",
+      "listing_name": "Wray",
+      "website_url": "http://www.cityofwray.org/",
+      "source_locator": "Links to Colorado cities and towns > Wray"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0886475",
+      "listing_name": "Yampa",
+      "website_url": "https://www.townofyampa.com/",
+      "source_locator": "Links to Colorado cities and towns > Yampa"
+    },
+    {
+      "jurisdiction_ref": "us-co-place-0886750",
+      "listing_name": "Yuma",
+      "website_url": "https://cityofyuma.colorado.gov/",
+      "source_locator": "Links to Colorado cities and towns > Yuma"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Commerce City portrait identity bridges
+
+The Commerce City roll-call API and the city's elected-official profiles use different display names for two members. The portrait registry keeps the roll-call name as its public name. It does not claim that the profile page contains a Legistar person ID. For these three portraits, a preserved official Legistar `Persons/{id}` response supplies the portal ID and full name; the city profile supplies the page heading and image. The two differing names are connected by the same official city email address in both first-party records. Email is used only in the source-verification check, not on the vote card.
+
+| Roll-call name and ID | Official portrait page | Cross-system proof | Image locator |
+| --- | --- | --- | --- |
+| [Steven J. Douglas, 210](https://webapi.legistar.com/v1/commerce/Persons/210) | [Steve Douglas](https://www.c3gov.com/Elected-officials/Current-Council-Members/Steve-Douglas) | `PersonEmail` exactly matches the profile's `mailto:` address; page heading and main image share the profile | `h1.oc-page-title`; `img.main-page-image[alt="Douglas headshot"]` |
+| [Jose Guardiola, 403](https://webapi.legistar.com/v1/commerce/Persons/403) | [José Guardiola](https://www.c3gov.com/Elected-officials/Current-Council-Members/Jos%C3%A9-Guardiola) | `PersonEmail` matches the profile's `mailto:` address without regard to email case; page heading and main image share the profile | `h1.oc-page-title`; `img.main-page-image[alt="Jose Guardiola Headshot"]` |
+| [Rocky Teter, 708](https://webapi.legistar.com/v1/commerce/Persons/708) | [Rocky Teter](https://www.c3gov.com/Elected-officials/Current-Council-Members/Rocky-Teter) | Exact full name in the Person response and profile heading. The city's main-image alt text misspells the surname, but the image is inside the exact-name profile page. | `h1.oc-page-title`; `img.main-page-image[alt="Rocky Teeter headshot"]` |
+
+All six raw source records and the three untransformed 720×720 PNG responses were fetched on 2026-11-10 and retained under `fixtures/atlas/portrait-sources` and `web/panopticon-terminal/portraits`. Their SHA-256 digests and source URLs are pinned in `portraits/portraits.js`. The publication validator checks the page heading, main-image alt and path, original image bytes, official Person ID and full name, and the two email bridges. A modified source record or image blocks publication and keeps the prior release in place.
+
+The city profiles do not date these photos. The image date and appearance at the April 2026 votes remain **not established**. The official PNG responses are the complete images served from the page's image path; they are not asserted to be the photographer's original files.

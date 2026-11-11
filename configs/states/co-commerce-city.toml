@@ -1,0 +1,61 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Commerce City, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Commerce City surveillance alerts"
+default_dry_run = true
+demo_documents = []
+
+[[sources]]
+id = "commerce-city-legistar-events"
+name = "Commerce City Council Legistar events"
+url = "https://webapi.legistar.com/v1/commerce/events?$filter=EventDate%20ge%20datetime%272025-01-01%27&$orderby=EventDate%20desc&$top=100&EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
+official_discovery_url = "https://commerce.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 20971520
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Operator must review current Legistar API scope and terms before live retrieval; use one request at a time, caching, and backoff."
+
+# Official HTML calendar for document-first, private candidate discovery.
+# The API event feed above runs only if this calendar fails and its own source review is current.
+[[sources]]
+id = "commerce-city-calendar"
+name = "Commerce City Council official meeting calendar"
+url = "https://commerce.legistar.com/Calendar.aspx"
+source_type = "html_page"
+documented_at = "https://commerce.legistar.com/Calendar.aspx"
+official_discovery_url = "https://commerce.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review the official HTML calendar and current terms before scheduled retrieval; candidates remain private until independently verified."
+
+# Reviewed path policy for one calendar candidate at a time. This source is
+# operator-triggered; do not schedule it before source-level policy review.
+[[sources]]
+id = "commerce-city-meeting-documents"
+name = "Commerce City, Colorado meeting detail HTML candidate path"
+url = "https://commerce.legistar.com/MeetingDetail.aspx"
+source_type = "candidate_meeting_html"
+documented_at = "https://commerce.legistar.com/Calendar.aspx"
+official_discovery_url = "https://commerce.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 60
+maximum_bytes = 4194304
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."
+
+# Reviewed path policy for one calendar candidate at a time. This source is
+# operator-triggered; do not schedule it before source-level policy review.
+[[sources]]
+id = "commerce-city-pdf-documents"
+name = "Commerce City, Colorado agenda/packet/minutes PDF candidate path"
+url = "https://commerce.legistar.com/View.ashx"
+source_type = "candidate_document_pdf"
+documented_at = "https://commerce.legistar.com/Calendar.aspx"
+official_discovery_url = "https://commerce.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."

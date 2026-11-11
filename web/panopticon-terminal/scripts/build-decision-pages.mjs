@@ -1,0 +1,102 @@
+import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { validateSnapshot } from "../api.js";
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
+}
+
+function replaceOne(html, pattern, replacement, label) {
+  const matches = [...html.matchAll(pattern)];
+  if (matches.length !== 1) throw new Error(`Decision template needs exactly one ${label}`);
+  return html.replace(pattern, () => replacement);
+}
+
+export function genericDecisionTemplate(template, siteUrl) {
+  const origin = new URL(siteUrl);
+  if (origin.protocol !== "https:" || origin.href !== `${origin.origin}/`) {
+    throw new Error("Site URL must be an HTTPS origin");
+  }
+  const url = escapeHtml(`${origin.origin}/decision.html`);
+  return replaceOne(
+    replaceOne(template, /<meta property="og:url" content="[^"]*"\s*\/>/g,
+      `<meta property="og:url" content="${url}" />`, "generic og:url"),
+    /<link rel="canonical" href="[^"]*"\s*\/>/g,
+    `<link rel="canonical" href="${url}" />`, "generic canonical URL",
+  );
+}
+
+export function buildDecisionPages(snapshot, template, siteUrl) {
+  validateSnapshot(snapshot);
+  if (!Array.isArray(snapshot.case_releases)) {
+    throw new Error("Static decision pages require per-case release records");
+  }
+  const origin = new URL(siteUrl);
+  if (origin.protocol !== "https:" || origin.href !== `${origin.origin}/`) {
+    throw new Error("Site URL must be an HTTPS origin");
+  }
+  const pages = [];
+  const seen = new Set();
+  for (const decision of snapshot.entities.filter((entity) => entity.type === "DECISION")) {
+    const slug = decision.slug;
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug ?? "") || seen.has(slug)) {
+      throw new Error("Decision has an unsafe or duplicate slug");
+    }
+    seen.add(slug);
+    const expectedUrl = `${origin.origin}/decisions/${slug}.html`;
+    if (decision.share_url !== expectedUrl) throw new Error(`Decision ${slug} lacks its case-specific share URL`);
+
+    const title = escapeHtml(`${decision.social_title ?? decision.name} | PANOPTICON.FAIL`);
+    const summary = escapeHtml(String(decision.social_summary ?? decision.summary ?? decision.description ?? decision.name).replace(/\s+/g, " ").trim().slice(0, 280));
+    const url = escapeHtml(expectedUrl);
+    let html = template;
+    for (const [pattern, replacement, label] of [
+      [/<meta name="robots" content="[^"]*"\s*\/>/g, '<meta name="robots" content="index,follow" />', "robots policy"],
+      [/<meta property="og:type" content="[^"]*"\s*\/>/g, '<meta property="og:type" content="article" />', "og:type"],
+      [/<meta name="description" content="[^"]*"\s*\/>/g, `<meta name="description" content="${summary}" />`, "description"],
+      [/<meta property="og:title" content="[^"]*"\s*\/>/g, `<meta property="og:title" content="${title}" />`, "og:title"],
+      [/<meta property="og:description" content="[^"]*"\s*\/>/g, `<meta property="og:description" content="${summary}" />`, "og:description"],
+      [/<meta property="og:url" content="[^"]*"\s*\/>/g, `<meta property="og:url" content="${url}" />`, "og:url"],
+      [/<meta name="twitter:title" content="[^"]*"\s*\/>/g, `<meta name="twitter:title" content="${title}" />`, "twitter:title"],
+      [/<meta name="twitter:description" content="[^"]*"\s*\/>/g, `<meta name="twitter:description" content="${summary}" />`, "twitter:description"],
+      [/<link rel="canonical" href="[^"]*"\s*\/>/g, `<link rel="canonical" href="${url}" />`, "canonical URL"],
+      [/<title>[^<]*<\/title>/g, `<title>${title}</title>`, "title"],
+    ]) html = replaceOne(html, pattern, replacement, label);
+    html = html.replaceAll('href="./decision.css"', 'href="../decision.css"')
+      .replaceAll('src="./decision.js"', 'src="../decision.js"')
+      .replaceAll('href="./index.html"', 'href="../index.html"');
+    if (!html.includes('href="../decision.css"') || !html.includes('src="../decision.js"')) {
+      throw new Error("Decision template assets did not resolve from case path");
+    }
+    pages.push({ path: `decisions/${slug}.html`, html });
+  }
+  for (const notice of snapshot.withdrawals ?? []) {
+    const slug = notice.case_id;
+    if (seen.has(slug)) throw new Error("Withdrawn case is still active");
+    seen.add(slug);
+    const url = escapeHtml(`${origin.origin}/decisions/${slug}.html`);
+    pages.push({ path: `decisions/${slug}.html`, html: `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,follow" /><meta name="description" content="This decision record has been withdrawn pending correction." />
+<link rel="canonical" href="${url}" /><title>Record withdrawn pending correction | PANOPTICON.FAIL</title></head>
+<body><main><h1>Record withdrawn pending correction</h1><p>This decision record is currently withdrawn while its evidence is checked. The previous release is not a current finding.</p>
+<p><a href="../index.html">Return to the Colorado atlas</a></p></main></body></html>\n` });
+  }
+  return pages;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const [, , stage, siteUrl] = process.argv;
+  if (!stage || !siteUrl) throw new Error("Usage: build-decision-pages.mjs STAGE SITE_ORIGIN");
+  const snapshot = JSON.parse(await readFile(join(stage, "public/public-snapshot.json"), "utf8"));
+  const template = await readFile(join(stage, "decision.html"), "utf8");
+  const generic = genericDecisionTemplate(template, siteUrl);
+  const pages = buildDecisionPages(snapshot, generic, siteUrl);
+  await writeFile(join(stage, "decision.html"), generic);
+  await mkdir(join(stage, "decisions"), { recursive: true });
+  for (const page of pages) await writeFile(join(stage, page.path), page.html, { flag: "wx" });
+  console.log(`generated ${pages.length} case-specific decision page(s)`);
+}

@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "case_id": "co-denver-25-1967-2025-12-08",
+  "synthetic": false,
+  "review_state": "pending",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-denver",
+    "jurisdiction_ref": "us-co-place-0820000",
+    "name": {
+      "value": "City and County of Denver",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "City and County of Denver"
+      }
+    },
+    "display_name": "City and County of Denver"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "25-1967",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemMatterFile",
+        "quote": "25-1967"
+      }
+    },
+    "event_item_id": {
+      "value": "199305",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemId",
+        "quote": "199305"
+      }
+    },
+    "title": {
+      "value": "A resolution approving a proposed Second Amendatory Agreement between the City and County of Denver and Axon Enterprise, Inc. for body worn cameras, tasers, equipment, software and cloud data storage for use by Safety agencies, citywide.\r\nAmends an Agreement with Axon Enterprise, Inc. to add $450,000.00 for a new total of $22,547,650.10 for body worn cameras, tasers, equipment, software and cloud data storage for use by Safety agencies. No change to contract term, citywide (POLIC-201522654/POLIC-202582081-02). The last regularly scheduled Council meeting within the 30-day review period is on 12-22-2025. The Committee approved filing this item at its meeting on 12-3-2025.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "A resolution approving a proposed Second Amendatory Agreement between the City and County of Denver and Axon Enterprise, Inc. for body worn cameras, tasers, equipment, software and cloud data storage for use by Safety agencies, citywide.\r\nAmends an Agreement with Axon Enterprise, Inc. to add $450,000.00 for a new total of $22,547,650.10 for body worn cameras, tasers, equipment, software and cloud data storage for use by Safety agencies. No change to contract term, citywide (POLIC-201522654/POLIC-202582081-02). The last regularly scheduled Council meeting within the 30-day review period is on 12-22-2025. The Committee approved filing this item at its meeting on 12-3-2025."
+      }
+    },
+    "short_label": {
+      "value": "Axon Enterprise, Inc.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "Axon Enterprise, Inc."
+      }
+    },
+    "display_title": "25-1967: Axon Enterprise, Inc.",
+    "date": {
+      "value": "2025-12-08",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventDate",
+        "quote": "2025-12-08T00:00:00"
+      }
+    },
+    "body": {
+      "value": "City Council",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventBodyName",
+        "quote": "City Council"
+      }
+    },
+    "action": {
+      "value": "adopted",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemActionName",
+        "quote": "adopted"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved"
+  },
+  "vote_record_state": "consent_block",
+  "votes": [],
+  "consent_context": {
+    "item_consent": {
+      "value": "1",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemConsent",
+        "quote": "1"
+      }
+    },
+    "block_item_id": {
+      "value": "199484",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemId",
+        "quote": "199484"
+      }
+    },
+    "block_title": {
+      "value": "Block Vote",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemTitle",
+        "quote": "Block Vote"
+      }
+    },
+    "block_action": {
+      "value": "A motion offered by Council member Lewis, duly seconded by Council member Hinds, to approve the following items en bloc, carried by the following vote:",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemActionText",
+        "quote": "A motion offered by Council member Lewis, duly seconded by Council member Hinds, to approve the following items en bloc, carried by the following vote:"
+      }
+    },
+    "block_outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[68].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "block_vote_source_id": "co-denver-2025-axon-block-votes"
+  },
+  "contract_link": {
+    "state": "not_established",
+    "detail": "Council approved a proposed Axon agreement as a consent item. City execution and payments are not established by the cited attachment."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "body worn cameras",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[132].EventItemTitle",
+          "quote": "body worn cameras"
+        }
+      }
+    },
+    {
+      "name": {
+        "value": "tasers",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[132].EventItemTitle",
+          "quote": "tasers"
+        }
+      }
+    },
+    {
+      "name": {
+        "value": "cloud data storage",
+        "proof": {
+          "source_id": "co-denver-2025-axon-event",
+          "locator": "$.EventItems[132].EventItemTitle",
+          "quote": "cloud data storage"
+        }
+      }
+    }
+  ],
+  "agreement_context": {
+    "name": {
+      "value": "proposed Second Amendatory Agreement between the City and County of Denver and Axon Enterprise, Inc.",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "proposed Second Amendatory Agreement between the City and County of Denver and Axon Enterprise, Inc."
+      }
+    },
+    "status": "proposal_approved",
+    "proposed_total": {
+      "value": "$22,547,650.10",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "$22,547,650.10"
+      }
+    },
+    "proposed_increase": {
+      "value": "$450,000.00",
+      "proof": {
+        "source_id": "co-denver-2025-axon-event",
+        "locator": "$.EventItems[132].EventItemTitle",
+        "quote": "$450,000.00"
+      }
+    }
+  },
+  "supporting_sources": [
+    "co-denver-2025-axon-block-votes",
+    "co-denver-2025-axon-amendment-matter",
+    "co-denver-2025-axon-minutes",
+    "co-denver-2025-axon-vendor-amendment"
+  ],
+  "unresolved_question": "Was the approved proposal fully executed by the City, and what payments followed?"
+}

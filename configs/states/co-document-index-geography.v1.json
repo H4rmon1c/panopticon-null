@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "document_index_geography": [
+    {
+      "source_id": "silver-plume-document-index",
+      "config_path": "configs/states/co-silver-plume.toml",
+      "jurisdiction_ref": "us-co-place-0870360"
+    },
+    {
+      "source_id": "moffat-document-index",
+      "config_path": "configs/states/co-moffat.toml",
+      "jurisdiction_ref": "us-co-place-0851250"
+    },
+    {
+      "source_id": "simla-document-index",
+      "config_path": "configs/states/co-simla.toml",
+      "jurisdiction_ref": "us-co-place-0870635"
+    },
+    {
+      "source_id": "del-norte-document-index",
+      "config_path": "configs/states/co-del-norte.toml",
+      "jurisdiction_ref": "us-co-place-0819795"
+    },
+    {
+      "source_id": "saguache-document-index",
+      "config_path": "configs/states/co-saguache.toml",
+      "jurisdiction_ref": "us-co-place-0867005"
+    }
+  ]
+}

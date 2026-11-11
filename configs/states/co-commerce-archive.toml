@@ -1,0 +1,95 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Commerce City, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Commerce City surveillance alerts"
+default_dry_run = true
+demo_documents = []
+
+# Each URL is fixed in config. `pnull source archive` retains bytes and an HTTP
+# receipt in private state only; it does not create or publish an atlas claim.
+[[sources]]
+id = "commerce-ord2755-detail"
+name = "Commerce City Ordinance 2755 Legistar detail"
+url = "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search="
+source_type = "html_page"
+documented_at = "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search="
+official_discovery_url = "https://commerce.legistar.com/MeetingDetail.aspx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site terms before live archive."
+terms_note = "Review exact endpoint and current site terms before scheduled retrieval."
+
+[[sources]]
+id = "commerce-ord2755-minutes"
+name = "Commerce City April 6 2026 final Council minutes"
+url = "https://commerce.legistar.com/View.ashx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&M=M"
+source_type = "pdf"
+documented_at = "https://commerce.legistar.com/MeetingDetail.aspx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&Options=&Search="
+official_discovery_url = "https://commerce.legistar.com/MeetingDetail.aspx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site terms before live archive."
+terms_note = "Review exact endpoint and current site terms before scheduled retrieval."
+
+# These exact JSON records can supply independent fetch receipts for an atlas
+# release without relying solely on bundled registry and fixture digests.
+[[sources]]
+id = "commerce-ord2755-event-json"
+name = "Commerce City April 6 2026 Council event JSON"
+url = "https://webapi.legistar.com/v1/commerce/Events/4626?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events-EventId_EventItems_AgendaNote_MinutesNote_EventItemAttachments"
+official_discovery_url = "https://commerce.legistar.com/MeetingDetail.aspx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review API terms before live archive."
+terms_note = "Review exact endpoint and current API terms before scheduled retrieval."
+
+[[sources]]
+id = "commerce-ord2755-votes-json"
+name = "Commerce City Ordinance 2755 vote JSON"
+url = "https://webapi.legistar.com/v1/commerce/EventItems/70384/Votes"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-EventItems-EventItemId-Votes"
+official_discovery_url = "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 1048576
+robots_status = "Capture current robots directives and review API terms before live archive."
+terms_note = "Review exact endpoint and current API terms before scheduled retrieval."
+
+[[sources]]
+id = "commerce-ord2756-votes-json"
+name = "Commerce City Ordinance 2756 vote JSON"
+url = "https://webapi.legistar.com/v1/commerce/EventItems/70385/Votes"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-EventItems-EventItemId-Votes"
+official_discovery_url = "https://commerce.legistar.com/MeetingDetail.aspx?GUID=C0ED2DA4-496A-4790-AA64-CB17DE0B1BBB&ID=1371690&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 1048576
+robots_status = "Capture current robots directives and review API terms before live archive."
+terms_note = "Review exact endpoint and current API terms before scheduled retrieval."
+
+[[sources]]
+id = "commerce-ord2755-ordinance"
+name = "Commerce City Ordinance 2755 attachment, final action corroborated separately"
+url = "https://legistar.granicus.com/Commerce/attachments/c23f7685-bbef-4a3c-9a78-f3d9da853712.pdf"
+source_type = "pdf"
+documented_at = "https://legistar.granicus.com/Commerce/attachments/c23f7685-bbef-4a3c-9a78-f3d9da853712.pdf"
+official_discovery_url = "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site terms before live archive."
+terms_note = "Review exact endpoint and current site terms before scheduled retrieval."
+
+[[sources]]
+id = "commerce-ord2755-agreement"
+name = "Commerce City Flock agreement attachment, City execution not established"
+url = "https://legistar.granicus.com/Commerce/attachments/06403380-2a4b-4a4f-b1c1-db847b8e94eb.pdf"
+source_type = "pdf"
+documented_at = "https://legistar.granicus.com/Commerce/attachments/06403380-2a4b-4a4f-b1c1-db847b8e94eb.pdf"
+official_discovery_url = "https://commerce.legistar.com/LegislationDetail.aspx?GUID=B239266E-1D85-4F30-95EC-AEC4C1D7723B&ID=7929879&Options=&Search="
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Capture current robots directives and review site terms before live archive."
+terms_note = "Review exact endpoint and current site terms before scheduled retrieval."

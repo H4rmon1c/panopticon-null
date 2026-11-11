@@ -1,0 +1,511 @@
+{
+  "schema_version": 2,
+  "case_id": "co-commerce-city-ord-2755-2026-04-06",
+  "synthetic": false,
+  "review_state": "source_verified",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-commerce-city",
+    "jurisdiction_ref": "us-co-place-0816495",
+    "name": {
+      "value": "COMMERCE CITY, COLORADO",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[35].EventItemTitle",
+        "quote": "COMMERCE CITY, COLORADO"
+      }
+    },
+    "display_name": "Commerce City, Colorado"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "Ord 2755",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemMatterFile",
+        "quote": "Ord 2755"
+      }
+    },
+    "event_item_id": {
+      "value": "70384",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemId",
+        "quote": "70384"
+      }
+    },
+    "title": {
+      "value": "AN ORDINANCE APPROVING AN AGREEMENT WITH FLOCK GROUP, INC. FOR THE LONG-TERM LEASE OF EQUIPMENT INCLUDING LICENSE PLATE RECOGNITION CAMERAS, DRONES AND OTHER CAMERAS, GRANTING A REVOCABLE LICENSE TO OPERATE SAID EQUIPMENT ON CITY PROPERTY, AND THE MAYOR TO EXECUTE THE AGREEMENT IN THE FORMAT ATTACHED HERETO",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemTitle",
+        "quote": "AN ORDINANCE APPROVING AN AGREEMENT WITH FLOCK GROUP, INC. FOR THE LONG-TERM LEASE OF EQUIPMENT INCLUDING LICENSE PLATE RECOGNITION CAMERAS, DRONES AND OTHER CAMERAS, GRANTING A REVOCABLE LICENSE TO OPERATE SAID EQUIPMENT ON CITY PROPERTY, AND THE MAYOR TO EXECUTE THE AGREEMENT IN THE FORMAT ATTACHED HERETO"
+      }
+    },
+    "date": {
+      "value": "2026-04-06",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventDate",
+        "quote": "2026-04-06T00:00:00"
+      }
+    },
+    "body": {
+      "value": "City Council",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventBodyName",
+        "quote": "City Council"
+      }
+    },
+    "action": {
+      "value": "approved on second & final reading",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemActionName",
+        "quote": "approved on second & final reading"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved",
+    "short_label": {
+      "value": "FLOCK GROUP, INC.",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemTitle",
+        "quote": "FLOCK GROUP, INC."
+      }
+    },
+    "display_title": "Ord 2755: Flock Group, Inc."
+  },
+  "votes": [
+    {
+      "person_name": {
+        "value": "Steven J. Douglas",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[0].VotePersonName",
+          "quote": "Steven J. Douglas"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[0].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "38473",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[0].VoteId",
+          "quote": "38473"
+        }
+      },
+      "official_person_id": {
+        "value": "210",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[0].VotePersonId",
+          "quote": "210"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[0].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Susan Noble",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[1].VotePersonName",
+          "quote": "Susan Noble"
+        }
+      },
+      "recorded_vote": {
+        "value": "Nay",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[1].VoteValueName",
+          "quote": "Nay"
+        }
+      },
+      "official_vote_id": {
+        "value": "38474",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[1].VoteId",
+          "quote": "38474"
+        }
+      },
+      "official_person_id": {
+        "value": "479",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[1].VotePersonId",
+          "quote": "479"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[1].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Jose Guardiola",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[2].VotePersonName",
+          "quote": "Jose Guardiola"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[2].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38475",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[2].VoteId",
+          "quote": "38475"
+        }
+      },
+      "official_person_id": {
+        "value": "403",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[2].VotePersonId",
+          "quote": "403"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[2].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Rocky Teter",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[3].VotePersonName",
+          "quote": "Rocky Teter"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[3].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38476",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[3].VoteId",
+          "quote": "38476"
+        }
+      },
+      "official_person_id": {
+        "value": "708",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[3].VotePersonId",
+          "quote": "708"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[3].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Joanna Sandoval",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[4].VotePersonName",
+          "quote": "Joanna Sandoval"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[4].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38477",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[4].VoteId",
+          "quote": "38477"
+        }
+      },
+      "official_person_id": {
+        "value": "816",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[4].VotePersonId",
+          "quote": "816"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[4].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Craig Kim",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[5].VotePersonName",
+          "quote": "Craig Kim"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[5].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38478",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[5].VoteId",
+          "quote": "38478"
+        }
+      },
+      "official_person_id": {
+        "value": "525",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[5].VotePersonId",
+          "quote": "525"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[5].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Charles Dukes",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[6].VotePersonName",
+          "quote": "Charles Dukes"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[6].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38479",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[6].VoteId",
+          "quote": "38479"
+        }
+      },
+      "official_person_id": {
+        "value": "455",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[6].VotePersonId",
+          "quote": "455"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[6].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Stefanie Trujillo",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[7].VotePersonName",
+          "quote": "Stefanie Trujillo"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[7].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38480",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[7].VoteId",
+          "quote": "38480"
+        }
+      },
+      "official_person_id": {
+        "value": "817",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[7].VotePersonId",
+          "quote": "817"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[7].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Lori Young",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[8].VotePersonName",
+          "quote": "Lori Young"
+        }
+      },
+      "recorded_vote": {
+        "value": "Aye",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[8].VoteValueName",
+          "quote": "Aye"
+        }
+      },
+      "official_vote_id": {
+        "value": "38481",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[8].VoteId",
+          "quote": "38481"
+        }
+      },
+      "official_person_id": {
+        "value": "818",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[8].VotePersonId",
+          "quote": "818"
+        }
+      },
+      "decision_ref": {
+        "value": "70384",
+        "proof": {
+          "source_id": "co-commerce-2026-ord2755-votes",
+          "locator": "$[8].VoteEventItemId",
+          "quote": "70384"
+        }
+      }
+    }
+  ],
+  "contract_link": {
+    "state": "not_established",
+    "detail": "Council approval of the attached agreement format is documented. Signed city execution and payments are not established by these records."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "LICENSE PLATE RECOGNITION CAMERAS",
+        "proof": {
+          "source_id": "co-commerce-2026-event",
+          "locator": "$.EventItems[33].EventItemTitle",
+          "quote": "LICENSE PLATE RECOGNITION CAMERAS"
+        }
+      }
+    },
+    {
+      "name": {
+        "value": "DRONES",
+        "proof": {
+          "source_id": "co-commerce-2026-event",
+          "locator": "$.EventItems[33].EventItemTitle",
+          "quote": "DRONES"
+        }
+      }
+    }
+  ],
+  "supporting_sources": [
+    "co-commerce-2026-minutes"
+  ],
+  "unresolved_question": "Was the agreement later signed by the city, and what payments or deployments followed?",
+  "agreement_context": {
+    "name": {
+      "value": "AGREEMENT WITH FLOCK GROUP, INC.",
+      "proof": {
+        "source_id": "co-commerce-2026-event",
+        "locator": "$.EventItems[33].EventItemTitle",
+        "quote": "AGREEMENT WITH FLOCK GROUP, INC."
+      }
+    },
+    "display_name": "Agreement With Flock Group, Inc.",
+    "status": "approved_format"
+  },
+  "vote_record_state": "direct"
+}

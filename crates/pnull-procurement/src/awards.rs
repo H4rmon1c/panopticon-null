@@ -20,6 +20,8 @@ pub enum AwardsError {
     UnexpectedColumns(String),
     #[error("row {row} has {observed} cells; expected 6")]
     UnexpectedCellCount { row: usize, observed: usize },
+    #[error("award table has no data rows; refusing to infer removals")]
+    EmptyTable,
 }
 
 /// One parsed award row with row-level provenance.
@@ -81,26 +83,24 @@ pub fn parse_awards_table(html: &str, snapshot_digest: &str) -> Result<Vec<Award
             }
             continue;
         }
-        if cells.len() < 6 {
+        if cells.len() != 6 {
             return Err(AwardsError::UnexpectedCellCount {
                 row: row_index,
                 observed: cells.len(),
             });
         }
-        let mut padded = cells.clone();
-        padded.resize(6, String::new());
-        let raw_amount = padded[3].clone();
-        let solicitation_id = padded[0].clone();
+        let raw_amount = cells[3].clone();
+        let solicitation_id = cells[0].clone();
         let normalized = pnull_core::normalize_identifier(&solicitation_id);
         rows.push(AwardRow {
             row_index,
             solicitation_id,
-            project_name: padded[1].clone(),
-            contractor: padded[2].clone(),
+            project_name: cells[1].clone(),
+            contractor: cells[2].clone(),
             raw_amount: raw_amount.clone(),
             amount: parse_money(&raw_amount),
-            start_date: padded[4].clone(),
-            notes: padded[5].clone(),
+            start_date: cells[4].clone(),
+            notes: cells[5].clone(),
             authority: SourceAuthority::OfficialInformationalMirror,
             coverage_state: CoverageState::InformationalOnly,
             snapshot_digest: snapshot_digest.to_owned(),
@@ -108,7 +108,11 @@ pub fn parse_awards_table(html: &str, snapshot_digest: &str) -> Result<Vec<Award
         });
         row_index += 1;
     }
-    Ok(rows)
+    if rows.is_empty() {
+        Err(AwardsError::EmptyTable)
+    } else {
+        Ok(rows)
+    }
 }
 
 /// Normalizes a cell's raw text without altering meaningful content.
@@ -242,6 +246,20 @@ mod tests {
         assert!(matches!(
             parse_awards_table(&html, DIGEST),
             Err(AwardsError::UnexpectedCellCount { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_extra_columns_and_header_only_capture() {
+        let extra = html_for(&["Q25-130ZM|Project|Contractor|$1.00|2026|note|surprise"]);
+        assert!(matches!(
+            parse_awards_table(&extra, DIGEST),
+            Err(AwardsError::UnexpectedCellCount { observed: 7, .. })
+        ));
+        let header_only = html_for(&[]);
+        assert!(matches!(
+            parse_awards_table(&header_only, DIGEST),
+            Err(AwardsError::EmptyTable)
         ));
     }
 

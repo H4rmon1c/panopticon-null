@@ -92,6 +92,9 @@ pub fn run_demo(
     let solicitation_bytes =
         fs::read(&solicitations_path).map_err(|e| format!("read solicitations fixture: {e}"))?;
     let solicitation_digest = sha256_hex(&solicitation_bytes);
+    store
+        .persist_content(&solicitation_digest, &solicitation_bytes)
+        .map_err(|e| format!("preserve solicitations fixture: {e}"))?;
     let solicitation_html = String::from_utf8_lossy(&solicitation_bytes);
     let solicitation_records = parse_solicitations(&solicitation_html, &solicitation_digest)
         .map_err(|e| format!("parse solicitations: {e}"))?;
@@ -114,6 +117,9 @@ pub fn run_demo(
     // 2. Ingest the contract-award mirror snapshot.
     let award_bytes = fs::read(&awards_path).map_err(|e| format!("read awards fixture: {e}"))?;
     let award_digest = sha256_hex(&award_bytes);
+    store
+        .persist_content(&award_digest, &award_bytes)
+        .map_err(|e| format!("preserve awards fixture: {e}"))?;
     let award_html = String::from_utf8_lossy(&award_bytes);
     let award_rows =
         parse_awards_table(&award_html, &award_digest).map_err(|e| format!("parse awards: {e}"))?;
@@ -358,6 +364,9 @@ fn reingest_second_snapshot(
     let second_bytes =
         fs::read(&second_path).map_err(|e| format!("read second awards fixture: {e}"))?;
     let second_digest = sha256_hex(&second_bytes);
+    store
+        .persist_content(&second_digest, &second_bytes)
+        .map_err(|e| format!("preserve second awards fixture: {e}"))?;
     let second_html = String::from_utf8_lossy(&second_bytes);
     let second_rows =
         parse_awards_table(&second_html, &second_digest).map_err(|e| format!("parse: {e}"))?;
@@ -446,13 +455,29 @@ fn reingest_second_snapshot(
             }
             ProcurementChangeKind::RecordAdded => continue,
         };
+        let identifier_ids = second_rows
+            .iter()
+            .find(|row| {
+                pnull_core::normalize_identifier(&row.solicitation_id)
+                    .is_some_and(|(normalized, _)| normalized == change.row_identity)
+            })
+            .and_then(|row| crate::awards::award_identifier(&matter_id, &row.solicitation_id))
+            .map(|identifier| {
+                let id = identifier.id.clone();
+                store.insert_procurement_identifier(&identifier)?;
+                Ok::<_, pnull_core::CoreError>(id)
+            })
+            .transpose()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .collect();
         let event = ProcurementEvent {
             id: ProcurementEvent::id_for(&matter_id, kind, OFFLINE_RETRIEVED_AT_2, &summary),
             matter_id: matter_id.clone(),
             kind,
             date: Some(OFFLINE_RETRIEVED_AT_2.to_owned()),
             summary,
-            identifier_ids: Vec::new(),
+            identifier_ids,
             evidence_ids: vec![second_snapshot.id.clone()],
             source_id: "colorado-springs-contract-awards".to_owned(),
         };
@@ -629,12 +654,11 @@ fn build_transit_fare_matter(
         id: ProcurementOrganization::id_for(
             TRANSIT_FARE_MATTER_ID,
             OrganizationRole::GovernmentDepartment,
-            "Colorado Springs Mountain Metropolitan Transit (City of Colorado Springs)",
+            "Mountain Metropolitan Transit",
         ),
         matter_id: TRANSIT_FARE_MATTER_ID.to_owned(),
         role: OrganizationRole::GovernmentDepartment,
-        raw_name: "Colorado Springs Mountain Metropolitan Transit (City of Colorado Springs)"
-            .to_owned(),
+        raw_name: "Mountain Metropolitan Transit".to_owned(),
         source_id: "colorado-springs-solicitation-mirror".to_owned(),
         normalized_alias: None,
         alias_reviewed: false,

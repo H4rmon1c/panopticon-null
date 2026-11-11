@@ -8,12 +8,19 @@ repository.workspace = true
 
 [dependencies]
 pnull-core = { path = "../pnull-core", version = "=0.0.4" }
+pnull-http = { path = "../pnull-http", version = "=0.0.4" }
 pnull-procurement = { path = "../pnull-procurement", version = "=0.0.4" }
+regex.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tempfile.workspace = true
+time.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 quick-xml.workspace = true
-tempfile.workspace = true
 
 [lints]
 workspace = true

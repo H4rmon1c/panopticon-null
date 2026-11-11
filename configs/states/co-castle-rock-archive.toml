@@ -1,0 +1,82 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Castle Rock, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Castle Rock direct document archive"
+default_dry_run = true
+demo_documents = []
+
+# Fixed official URLs only. Archive preserves private raw bytes and fetch receipts.
+# These sources are not in the active collection matrix until endpoint reviews exist.
+
+[[sources]]
+id = "castle-rock-res2025-071-event-json"
+name = "Town Council June 3 2025 event JSON"
+url = "https://webapi.legistar.com/v1/castlerock-co/Events/4406?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "castle-rock-res2025-071-votes-json"
+name = "Town Council direct vote on RES 2025-071"
+url = "https://webapi.legistar.com/v1/castlerock-co/EventItems/66424/Votes"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help/Api/GET-v1-Client-Events"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 1048576
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "castle-rock-res2025-071-detail"
+name = "Resolution 2025-071 detail and staff memo"
+url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+source_type = "html_page"
+documented_at = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "castle-rock-res2025-071-agreement"
+name = "Flock agreement attachment, Town signature not established"
+url = "https://legistar2.granicus.com/castlerock-co/attachments/4a2b2ae6-5147-454c-808d-81bcae9a0b3d.pdf"
+source_type = "pdf"
+documented_at = "https://legistar2.granicus.com/castlerock-co/attachments/4a2b2ae6-5147-454c-808d-81bcae9a0b3d.pdf"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "castle-rock-res2025-071-matter-json"
+name = "Town Council RES 2025-071 matter JSON"
+url = "https://webapi.legistar.com/v1/castlerock-co/Matters/10968?MatterAttachments=1&MatterSponsors=1&MatterHistory=1"
+source_type = "official_api"
+documented_at = "https://webapi.legistar.com/Help"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 1048576
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."
+
+[[sources]]
+id = "castle-rock-res2025-071-sole-source"
+name = "Town Council Flock sole-source request attachment"
+url = "https://legistar2.granicus.com/castlerock-co/attachments/48523085-e394-409a-ac2d-b08e84c51fcc.pdf"
+source_type = "pdf"
+documented_at = "https://legistar2.granicus.com/castlerock-co/attachments/48523085-e394-409a-ac2d-b08e84c51fcc.pdf"
+official_discovery_url = "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Capture current robots directives and review site/API terms before live archive."
+terms_note = "Review exact endpoint and current terms before scheduled retrieval; no case is auto-published by archiving."

@@ -53,54 +53,58 @@ pub fn parse_solicitations(
     snapshot_digest: &str,
 ) -> Result<Vec<SolicitationRecord>, SolicitationError> {
     let document = Html::parse_document(html);
-    let identifier_re = Regex::new(r"(?i)\b(rfp|rfq|ifb|r|q|b)?-?\s?[0-9]{2}-[0-9]{3}[a-z]{0,3}\b")
-        .expect("constant identifier regex");
-    let mut records = Vec::new();
+    let identifier_re =
+        Regex::new(r"(?i)\b(?:rfp|rfq|ifb|rfi|r|q|b)?-?[0-9]{2,4}-[0-9]{3}[a-z]{0,3}\b")
+            .expect("constant identifier regex");
+    let mut records: Vec<SolicitationRecord> = Vec::new();
 
-    // Collect document links and headings, pairing each heading's text with the
-    // links it contains. The identifier may appear in the heading's own text
-    // (e.g., "(R26-023AB)") while the linked document lives on a child anchor.
-    // This is intentionally bounded and tolerant of layout drift without
-    // claiming completeness.
-    let heading_selector = Selector::parse("h2, h3, h4").expect("valid");
+    // Bound parsing to the main content where available. A link to a related
+    // document is not itself a solicitation, and page navigation must never
+    // become one merely because it is an anchor.
+    let main_selector = Selector::parse("main").expect("valid");
+    let container = document
+        .select(&main_selector)
+        .next()
+        .unwrap_or_else(|| document.root_element());
     let link_selector = Selector::parse("a[href]").expect("valid");
-    let mut items: Vec<(String, Vec<String>)> = Vec::new();
-
-    // Standalone anchors outside any heading (e.g., table cells).
-    for element in document.select(&link_selector) {
-        let href = absolutize(element.value().attr("href").unwrap_or_default());
-        if href.is_empty() {
-            continue;
-        }
-        let in_heading = element
-            .ancestors()
-            .any(|node| matches!(node.value(), scraper::Node::Element(el) if matches!(el.name(), "h2" | "h3" | "h4")));
-        if in_heading {
-            continue; // handled with its heading below
+    let candidate_selector = Selector::parse("h2, h3, h4, a[href]").expect("valid");
+    let mut current_record: Option<usize> = None;
+    for element in container.select(&candidate_selector) {
+        let is_heading = matches!(element.value().name(), "h2" | "h3" | "h4");
+        if !is_heading {
+            let nested_under_heading = element.ancestors().any(|node| {
+                matches!(node.value(), scraper::Node::Element(el) if matches!(el.name(), "h2" | "h3" | "h4"))
+            });
+            if nested_under_heading {
+                continue;
+            }
         }
         let text = normalize(&element.text().collect::<Vec<_>>().join(" "));
-        if text.is_empty() {
+        let links: Vec<String> = if is_heading {
+            element
+                .select(&link_selector)
+                .map(|a| absolutize(a.value().attr("href").unwrap_or_default()))
+                .filter(|u| !u.is_empty())
+                .collect()
+        } else {
+            let href = absolutize(element.value().attr("href").unwrap_or_default());
+            if href.is_empty() {
+                continue;
+            }
+            vec![href]
+        };
+        let standalone_record = !is_heading
+            && identifier_re.is_match(&text)
+            && element.ancestors().any(|node| {
+                matches!(node.value(), scraper::Node::Element(el) if matches!(el.name(), "li" | "td" | "tr"))
+            });
+        if !is_heading && !standalone_record {
+            if let Some(index) = current_record {
+                records[index].linked_documents.extend(links);
+            }
             continue;
         }
-        items.push((text, vec![href]));
-    }
-
-    // Headings with their descendant links.
-    for element in document.select(&heading_selector) {
-        let text = normalize(&element.text().collect::<Vec<_>>().join(" "));
         if text.is_empty() {
-            continue;
-        }
-        let links: Vec<String> = element
-            .select(&link_selector)
-            .map(|a| absolutize(a.value().attr("href").unwrap_or_default()))
-            .filter(|u| !u.is_empty())
-            .collect();
-        items.push((text, links));
-    }
-
-    for (text, links) in items {
-        if text.is_empty() && links.is_empty() {
             continue;
         }
         let identifier = identifier_re
@@ -137,6 +141,12 @@ pub fn parse_solicitations(
             incompleteness_warning: INCOMPLETENESS_WARNING.to_owned(),
             snapshot_digest: snapshot_digest.to_owned(),
         });
+        current_record = Some(records.len() - 1);
+    }
+
+    for record in &mut records {
+        record.linked_documents.sort();
+        record.linked_documents.dedup();
     }
 
     if records.is_empty() {
@@ -197,11 +207,23 @@ pub fn solicitation_record_rows(records: &[SolicitationRecord]) -> Vec<RecordRow
 }
 
 fn absolutize(href: &str) -> String {
-    if href.starts_with("http://") || href.starts_with("https://") {
-        href.to_owned()
-    } else {
-        format!("https://coloradosprings.gov{href}")
+    let href = href.trim();
+    if href.is_empty() || href.starts_with('#') {
+        return String::new();
     }
+    let base =
+        url::Url::parse("https://coloradosprings.gov/solicitations").expect("constant City URL");
+    let Ok(link) = base.join(href) else {
+        return String::new();
+    };
+    if !matches!(link.scheme(), "http" | "https")
+        || link.host_str() != Some("coloradosprings.gov")
+        || !link.username().is_empty()
+        || link.password().is_some()
+    {
+        return String::new();
+    }
+    link.to_string()
 }
 
 fn normalize(text: &str) -> String {
@@ -263,6 +285,47 @@ mod tests {
             r26.linked_documents
                 .iter()
                 .all(|u| u.starts_with("https://coloradosprings.gov"))
+        );
+    }
+
+    #[test]
+    fn only_city_document_links_are_retained() {
+        let html = "<main><h2>Street Repair IFB (IFB-2024-001)</h2>\
+                    <p><a href=\"document/specification.pdf\">Specification</a>\
+                    <a href=\"https://outside.example/bid.pdf\">Other portal</a>\
+                    <a href=\"mailto:buyer@example.com\">Email buyer</a>\
+                    <a href=\"#details\">Details</a></p></main>";
+        let records = parse_solicitations(html, DIGEST).expect("parse");
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].linked_documents,
+            ["https://coloradosprings.gov/document/specification.pdf"]
+        );
+    }
+
+    #[test]
+    fn related_documents_do_not_become_solicitations() {
+        let fixture = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixtures/procurement/solicitations.html"
+        ));
+        let records = parse_solicitations(fixture, DIGEST).expect("parse fixture");
+        assert_eq!(records.len(), 3);
+        let transit = records
+            .iter()
+            .find(|record| record.identifier == "R26-023AB")
+            .expect("transit record");
+        assert_eq!(transit.linked_documents.len(), 3);
+        assert!(
+            transit
+                .linked_documents
+                .iter()
+                .any(|link| link.contains("sample-services-contract"))
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.identifier == "IFB-2024-001")
         );
     }
 

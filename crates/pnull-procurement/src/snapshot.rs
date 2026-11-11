@@ -59,7 +59,10 @@ impl Acquisition {
             state: self.coverage_state,
             retrieved_at: self.retrieved_at.clone(),
             persisted_digest: Some(self.bytes_digest.clone()),
-            http_status: None,
+            http_status: self
+                .observations
+                .last()
+                .map(|observation| observation.status_code),
             etag: self.etag.clone(),
             last_modified: self.last_modified.clone(),
             final_url: Some(self.final_url.clone()),
@@ -81,7 +84,12 @@ impl Acquisition {
         supersedes: Option<String>,
     ) -> SourceSnapshot {
         SourceSnapshot {
-            id: SourceSnapshot::id_for(&self.source_id, &self.bytes_digest),
+            id: supersedes.as_ref().map_or_else(
+                || SourceSnapshot::id_for(&self.source_id, &self.bytes_digest),
+                |prior_id| {
+                    SourceSnapshot::id_for_revision(&self.source_id, &self.bytes_digest, prior_id)
+                },
+            ),
             source_id: self.source_id.clone(),
             source_url: self.source_url.clone(),
             retrieved_at: self.retrieved_at.clone(),
@@ -251,7 +259,27 @@ pub fn record_snapshot(
     old_rows: &[RecordRow],
     new_rows: &[RecordRow],
 ) -> Result<(SourceSnapshot, Option<SnapshotDiff>), SnapshotError> {
-    let snapshot = acquisition.snapshot(record_count, prior_snapshot.map(|s| s.id.clone()));
+    // Repeatedly observed bytes are another acquisition, not a new revision.
+    // Retain the existing snapshot identity, while recording fresh coverage.
+    let same_revision = if let Some(prior) = prior_snapshot.filter(|prior| {
+        prior.persisted_digest == acquisition.bytes_digest
+            && prior.parser_version == acquisition.parser_version
+            && prior.schema_version == acquisition.schema_version
+    }) {
+        match snapshot_rows(store, &prior.id) {
+            Ok(_) => Some(prior.clone()),
+            // A legacy capture's missing rows cannot be silently filled from
+            // a later acquisition, even if the bytes match. Record a new
+            // revision with its own preserved rows instead.
+            Err(SnapshotError::LegacyOrIncomplete(_)) => None,
+            Err(error) => return Err(error),
+        }
+    } else {
+        None
+    };
+    let snapshot = same_revision.unwrap_or_else(|| {
+        acquisition.snapshot(record_count, prior_snapshot.map(|prior| prior.id.clone()))
+    });
 
     // Insert the immutable snapshot first so the row set can reference it.
     // This is idempotent: re-inserting the same snapshot id inserts nothing.
@@ -262,7 +290,13 @@ pub fn record_snapshot(
             snapshot_id: snapshot.id.clone(),
             supersedes: snapshot.supersedes.clone(),
             superseded_by: None,
-            reason: "new bytes observed for the same official URL".to_owned(),
+            reason: if prior_snapshot
+                .is_some_and(|prior| prior.persisted_digest == snapshot.persisted_digest)
+            {
+                "same bytes reparsed with a new parser or schema".to_owned()
+            } else {
+                "new bytes observed for the same official URL".to_owned()
+            },
             recorded_at: acquisition.retrieved_at.clone(),
         };
         store.insert_snapshot_revision(&revision)?;
@@ -337,7 +371,7 @@ pub fn record_unchanged(
         source_id: acquisition.source_id.clone(),
         source_url: acquisition.source_url.clone(),
         authority: acquisition.authority,
-        state: CoverageState::Complete,
+        state: acquisition.coverage_state,
         retrieved_at: acquisition.retrieved_at.clone(),
         persisted_digest: Some(existing_snapshot.persisted_digest.clone()),
         http_status: Some(304),
@@ -580,13 +614,17 @@ mod tests {
         let store = pnull_core::Store::open(dir.path()).expect("store");
         let first = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T00:00:00Z");
         let (snap1, _) = record_snapshot(&store, &first, None, Some(1), &[], &[]).expect("first");
-        let unchanged = acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T01:00:00Z");
+        let mut unchanged =
+            acquisition_for("src", "https://x/a", "digest-x", "2026-08-17T01:00:00Z");
+        unchanged.coverage_state = CoverageState::InformationalOnly;
         let unchanged_flag = record_unchanged(&store, &unchanged, &snap1).expect("unchanged");
         assert!(unchanged_flag);
         // Still only one snapshot; coverage ledger gained a 304 entry.
         assert_eq!(store.source_snapshots("src").expect("list").len(), 1);
         let coverage = store.coverage_entries("src").expect("coverage");
-        assert!(coverage.iter().any(|e| e.http_status == Some(304)));
+        assert!(coverage.iter().any(|entry| {
+            entry.http_status == Some(304) && entry.state == CoverageState::InformationalOnly
+        }));
     }
 
     fn row(key: &str, canonical: &str) -> RecordRow {

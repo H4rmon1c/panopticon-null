@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Panopticon sources every 25 hours
+
+[Timer]
+OnStartupSec=10min
+OnUnitInactiveSec=25h
+Unit=panopticon-collect.service
+
+[Install]
+WantedBy=timers.target

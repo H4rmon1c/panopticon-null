@@ -1,0 +1,33 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Simla, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Simla public-record alerts"
+default_dry_run = true
+demo_documents = []
+
+# Official documents index includes dated Board of Trustees meeting minutes.
+# Remains unscheduled until current robots, terms, and source policy are reviewed.
+[[sources]]
+id = "simla-document-index"
+name = "Town of Simla official documents index"
+url = "https://townofsimla.com/documents"
+source_type = "html_page"
+documented_at = "https://townofsimla.com/documents"
+official_discovery_url = "https://townofsimla.com/"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before a source review."
+terms_note = "Review the town's current terms and this exact document index path; candidates remain private."
+
+[[sources]]
+id = "simla-pdf-documents"
+name = "Town of Simla official uploaded PDF candidate path"
+url = "https://townofsimla.com/uploads/"
+source_type = "candidate_index_pdf"
+documented_at = "https://townofsimla.com/documents"
+official_discovery_url = "https://townofsimla.com/documents"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before a source review."
+terms_note = "Review this exact upload prefix and current terms; fetch only digest-bound same-host PDF links, one per invocation."

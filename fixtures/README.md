@@ -1,6 +1,6 @@
 # Fixture provenance
 
-The Colorado fixtures are exact bytes retrieved from official public endpoints on 2026-08-16 with one request at a time and no authentication, access-control bypass, or browser automation.
+The Colorado fixtures are exact bytes retrieved from official public endpoints. The original event and PDF bundle was retrieved on 2026-08-16; the individual-vote response was retrieved on 2026-11-09 UTC. Acquisition used one request at a time and no authentication, access-control bypass, or browser automation.
 
 | File | Official source | Purpose |
 |---|---|---|
@@ -9,6 +9,7 @@ The Colorado fixtures are exact bytes retrieved from official public endpoints o
 | `co/police-technology-surcharge-presentation.pdf` | [Legistar attachment 14876735](https://coloradosprings.legistar.com/View.ashx?M=F&ID=14876735&GUID=EA1466B1-D5D6-48CF-BB70-7710853E363D) | Supporting source naming Axon body cameras, Axon evidence systems, and Flock vehicle-intelligence cameras with stated costs |
 | `co/event-2654-work-session.json` | [Legistar event 2654](https://webapi.legistar.com/v1/coloradosprings/events/2654?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1) | Real API parser and work-session fixture |
 | `co/event-2660-final-vote.json` | [Legistar event 2660](https://webapi.legistar.com/v1/coloradosprings/events/2660?EventItems=1&AgendaNote=1&MinutesNote=1&EventItemAttachments=1) | Real API parser and final-vote fixture |
+| `co/votes-103550-final-vote.json` | [Legistar votes on event item 103550](https://webapi.legistar.com/v1/coloradosprings/EventItems/103550/Votes) | Nine individually recorded votes on Ordinance 25-93: six Aye, three No |
 
 `co/SHA256SUMS` commits the hash of every source fixture. Raw fixtures remain local evidence inputs; the static publisher emits only necessary institutional facts and exact selected citations.
 

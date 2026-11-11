@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# Publish only the approved static atlas. The collector database is never copied.
+set -euo pipefail
+
+: "${PNUL_REPO_DIR:?set PNUL_REPO_DIR to the checked-out repository}"
+: "${PNUL_DATA_DIR:?set PNUL_DATA_DIR to the private collector state}"
+: "${PNUL_SITE_URL:?set PNUL_SITE_URL to the public HTTPS origin}"
+: "${PNUL_RELEASE_ROOT:?set PNUL_RELEASE_ROOT to the public releases directory}"
+: "${PNUL_CURRENT_LINK:?set PNUL_CURRENT_LINK to the public current symlink}"
+
+pnull_bin="${PNUL_BIN:-/usr/local/bin/pnull}"
+node_bin="${PNUL_NODE_BIN:-node}"
+config_path="${PNUL_CONFIG_PATH:-configs/states/co.toml}"
+manifest_paths="${PNUL_MANIFEST_PATHS:-${PNUL_MANIFEST_PATH:-fixtures/atlas/colorado-springs-25-93.v1.json}}"
+withdrawn_paths="${PNUL_WITHDRAWN_MANIFESTS:-}"
+proposal_paths="${PNUL_PROPOSAL_INPUTS:-}"
+withdrawn_case_ids="${PNUL_WITHDRAWN_CASE_IDS:-}"
+
+for path in "$PNUL_REPO_DIR" "$PNUL_DATA_DIR" "$PNUL_RELEASE_ROOT" "$PNUL_CURRENT_LINK"; do
+    [[ "$path" == /* ]] || { echo "deployment paths must be absolute: $path" >&2; exit 1; }
+done
+withdrawn_args=()
+if [[ -n "$withdrawn_paths" ]]; then
+    read -r -a withdrawn_list <<< "$withdrawn_paths"
+    for manifest in "${withdrawn_list[@]}"; do
+        [[ "$manifest" =~ ^fixtures/atlas/[a-zA-Z0-9._/-]+\.json$ &&
+           "$manifest" != *..* && -z "${seen_manifests[$manifest]:-}" &&
+           -f "$PNUL_REPO_DIR/$manifest" && ! -L "$PNUL_REPO_DIR/$manifest" ]] || {
+            echo "invalid or active withdrawn manifest: $manifest" >&2
+            exit 1
+        }
+        seen_manifests[$manifest]=1
+        withdrawn_args+=(--withdrawn-manifest "$manifest")
+    done
+fi
+[[ -d "$PNUL_REPO_DIR/web/panopticon-terminal" ]] || { echo "web source is missing" >&2; exit 1; }
+[[ -d "$PNUL_DATA_DIR" ]] || { echo "private collector state is missing" >&2; exit 1; }
+
+read -r -a manifest_list <<< "$manifest_paths"
+[[ ${#manifest_list[@]} -gt 0 ]] || { echo "no atlas manifests configured" >&2; exit 1; }
+manifest_args=()
+declare -A seen_manifests=()
+for manifest in "${manifest_list[@]}"; do
+    [[ "$manifest" =~ ^fixtures/atlas/[a-zA-Z0-9._/-]+\.json$ &&
+       "$manifest" != *..* && -z "${seen_manifests[$manifest]:-}" &&
+       -f "$PNUL_REPO_DIR/$manifest" && ! -L "$PNUL_REPO_DIR/$manifest" ]] || {
+        echo "invalid or duplicate atlas manifest: $manifest" >&2
+        exit 1
+    }
+    seen_manifests[$manifest]=1
+    manifest_args+=(--manifest "$manifest")
+done
+[[ -e "$PNUL_CURRENT_LINK" && ! -L "$PNUL_CURRENT_LINK" ]] && {
+    echo "current path exists and is not a symlink" >&2
+    exit 1
+}
+
+private_root="$(realpath -m "$PNUL_DATA_DIR")"
+proposal_args=()
+if [[ -n "$proposal_paths" ]]; then
+    read -r -a proposal_list <<< "$proposal_paths"
+    [[ ${#proposal_list[@]} -le 64 ]] || { echo "too many proposal inputs" >&2; exit 1; }
+    declare -A seen_proposals=()
+    for proposal in "${proposal_list[@]}"; do
+        [[ "$proposal" == "$private_root/"* && "$proposal" == *.json &&
+           "$proposal" != *..* && -z "${seen_proposals[$proposal]:-}" &&
+           -f "$proposal" && ! -L "$proposal" ]] || {
+            echo "invalid or duplicate private proposal input: $proposal" >&2
+            exit 1
+        }
+        canonical_proposal="$(realpath -e -- "$proposal")"
+        [[ "$canonical_proposal" == "$private_root/"* ]] || {
+            echo "proposal input escapes private state: $proposal" >&2
+            exit 1
+        }
+        seen_proposals[$proposal]=1
+        proposal_args+=(--proposal-input "$proposal")
+    done
+fi
+release_root="$(realpath -m "$PNUL_RELEASE_ROOT")"
+public_root="$(realpath -m "$(dirname "$PNUL_CURRENT_LINK")")"
+current_link="$public_root/$(basename "$PNUL_CURRENT_LINK")"
+prior_withdrawal_args=()
+if [[ -n "$withdrawn_case_ids" ]]; then
+    [[ -L "$current_link" ]] || { echo "prior withdrawals need a current release" >&2; exit 1; }
+    prior_release="$(realpath -e -- "$current_link")"
+    [[ "$prior_release" == "$release_root/"* ]] || { echo "current release escapes release root" >&2; exit 1; }
+    prior_snapshot="$prior_release/public/public-snapshot.json"
+    [[ -f "$prior_snapshot" && ! -L "$prior_snapshot" ]] || { echo "prior public snapshot missing" >&2; exit 1; }
+    read -r -a withdrawn_id_list <<< "$withdrawn_case_ids"
+    declare -A seen_withdrawn_ids=()
+    for case_id in "${withdrawn_id_list[@]}"; do
+        [[ "$case_id" =~ ^co-[a-z0-9-]+$ && -z "${seen_withdrawn_ids[$case_id]:-}" ]] || {
+            echo "invalid or duplicate withdrawn case ID: $case_id" >&2
+            exit 1
+        }
+        seen_withdrawn_ids[$case_id]=1
+        prior_withdrawal_args+=(--withdrawn-case-id "$case_id")
+    done
+    prior_withdrawal_args+=(--previous-snapshot "$prior_snapshot")
+fi
+case "$private_root/" in "$release_root/"*) echo "collector state is inside the public release root" >&2; exit 1 ;; esac
+case "$release_root/" in "$private_root/"*) echo "public release root is inside collector state" >&2; exit 1 ;; esac
+case "$private_root/" in "$public_root/"*) echo "collector state is inside the public site directory" >&2; exit 1 ;; esac
+case "$public_root/" in "$private_root/"*) echo "public site directory is inside collector state" >&2; exit 1 ;; esac
+
+mkdir -p "$release_root" "$(dirname "$current_link")"
+exec 9>"$release_root/.publish.lock"
+flock -n 9 || { echo "another publish is running" >&2; exit 1; }
+
+stage="$(mktemp -d "$release_root/.candidate.XXXXXXXX")"
+cleanup() {
+    if [[ -n "$stage" && -d "$stage" ]]; then
+        rm -rf -- "$stage"
+    fi
+}
+trap cleanup EXIT
+
+web="$(realpath "$PNUL_REPO_DIR/web/panopticon-terminal")"
+asset_manifest="$(dirname -- "$(realpath -e -- "${BASH_SOURCE[0]}")")/public-assets.txt"
+[[ -f "$asset_manifest" ]] || { echo "public asset manifest is missing" >&2; exit 1; }
+while IFS= read -r asset || [[ -n "$asset" ]]; do
+    [[ -z "$asset" || "$asset" == \#* ]] && continue
+    if [[ ! "$asset" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] ||
+       [[ "$asset" == *".."* ]] || [[ "$asset" == *"//"* ]]; then
+        echo "invalid public asset path: $asset" >&2
+        exit 1
+    fi
+    source_path="$(realpath -e "$web/$asset")"
+    if [[ "$source_path" != "$web/"* || ! -f "$source_path" || -L "$web/$asset" ]]; then
+        echo "public asset escapes the web source or is not a regular file: $asset" >&2
+        exit 1
+    fi
+    mkdir -p -- "$stage/$(dirname -- "$asset")"
+    cp -- "$source_path" "$stage/$asset"
+done < "$asset_manifest"
+mkdir -p -- "$stage/public"
+if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
+    echo "site assets contain a symlink" >&2
+    exit 1
+fi
+if [[ -e "$stage/preview-snapshot.json" ]]; then
+    echo "private preview was copied into the public release" >&2
+    exit 1
+fi
+
+cd "$PNUL_REPO_DIR"
+"$pnull_bin" --data-dir "$PNUL_DATA_DIR" --config "$config_path" \
+    --site-url "$PNUL_SITE_URL" atlas export "${manifest_args[@]}" "${withdrawn_args[@]}" "${prior_withdrawal_args[@]}" "${proposal_args[@]}" \
+    --output "$stage/public/public-snapshot.json"
+PNUL_PORTRAIT_PROOF_ROOT="$PNUL_REPO_DIR" "$node_bin" "$stage/scripts/validate.mjs"
+"$node_bin" "$stage/scripts/filter-portraits.mjs" "$stage"
+"$node_bin" "$stage/scripts/build-decision-pages.mjs" "$stage" "$PNUL_SITE_URL"
+PNUL_PORTRAIT_PROOF_ROOT="$PNUL_REPO_DIR" PNUL_VALIDATE_RELEASE=1 "$node_bin" "$stage/scripts/validate.mjs"
+PNUL_VALIDATE_RELEASE=1 "$node_bin" --test "$stage/scripts/test-client.mjs"
+
+# Operator scripts are needed for staging validation, not for browsers.
+rm -- "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
+find "$stage" -type d -exec chmod 755 {} +
+find "$stage" -type f -exec chmod 644 {} +
+
+release="$release_root/release-$(date -u +%Y%m%dT%H%M%SZ)-$(basename "$stage" | cut -d. -f3)"
+mv -- "$stage" "$release"
+stage=""
+next_link="$current_link.next.$$"
+trap 'rm -f -- "$next_link"; cleanup' EXIT
+ln -s -- "$release" "$next_link"
+mv -Tf -- "$next_link" "$current_link"
+echo "published $release"

@@ -1,0 +1,46 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Douglas County, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Douglas County surveillance alerts"
+default_dry_run = true
+demo_documents = []
+
+# Current county meeting platform, linked from douglasco.gov. This source
+# discovers private links only; candidate documents need separate review.
+[[sources]]
+id = "douglas-county-calendar"
+name = "Douglas County official meeting calendar"
+url = "https://douglascounty.legistar.com/Calendar.aspx"
+source_type = "html_page"
+documented_at = "https://www.douglasco.gov/board-county-commissioners/boards-commissions/"
+official_discovery_url = "https://www.douglasco.gov/board-county-commissioners/boards-commissions/"
+minimum_interval_seconds = 86400
+maximum_bytes = 4194304
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review official calendar and current terms before scheduled retrieval; candidates remain private until independently verified."
+
+# Operator-triggered path policies for one digest-bound calendar candidate.
+[[sources]]
+id = "douglas-county-meeting-documents"
+name = "Douglas County, Colorado meeting detail HTML candidate path"
+url = "https://douglascounty.legistar.com/MeetingDetail.aspx"
+source_type = "candidate_meeting_html"
+documented_at = "https://douglascounty.legistar.com/Calendar.aspx"
+official_discovery_url = "https://douglascounty.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 60
+maximum_bytes = 4194304
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."
+
+[[sources]]
+id = "douglas-county-pdf-documents"
+name = "Douglas County, Colorado agenda/packet/minutes PDF candidate path"
+url = "https://douglascounty.legistar.com/View.ashx"
+source_type = "candidate_document_pdf"
+documented_at = "https://douglascounty.legistar.com/Calendar.aspx"
+official_discovery_url = "https://douglascounty.legistar.com/Calendar.aspx"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact official path and current terms; only digest-bound calendar links may be fetched, one per invocation."

@@ -1,0 +1,179 @@
+name: Public terminal
+
+on:
+  # The Rust exporter and evidence model can change the released snapshot.
+  # Run on branch pushes as well as PR events: API ref updates may not emit
+  # a pull_request synchronize event.
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/panopticon-terminal/api.js
+          node --check web/panopticon-terminal/app.js
+          node --check web/panopticon-terminal/decision.js
+          node --check web/panopticon-terminal/scripts/validate.mjs
+          node --check web/panopticon-terminal/scripts/build-decision-pages.mjs
+          node --check web/panopticon-terminal/scripts/24-colorado-coverage.mjs
+          for script in web/panopticon-terminal/scripts/[0-9][0-9]-*.js; do
+            node --check "$script"
+          done
+      - name: Validate shell, snapshot, and references
+        run: node web/panopticon-terminal/scripts/validate.mjs
+      - name: Verify archived Colorado geography rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pnull-geography-venv
+          /tmp/pnull-geography-venv/bin/pip install -r web/panopticon-terminal/scripts/requirements-geography.txt
+          /tmp/pnull-geography-venv/bin/python web/panopticon-terminal/scripts/build-colorado-geography.py --output /tmp/pnull-colorado-rebuilt.json
+          cmp web/panopticon-terminal/geography/colorado-jurisdictions.json /tmp/pnull-colorado-rebuilt.json
+          node web/panopticon-terminal/scripts/test-colorado-geography.mjs
+          python3 web/panopticon-terminal/scripts/build-colorado-worklist.py --output /tmp/pnull-colorado-worklist.csv
+          python3 deploy/selfhost/test-small-town-profile.py
+      - name: Test multi-jurisdiction collection schedule
+        run: bash deploy/selfhost/test-collect.sh
+      - name: Test bounded private candidate queue schedule
+        run: bash deploy/selfhost/test-candidate-queue.sh
+      - name: Verify fixed official archive profiles
+        run: python3 deploy/selfhost/test-archive-profiles.py
+      - name: Test exact Colorado source review batch
+        run: python3 deploy/selfhost/test-review-batch.py
+      - name: Test staged publication and rollback
+        run: bash deploy/selfhost/test-publish.sh
+      - name: Browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory web/panopticon-terminal \
+            >/tmp/pnull-terminal-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for _ in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 0.2
+          done
+          curl --fail --silent http://127.0.0.1:4173/ >/dev/null
+
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome"
+          test_url="http://127.0.0.1:4173/?ci=1"
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --dump-dom \
+            "$test_url" \
+            > /tmp/pnull-terminal-dom.html \
+            2> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/pnull-terminal-dom.html
+
+          grep --quiet "Ordinance 25-93" /tmp/pnull-terminal-dom.html
+          grep --quiet "Colorado Springs" /tmp/pnull-terminal-dom.html
+          if grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html; then
+            echo "public default unexpectedly loaded demonstration data" >&2
+            exit 1
+          fi
+          grep --quiet "READ THE PROOF" /tmp/pnull-terminal-dom.html
+          grep --quiet 'id="civic-canvas"' /tmp/pnull-terminal-dom.html
+          grep --quiet "What is happening here?" /tmp/pnull-terminal-dom.html
+          grep --quiet "THE PUBLIC RECORD, CONNECTED" /tmp/pnull-terminal-dom.html
+          grep --quiet "POWER LEAVES A RECORD. WE CONNECT IT." /tmp/pnull-terminal-dom.html
+          grep --quiet "No private-person tracking" /tmp/pnull-terminal-dom.html
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --dump-dom \
+            "http://127.0.0.1:4173/?ci=1&demo=1" \
+            > /tmp/pnull-terminal-demo-dom.html \
+            2>> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          grep --quiet "DEMO DATA" /tmp/pnull-terminal-demo-dom.html
+          grep --ignore-case --quiet "Front Range Campus" /tmp/pnull-terminal-demo-dom.html
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --dump-dom \
+            "http://127.0.0.1:4173/decision.html?decision=co-colorado-springs-25-581-2025-11-25" \
+            > /tmp/pnull-terminal-decision-dom.html \
+            2>> /tmp/pnull-terminal-chrome.log || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          grep --quiet "Recorded votes on this decision" /tmp/pnull-terminal-decision-dom.html
+          grep --quiet "Portrait of Tom Bailey" /tmp/pnull-terminal-decision-dom.html
+          grep --quiet "Public role and term: not established" /tmp/pnull-terminal-decision-dom.html
+
+          status=0
+          timeout --signal=TERM 45s "$chrome" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --virtual-time-budget=6500 \
+            --window-size=1440,1000 \
+            --screenshot=/tmp/panopticon-civic-atlas.png \
+            "$test_url" \
+            >> /tmp/pnull-terminal-chrome.log \
+            2>&1 || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/pnull-terminal-chrome.log
+            exit "$status"
+          fi
+          test -s /tmp/panopticon-civic-atlas.png
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-terminal-civic-atlas
+          if-no-files-found: error
+          path: |
+            /tmp/panopticon-civic-atlas.png
+            /tmp/pnull-terminal-dom.html
+            /tmp/pnull-terminal-demo-dom.html
+            /tmp/pnull-terminal-decision-dom.html
+            /tmp/pnull-terminal-server.log
+            /tmp/pnull-terminal-chrome.log

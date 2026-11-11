@@ -35,7 +35,7 @@ All durable state is local. No hosted service, JavaScript runtime, telemetry, an
 
 ## SQLite schema and migration
 
-SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 4` (as of v0.0.4c).
+SQLite stores canonical JSON records and enforces durable uniqueness. Schema versioning uses `PRAGMA user_version` with `SCHEMA_VERSION = 5` for the approval ledger.
 
 - v0.0.1 databases have no `user_version` (treated as `0`). They upgrade transactionally by adding supplemental tables without rewriting canonical records.
 - v0.0.2 databases (`user_version = 1`) upgrade transactionally by adding procurement supplemental tables.
@@ -68,6 +68,8 @@ Tables: `evidence`, `findings`, `alerts`, `approvals`, `posts`, `post_segments`,
 - `case_files`, `cora_drafts` — generated case files and local unsent CORA drafts.
 - `procurement_alerts`, `cora_requests`, `official_relationships` — the v0.0.4 public-ledger tables (change alerts, the CORA request ledger, and official-relationship links).
 - `snapshot_rows`, `snapshot_row_sets` — the v0.0.4c snapshot-row storage tables. Every immutable snapshot persists the exact parsed row set it captured (stable row key, normalized canonical fields, per-row and row-set digests, original raw values, parser/schema version), so change detection compares the exact previous snapshot's stored rows from the database and never reconstructs history from fixtures or files on disk.
+- A new snapshot revision links to its predecessor, even when its exact bytes equal an older revision. This records A→B→A reversions and makes the returning A the current head; unchanged current bytes and HTTP 304 remain no-op acquisitions with coverage provenance.
+- `office_terms`, `civic_decisions`, `decision_participations`, `contract_records`, `technology_records`, `approval_links`, `approval_reviews`, `approval_corrections`, `approval_gaps` — the v5 public-role approval ledger. Exact source bytes live in the SHA-256 content store; every proposed connection binds a source URL, digest, locator, quotation, review history, and correction history. Only approved, unretracted links enter the chain projection. The projection does not itself authorize publishing unreviewed display fields.
 
 ## Procurement chain
 
@@ -147,7 +149,7 @@ The site, Atom feed, and X pipeline fail closed on pending, rejected, stale, or 
 
 ## X reconciliation
 
-X thread safety is built around append-only attempts and operator decisions. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` operate with a dry-run default. A new attempt is authorized only after the previous attempt is resolved; uncertain attempts are never blindly retried. No audit history is deleted, and no test, fixture, or demo constructs a live X transport.
+X thread safety is built around append-only attempts and operator decisions. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` operate with a dry-run default. A new attempt is authorized only after confirming that none posted; partial and abandoned attempts remain blocked. No audit history is deleted, and no test, fixture, or demo constructs a live X transport.
 
 ## Determinism
 

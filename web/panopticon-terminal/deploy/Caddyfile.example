@@ -1,0 +1,24 @@
+panopticon.fail {
+    encode zstd gzip
+
+    # A private editorial preview must never be served from the public site.
+    handle /preview-snapshot.json {
+        respond 404
+    }
+
+    # Copy the validated static site and gated public snapshot together.
+    handle {
+        root * /srv/panopticon/site/current
+        file_server
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+    }
+
+    @public_snapshot path /public/public-snapshot.json
+    header @public_snapshot Cache-Control "public, max-age=60, must-revalidate"
+}

@@ -1,0 +1,6 @@
+# Config path<TAB>origin HTML source ID<TAB>max fetches/run<TAB>refresh after seconds.
+# Activate a row only after the origin and its path policies have current
+# source-level reviews. Each run fetches at most one candidate per path policy.
+# Examples after review:
+# configs/states/co-commerce-city.toml	commerce-city-calendar	2	604800
+# configs/states/co-moffat.toml	moffat-document-index	1	604800

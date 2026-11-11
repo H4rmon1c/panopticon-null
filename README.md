@@ -59,7 +59,7 @@ preserved (those degrade to no reported diff as a documented evidence limitation
 - **Bounded Legistar pagination and attachment discovery.** One request at a time, configurable page size, hard maximums on pages, events, matters, and attachments per matter, aggregate byte and time budgets, deduplication by official identifiers, repeated-page/non-progressing detection, deterministic ordering, conditional requests with cached observations, and fail-closed handling of malformed identifiers or unknown hosts. Discovery uses only documented official fields and reviewed hosts.
 - **Explicit subjects, actions, and document roles.** Versioned domain types model the subject of an action (Ordinance, Policy, Solicitation, Contract, Amendment, Vendor, SurveillanceTechnology, Program, BudgetItem, Other, Unknown), the action (Mentioned, Proposed, HearingScheduled, VoteScheduled, Approved, Rejected, Awarded, Executed, Amended, Renewed, Expanded, DeploymentReported, PolicyChanged, Unknown), and the document role (Agenda, Minutes, Ordinance, Policy, Solicitation, Award, Contract, Amendment, StaffReport, Presentation, Other). Every action identifies its exact subject and citations. A regression test proves an Ordinance 25-93 approval can never become an Axon/Flock purchase assertion.
 - **A human citation-review queue.** Append-only review states (Pending, Approved, Rejected, NeedsContext, Superseded). Each decision binds to the exact digest of the evidence ID, source digest, locator/geometry, quote, quote digest, rule digest, processing artifact digest, and proposed public fields. Changing any bound value invalidates the approval. Structured publication allowlists name which categories may appear publicly; an allowlist is not auto-approval. The static site, Atom feed, and X drafting fail closed on pending, rejected, stale, or mismatched decisions. The demo uses clearly labeled deterministic demonstration reviews.
-- **Safe reconciliation of uncertain X threads.** Dry-run is the default. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` record append-only operator decisions (confirm a segment exists plus remote ID/URL, confirm none posted, mark partially posted, abandon, or authorize a new attempt only after the previous one is resolved). There is no blind retry of uncertain attempts and no audit-history deletion.
+- **Safe reconciliation of uncertain X threads.** Dry-run is the default. `pnull x attempts`, `pnull x status`, and `pnull x reconcile` record append-only operator decisions. A new attempt is possible only after confirming that none posted. Partial and abandoned attempts retain their reservation and cannot be retried. There is no blind retry or audit-history deletion.
 - **A second genuine Colorado Springs matter.** Ordinance No. 15-84 (2015), matter 15-00663, established the municipal court Information Technology Surcharge that Ordinance 25-93 (the v0.0.1 matter) amends. The surveillance-technology link (Axon body cameras/evidence systems/AI transcription, Flock vehicle-intelligence cameras) is documented in the preserved 2025 presentation as supporting evidence, not asserted by the 2015 action itself.
 
 ### The 0.0.1 foundation
@@ -130,6 +130,26 @@ cargo run --locked -p pnull-cli -- demo
 
 The demo runs offline against preserved official fixtures, exercises the v0.0.1→v0.0.2 migration, generates page-accurate citations, models explicit subjects and actions for two genuine matters, requires deterministic demonstration review decisions, generates a JavaScript-free static site and Atom feed, and produces only dry-run X drafts. It now also re-ingests the second contract-award snapshot, publishes procurement pages and Atom entries (a transit-fare page, a benign control, and a derived "what changed" matter), produces one dry-run X draft for a procurement change alert, and registers a transit-fare CORA request in `drafted` state. It performs zero network posts and constructs no live X transport.
 
+For deployment, set the state configuration path and canonical public site URL explicitly. The repository URL ends in `.invalid` by design; publication and X links must use the actual deployed origin and path. The CLI also accepts the equivalent global flags `--config`, `--rules`, and `--site-url`.
+
+```console
+export PNUL_CONFIG_PATH=/absolute/path/to/configs/states/co.toml
+export PNUL_RULES_PATH=/absolute/path/to/rules/surveillance.yml
+export PNUL_SITE_URL=https://your-domain.example/co
+cargo run --locked -p pnull-cli -- build-site --output /absolute/path/to/site
+```
+
+The first Chino approval chain is an **offline, pending-review ledger**, separate from the Colorado Springs site. It preserves the City's consent-calendar motion, the specific Axon item, five recorded votes, office roles and published term years, and explicit unknowns. See [the approval-chain guide](docs/approval-chain.md) before making public claims.
+
+The first civic atlas release reads a sanitized static JSON snapshot from the Rust exporter. Its Colorado Springs case records Ordinance 25-93 and the 6–3 surcharge vote, with a specific vendor contract explicitly **not established**. The exporter checks source bytes, exact JSON locators, votes, and public text automatically. Atlas release uses one human decision bound to the complete case manifest; it does not require a separate review click for each vote or citation. Individual public evidence is labeled `SOURCE_VERIFIED`, and synthetic demo data is available only through an explicit demo mode. See [atlas export](docs/atlas-export.md) and the [launch case](docs/launch-case.md).
+
+```console
+cargo run --locked -p pnull-cli -- approval import-chino
+cargo run --locked -p pnull-cli -- approval show <contract-id>
+cargo run --locked -p pnull-cli -- approval review <link-id> --binding <digest-from-show> --decision approve --reviewer NAME --note NOTE
+cargo run --locked -p pnull-cli -- approval correct <link-id> --kind retracted --operator NAME --reason REASON --source-url URL --snapshot-digest DIGEST --locator LOCATOR --quote QUOTE
+```
+
 Common commands:
 
 ```console
@@ -197,12 +217,12 @@ Live source retrieval is refused unless the operator has recorded a persistent, 
 
 Drafting is always local and dry-run by default. `x approve` hashes and approves the exact generated post or thread. A live attempt requires all of the following:
 
-1. A real public `canonical_base_url` in `configs/states/co.toml` (the repository default is intentionally `.invalid`).
+1. A real public `canonical_base_url` in the chosen state config, or `--site-url`/`PNUL_SITE_URL` (the repository default is intentionally `.invalid`).
 2. An approved, unchanged draft digest.
 3. `X_BEARER_TOKEN` or `PNUL_X_SECRET_FILE` pointing to a mode-`0600` token file.
 4. `pnull x post <alert-id> --confirm`.
 
-Tests use only a fake transport. An attempt is reserved before network activity, each successful thread segment is stored immediately, and uncertain partial attempts cannot be blindly retried. If a live attempt becomes uncertain, inspect it with `pnull x status` and resolve it with `pnull x reconcile` before any new attempt is allowed. No audit history is ever deleted.
+Tests use only a fake transport. An attempt is reserved before network activity, each successful thread segment is stored immediately, and uncertain partial attempts cannot be blindly retried. If a live attempt becomes uncertain, inspect it with `pnull x status` and resolve it with `pnull x reconcile`. Only a confirmed none-posted decision permits a new attempt. No audit history is ever deleted.
 
 ## Validate
 

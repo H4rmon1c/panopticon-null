@@ -4,8 +4,8 @@
 //! default. Network retrieval is never attempted by this module: the connectors
 //! are deterministic parsers over preserved snapshots, and the coverage ledger
 //! records the informational-mirror status of each source. Live mode is an
-//! explicit opt-in that is refused unless a persistent source review exists; no
-//! live procurement fetch path is wired in this milestone.
+//! explicit opt-in guarded by a persistent source review. Network retrieval is
+//! implemented by the separate `refresh` command, not fixture ingestion.
 
 use std::fs;
 use std::path::Path;
@@ -16,6 +16,8 @@ use pnull_procurement::{
     Acquisition, OpenBookFinding, build_cora_draft, generate_case_file, import_supplied_record,
     parse_awards_table, parse_solicitations, record_snapshot,
 };
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 /// Default fixture paths (committed, offline).
 const DEFAULT_AWARDS_FIXTURE: &str = "fixtures/procurement/contract-awards.html";
@@ -34,6 +36,7 @@ pub fn ingest_solicitations(store: &Store, source_path: &str, live: bool) -> Res
     let html = String::from_utf8_lossy(&bytes);
     let records =
         parse_solicitations(&html, &digest).context("parse solicitation mirror snapshot")?;
+    store.persist_content(&digest, &bytes)?;
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-solicitation-mirror".to_owned(),
@@ -90,6 +93,7 @@ pub fn ingest_awards(store: &Store, source_path: &str, live: bool) -> Result<()>
     let digest = sha256_hex(&bytes);
     let html = String::from_utf8_lossy(&bytes);
     let rows = parse_awards_table(&html, &digest).context("parse contract-award snapshot")?;
+    store.persist_content(&digest, &bytes)?;
 
     let acquisition = Acquisition {
         source_id: "colorado-springs-contract-awards".to_owned(),
@@ -636,10 +640,14 @@ pub fn procurement_alerts(store: &Store) -> Result<()> {
 }
 
 /// Run `procurement refresh <source-id> [--live]` — the exposure heartbeat
-/// (v0.0.4, Item 6). `--dry-run` is the default. Implemented in Item 6; this
-/// placeholder refuses until the live path is wired.
-pub fn procurement_refresh(store: &Store, source_id: &str, live: bool) -> Result<()> {
-    crate::refresh::refresh_procurement(store, source_id, live)
+/// (v0.0.4, Item 6). `--dry-run` is the default.
+pub fn procurement_refresh(
+    store: &Store,
+    config: &crate::StateConfig,
+    source_id: &str,
+    live: bool,
+) -> Result<()> {
+    crate::refresh::refresh_procurement(store, config, source_id, live)
 }
 
 /// Run `procurement publish-ready <matter-id>` — the operator's pre-publish
@@ -696,12 +704,35 @@ fn read_fixture(source_path: &str, default: &str) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn require_review_for_live(store: &Store, source_id: &str) -> Result<SourceReview> {
+    require_review_for_live_at(store, source_id, OffsetDateTime::now_utc())
+}
+
+pub(crate) fn require_review_for_live_at(
+    store: &Store,
+    source_id: &str,
+    now: OffsetDateTime,
+) -> Result<SourceReview> {
     match store.current_source_review(source_id)? {
-        Some(review) if review.expires_at.as_str() >= OFFLINE_RETRIEVED_AT => {
-            println!("live mode: approved source review present for {source_id}");
+        Some(review) => {
+            // CLI source reviews accept a date or an RFC 3339 instant. A date
+            // remains valid through that UTC day.
+            let expiry = if review.expires_at.len() == 10 {
+                format!("{}T23:59:59Z", review.expires_at)
+            } else {
+                review.expires_at.clone()
+            };
+            let expiry = OffsetDateTime::parse(&expiry, &Rfc3339)
+                .with_context(|| format!("invalid source review expiry for {source_id}"))?;
+            if expiry < now {
+                bail!(
+                    "live retrieval refused: source review for {source_id} expired {}",
+                    review.expires_at
+                );
+            }
+            crate::require_preserved_robots_capture(store, source_id, &review)?;
             Ok(review)
         }
-        _ => bail!(
+        None => bail!(
             "live retrieval refused: no current persistent source review for {source_id}; \
              use the offline fixture path or record a source review first"
         ),

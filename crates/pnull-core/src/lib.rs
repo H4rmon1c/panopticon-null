@@ -9,10 +9,19 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub mod approval;
+pub mod candidate_queue;
 pub mod migrate;
 pub mod procurement;
 pub mod types;
 
+pub use approval::{
+    ApprovalChain, ApprovalCorrection, ApprovalCorrectionKind, ApprovalGap, ApprovalGapKind,
+    ApprovalLink, ApprovalLinkKind, ApprovalReview, CivicDecision, ContractRecord, ContractStatus,
+    DecisionKind, DecisionOutcome, DecisionParticipation, OfficeTerm, ParticipationKind,
+    SourceProof, TechnologyRecord,
+};
+pub use candidate_queue::{CandidateQueueItem, CandidateQueueOutcome, CandidateQueueSeed};
 pub use migrate::{SCHEMA_VERSION, migrate};
 pub use procurement::{
     CaseFile, CaseFileState, CoraDraft, CoraRequest, CoraRequestEvent, CoraRequestState,
@@ -60,6 +69,14 @@ pub enum CoreError {
     SnapshotRowSetConflict { snapshot_id: String },
     #[error("stored snapshot rows for {snapshot_id} violate integrity: {detail}")]
     SnapshotRowIntegrity { snapshot_id: String, detail: String },
+    #[error("invalid approval record: {0}")]
+    InvalidApproval(String),
+    #[error("approval record {0} already exists with different content")]
+    ApprovalConflict(String),
+    #[error("posting state conflict for alert {0}")]
+    PostStateConflict(String),
+    #[error("invalid private candidate queue state: {0}")]
+    InvalidCandidateQueue(String),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -315,6 +332,38 @@ impl Store {
             .join(digest))
     }
 
+    /// Retains the exact fetched bytes behind their SHA-256 digest.
+    /// Repeating the same capture is idempotent; conflicting bytes fail closed.
+    pub fn persist_content(&self, digest: &str, bytes: &[u8]) -> Result<(), CoreError> {
+        let path = self.content_path(digest)?;
+        let observed = sha256_hex(bytes);
+        if observed != digest {
+            return Err(CoreError::DigestMismatch {
+                evidence_id: digest.to_owned(),
+                expected: digest.to_owned(),
+                observed,
+            });
+        }
+        if path.exists() {
+            let existing = fs::read(&path)?;
+            let existing_digest = sha256_hex(&existing);
+            if existing_digest != digest {
+                return Err(CoreError::DigestMismatch {
+                    evidence_id: digest.to_owned(),
+                    expected: digest.to_owned(),
+                    observed: existing_digest,
+                });
+            }
+            return Ok(());
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+            set_private_directory(parent)?;
+        }
+        write_atomic(&path, bytes)?;
+        Ok(())
+    }
+
     fn record_path(&self, id: &str) -> Result<PathBuf, CoreError> {
         if !id.starts_with("evidence:")
             || !id.strip_prefix("evidence:").is_some_and(|digest| {
@@ -486,6 +535,25 @@ impl Store {
         Ok(())
     }
 
+    /// Atomically claim a live fetch slot before any network request. A failed
+    /// transport or parse still consumes the slot, so errors cannot bypass the
+    /// configured minimum interval. Concurrent processes cannot both claim it.
+    pub fn try_record_source_fetch(
+        &self,
+        source_id: &str,
+        minimum_interval_seconds: u64,
+        now_unix: i64,
+    ) -> Result<bool, CoreError> {
+        let interval = i64::try_from(minimum_interval_seconds).unwrap_or(i64::MAX);
+        let previous_latest_allowed = now_unix.saturating_sub(interval);
+        Ok(self.connection.execute(
+            "INSERT INTO source_fetches(source_id, fetched_at_unix) VALUES (?1, ?2)
+             ON CONFLICT(source_id) DO UPDATE SET fetched_at_unix = excluded.fetched_at_unix
+             WHERE source_fetches.fetched_at_unix <= ?3",
+            params![source_id, now_unix, previous_latest_allowed],
+        )? == 1)
+    }
+
     pub fn approve(
         &self,
         alert_id: &str,
@@ -523,6 +591,25 @@ impl Store {
             "INSERT OR IGNORE INTO posts(alert_id, remote_ids_json, posted_at) VALUES (?1, '[]', 'IN_PROGRESS')",
             [alert_id],
         )? == 1)
+    }
+
+    /// Reserve the post and persist its recovery record in one transaction.
+    /// A concurrent loser must not leave a phantom in-progress attempt behind.
+    pub fn reserve_x_post_attempt(&self, attempt: &XAttempt) -> Result<bool, CoreError> {
+        self.transaction(|transaction| {
+            let reserved = transaction.execute(
+                "INSERT OR IGNORE INTO posts(alert_id, remote_ids_json, posted_at) VALUES (?1, '[]', 'IN_PROGRESS')",
+                [&attempt.alert_id],
+            )? == 1;
+            if !reserved {
+                return Ok(false);
+            }
+            transaction.execute(
+                "INSERT INTO x_attempts(id, alert_id, attempt_json) VALUES (?1, ?2, ?3)",
+                params![attempt.id, attempt.alert_id, serde_json::to_string(attempt)?],
+            )?;
+            Ok(true)
+        })
     }
 
     pub fn record_post_segment(
@@ -724,7 +811,7 @@ impl Store {
         citation_id: &str,
     ) -> Result<Vec<ReviewDecision>, CoreError> {
         self.read_json_rows(
-            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY id",
+            "SELECT decision_json FROM review_decisions WHERE citation_id = ?1 ORDER BY json_extract(decision_json, '$.decided_at'), id",
             &[citation_id],
         )
     }
@@ -795,6 +882,22 @@ impl Store {
         self.read_json_rows(
             "SELECT observation_json FROM fetch_observations WHERE source_id = ?1 ORDER BY json_extract(observation_json, '$.retrieved_at')",
             &[source_id],
+        )
+    }
+
+    /// Read receipts for one exact URL through the indexed source/URL key.
+    /// The caller must still check receipt integrity and byte provenance.
+    pub fn fetch_observations_for_url(
+        &self,
+        source_id: &str,
+        requested_url: &str,
+    ) -> Result<Vec<FetchObservation>, CoreError> {
+        self.read_json_rows(
+            "SELECT observation_json FROM fetch_observations
+             WHERE source_id = ?1
+               AND json_extract(observation_json, '$.requested_url') = ?2
+             ORDER BY json_extract(observation_json, '$.retrieved_at')",
+            &[source_id, requested_url],
         )
     }
 
@@ -990,7 +1093,7 @@ impl Store {
 
     pub fn source_snapshots(&self, source_id: &str) -> Result<Vec<SourceSnapshot>, CoreError> {
         self.read_json_rows(
-            "SELECT snapshot_json FROM source_snapshots WHERE source_id = ?1 ORDER BY json_extract(snapshot_json, '$.retrieved_at')",
+            "SELECT snapshot_json FROM source_snapshots WHERE source_id = ?1 ORDER BY rowid",
             &[source_id],
         )
     }
@@ -1504,6 +1607,76 @@ mod tests {
     }
 
     #[test]
+    fn fetch_attempt_claim_observes_interval_boundary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = Store::open(dir.path()).expect("store");
+        assert!(
+            store
+                .try_record_source_fetch("source", 86_400, 1_000_000)
+                .expect("first claim")
+        );
+        assert!(
+            !store
+                .try_record_source_fetch("source", 86_400, 1_000_001)
+                .expect("early retry")
+        );
+        assert!(
+            !store
+                .try_record_source_fetch("source", 86_400, 999_999)
+                .expect("clock moved backward")
+        );
+        assert!(
+            store
+                .try_record_source_fetch("source", 86_400, 1_086_400)
+                .expect("boundary retry")
+        );
+    }
+
+    #[test]
+    fn current_review_uses_decision_time_not_hashed_id_order() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = Store::open(dir.path()).expect("store");
+        let citation_id = "citation:test";
+        let first_at = "2026-06-18T00:00:01Z";
+        let second_at = "2026-06-18T00:00:02Z";
+        let first = ReviewDecision {
+            id: ReviewDecision::id_for(citation_id, first_at),
+            citation_id: citation_id.to_owned(),
+            state: ReviewState::Approved,
+            reviewer: "reviewer".to_owned(),
+            note: "approved".to_owned(),
+            bound_digest: "binding".to_owned(),
+            decision_digest: "decision".to_owned(),
+            decided_at: first_at.to_owned(),
+            supersedes: None,
+        };
+        let second = ReviewDecision {
+            id: ReviewDecision::id_for(citation_id, second_at),
+            citation_id: citation_id.to_owned(),
+            state: ReviewState::Rejected,
+            reviewer: "reviewer".to_owned(),
+            note: "rejected after correction".to_owned(),
+            bound_digest: "binding".to_owned(),
+            decision_digest: "decision".to_owned(),
+            decided_at: second_at.to_owned(),
+            supersedes: Some(first.id.clone()),
+        };
+        assert!(second.id < first.id, "hash order must invert decision time");
+        store.insert_review(&first).expect("first review");
+        store.insert_review(&second).expect("second review");
+        assert_eq!(
+            store
+                .reviews_for_citation(citation_id)
+                .expect("review history"),
+            vec![first, second.clone()]
+        );
+        assert_eq!(
+            store.current_review(citation_id).expect("current review"),
+            Some(second)
+        );
+    }
+
+    #[test]
     #[allow(clippy::too_many_lines)]
     fn json_backed_list_queries_round_trip_and_are_ordered() {
         let dir = tempfile::tempdir().expect("temp dir");
@@ -1637,5 +1810,18 @@ mod tests {
             .fetch_observations("co")
             .expect("fetch observations query");
         assert_eq!(observations.len(), 1);
+        assert_eq!(
+            store
+                .fetch_observations_for_url("co", "https://example.test/robots.txt")
+                .expect("indexed URL receipts")
+                .len(),
+            1
+        );
+        assert!(
+            store
+                .fetch_observations_for_url("co", "https://example.test/elsewhere")
+                .expect("other URL receipts")
+                .is_empty()
+        );
     }
 }

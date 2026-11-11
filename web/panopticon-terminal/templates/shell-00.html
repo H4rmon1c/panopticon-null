@@ -1,0 +1,68 @@
+
+    <a class="skip-link" href="#entity-workspace">Skip to selected record</a>
+
+    <div id="app" class="app-shell">
+      <canvas id="world-canvas" aria-label="Interactive public intelligence globe"></canvas>
+      <div class="world-grid" aria-hidden="true"></div>
+      <div class="world-noise" aria-hidden="true"></div>
+      <div class="world-scanlines" aria-hidden="true"></div>
+      <div class="world-vignette" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <button id="home-button" class="brand" type="button" aria-label="Reset global view">
+          <span class="brand__mark">P//F</span>
+          <span class="brand__name">PANOPTICON.FAIL</span>
+          <span class="brand__sub">PUBLIC INTELLIGENCE SYSTEM</span>
+        </button>
+
+        <button id="global-search" class="omnibox" type="button" aria-haspopup="dialog">
+          <span class="omnibox__prefix">QUERY</span>
+          <span class="omnibox__text">Search entities, facilities, contracts, events, sources…</span>
+          <kbd>/</kbd>
+        </button>
+
+        <div class="topbar__right">
+          <button id="density-button" class="telemetry telemetry--button" type="button">
+            <span>DENSITY</span><strong id="density-value">TACTICAL</strong>
+          </button>
+          <div class="telemetry telemetry--count">
+            <span>PUBLIC GRAPH</span><strong id="graph-count">12,418 ENTITIES</strong>
+          </div>
+          <div id="system-state" class="system-state">
+            <i></i><span id="system-state-label">CONNECTING</span>
+          </div>
+          <button id="command-button" class="command-button" type="button" aria-haspopup="dialog">
+            CMD <kbd>⌘K</kbd>
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content" class="hud">
+        <section class="mission-bar" aria-label="Active intelligence view">
+          <div>
+            <span class="eyebrow">ACTIVE PUBLIC VIEW</span>
+            <strong id="mission-title">FRONT RANGE INFRASTRUCTURE CHAIN</strong>
+          </div>
+          <div class="mission-bar__stats">
+            <span><b id="visible-entities">00</b> ENTITIES</span>
+            <span><b id="visible-links">00</b> LINKS</span>
+            <span><b id="visible-sources">00</b> SOURCES</span>
+          </div>
+          <button id="focus-network" class="ghost-action" type="button">FOCUS NETWORK</button>
+        </section>
+
+        <aside class="panel layer-panel" aria-label="Public intelligence layers">
+          <header class="panel__header">
+            <div><span class="eyebrow">PUBLIC LAYERS</span><h2>Signal stack</h2></div>
+            <span class="panel-code">L-01</span>
+          </header>
+
+          <div class="view-tabs" role="group" aria-label="Visualization mode">
+            <button class="view-tab is-active" data-view="global" type="button"><i>◉</i><span>GLOBAL</span></button>
+            <button class="view-tab" data-view="network" type="button"><i>⌁</i><span>NETWORK</span></button>
+            <button class="view-tab" data-view="records" type="button"><i>▤</i><span>RECORDS</span></button>
+          </div>
+
+          <div id="layer-list" class="layer-list">
+            <button class="layer is-active" data-layer="FACILITY" type="button">
+              <i class="layer-dot layer-dot--facility"></i><span><b>FACILITIES</b><small>campuses, sites, projects</small></span><em>0</em>

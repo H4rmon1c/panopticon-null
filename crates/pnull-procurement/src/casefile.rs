@@ -10,6 +10,7 @@ use pnull_core::{
     Locator, MoneyValue, ProcurementEvent, ProcurementEventKind, ProcurementIdentifier,
     ProcurementMatter, ProcurementOrganization, ReconciliationKind, SourceAuthority, sha256_hex,
 };
+use scraper::{Html, Selector};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use thiserror::Error;
@@ -304,74 +305,96 @@ fn build_what_changed(
 
 /// Builds the deterministic fact-citations for a matter's case file.
 ///
-/// Each citation references a preserved `SourceSnapshot` (as its evidence) with
-/// an exact quote drawn from the preserved record. The timeline events carry
-/// explicit `evidence_ids` (snapshot ids), so their summaries are quoted
-/// against the snapshot that records them. Identifiers and organizations are
-/// quoted against the matter's primary snapshot (the first snapshot referenced
-/// by any event), so no citation invents an evidence association. A citation is
-/// emitted only when the referenced snapshot resolves; unresolvable references
-/// produce no citation and no assertion.
+/// Each citation quotes a visible HTML element from a preserved snapshot. The
+/// event summary remains derived prose; it is never presented as a verbatim
+/// source quote. Identifiers and organizations use an event snapshot whose
+/// source id matches their own source id. Missing or mismatched source content
+/// produces no citation, which causes the publication gate to withhold.
 fn build_citations(
     store: &pnull_core::Store,
     events: &[ProcurementEvent],
     identifiers: &[ProcurementIdentifier],
     organizations: &[ProcurementOrganization],
 ) -> Vec<Citation> {
-    // Resolve each event's first evidence snapshot, in event order.
-    let mut primary_snapshot: Option<pnull_core::SourceSnapshot> = None;
-    let mut by_evidence: Vec<(String, pnull_core::SourceSnapshot)> = Vec::new();
+    let mut snapshots = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for event in events {
-        if let Some(evidence_id) = event.evidence_ids.first()
-            && let Ok(snapshot) = store.source_snapshot(evidence_id)
-        {
-            if primary_snapshot.is_none() {
-                primary_snapshot = Some(snapshot.clone());
-            }
-            if seen.insert(snapshot.id.clone()) {
-                by_evidence.push((snapshot.id.clone(), snapshot));
+        for evidence_id in &event.evidence_ids {
+            if seen.insert(evidence_id.clone())
+                && let Ok(snapshot) = store.source_snapshot(evidence_id)
+            {
+                snapshots.push(snapshot);
             }
         }
     }
 
     let mut citations: Vec<Citation> = Vec::new();
-    let locator_for = |snapshot: &pnull_core::SourceSnapshot| Locator {
-        kind: "procurement-snapshot".to_owned(),
-        start: 1,
-        end: 1,
-        label: format!("{} retrieved {}", snapshot.source_id, snapshot.retrieved_at),
-    };
-    // Timeline events quoted against their own evidence snapshot.
     for event in events {
         if let Some(evidence_id) = event.evidence_ids.first()
             && let Ok(snapshot) = store.source_snapshot(evidence_id)
+            && snapshot.source_id == event.source_id
         {
-            citations.push(Citation {
-                evidence_id: snapshot.id.clone(),
-                source_url: snapshot.source_url.clone(),
-                locator: locator_for(&snapshot),
-                quote: event.summary.clone(),
-            });
+            let segment = if event.kind == ProcurementEventKind::QuestionsAndAnswersPublished {
+                source_segment(store, &snapshot, |text| {
+                    let lower = text.to_ascii_lowercase();
+                    lower.contains("questions") && lower.contains("responses")
+                })
+            } else {
+                event
+                    .identifier_ids
+                    .iter()
+                    .filter_map(|id| identifiers.iter().find(|identifier| &identifier.id == id))
+                    .find_map(|identifier| {
+                        source_segment(store, &snapshot, |text| text.contains(&identifier.raw))
+                    })
+                    .or_else(|| {
+                        source_segment(store, &snapshot, |text| text.contains(&event.summary))
+                    })
+            };
+            if let Some(segment) = segment {
+                citations.push(citation_for(
+                    &snapshot,
+                    &segment,
+                    &format!("event:{}", event.id),
+                    segment.text.clone(),
+                ));
+            }
         }
     }
-    // Identifiers and organizations quoted against the primary snapshot.
-    if let Some(primary) = &primary_snapshot {
-        for identifier in identifiers {
-            citations.push(Citation {
-                evidence_id: primary.id.clone(),
-                source_url: primary.source_url.clone(),
-                locator: locator_for(primary),
-                quote: identifier.raw.clone(),
-            });
+    for identifier in identifiers {
+        if let Some((snapshot, segment)) = snapshots
+            .iter()
+            .filter(|snapshot| snapshot.source_id == identifier.source_id)
+            .find_map(|snapshot| {
+                source_segment(store, snapshot, |text| text.contains(&identifier.raw))
+                    .map(|segment| (snapshot, segment))
+            })
+        {
+            citations.push(citation_for(
+                snapshot,
+                &segment,
+                &format!("identifier:{}", identifier.id),
+                identifier.raw.clone(),
+            ));
         }
-        for org in organizations {
-            citations.push(Citation {
-                evidence_id: primary.id.clone(),
-                source_url: primary.source_url.clone(),
-                locator: locator_for(primary),
-                quote: org.raw_name.clone(),
-            });
+    }
+    for organization in organizations {
+        if let Some((snapshot, segment)) = snapshots
+            .iter()
+            .filter(|snapshot| snapshot.source_id == organization.source_id)
+            .find_map(|snapshot| {
+                source_segment(store, snapshot, |text| {
+                    text.contains(&organization.raw_name)
+                })
+                .map(|segment| (snapshot, segment))
+            })
+        {
+            citations.push(citation_for(
+                snapshot,
+                &segment,
+                &format!("organization:{}", organization.id),
+                organization.raw_name.clone(),
+            ));
         }
     }
     // Deterministic order: by evidence id, then locator, then quote.
@@ -383,6 +406,65 @@ fn build_citations(
         ))
     });
     citations
+}
+
+struct SourceSegment {
+    text: String,
+    ordinal: usize,
+    tag: String,
+}
+
+fn normalized_html_text(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn source_segment(
+    store: &pnull_core::Store,
+    snapshot: &pnull_core::SourceSnapshot,
+    matches: impl Fn(&str) -> bool,
+) -> Option<SourceSegment> {
+    let path = store.content_path(&snapshot.persisted_digest).ok()?;
+    let bytes = std::fs::read(path).ok()?;
+    if sha256_hex(&bytes) != snapshot.persisted_digest {
+        return None;
+    }
+    let html = std::str::from_utf8(&bytes).ok()?;
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("tr, h2, p, li").ok()?;
+    for (index, element) in document.select(&selector).enumerate() {
+        let text = normalized_html_text(&element.text().collect::<Vec<_>>().join(" "));
+        if !text.is_empty() && matches(&text) {
+            return Some(SourceSegment {
+                text,
+                ordinal: index + 1,
+                tag: element.value().name().to_owned(),
+            });
+        }
+    }
+    None
+}
+
+fn citation_for(
+    snapshot: &pnull_core::SourceSnapshot,
+    segment: &SourceSegment,
+    entity: &str,
+    quote: String,
+) -> Citation {
+    let ordinal = u32::try_from(segment.ordinal).unwrap_or(u32::MAX);
+    Citation {
+        evidence_id: snapshot.id.clone(),
+        source_url: snapshot.source_url.clone(),
+        locator: Locator {
+            kind: "html-element".to_owned(),
+            start: ordinal,
+            end: ordinal,
+            label: format!(
+                "{entity};visible-element[{}]/{}",
+                segment.ordinal, segment.tag
+            ),
+        },
+        quote,
+    }
 }
 
 /// Looks up the observed digest of the response evidence linked to a CORA

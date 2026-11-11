@@ -1,0 +1,8 @@
+# Config path<TAB>primary HTML calendar source ID<TAB>official API event source ID.
+# Try the API only when that calendar's source review or fetch fails. A current
+# review of the API source is required separately; failures remain visible.
+configs/states/co.toml	colorado-springs-calendar	colorado-springs-legistar-events
+configs/states/co-denver.toml	denver-calendar	denver-legistar-events
+configs/states/co-commerce-city.toml	commerce-city-calendar	commerce-city-legistar-events
+configs/states/co-castle-rock.toml	castle-rock-calendar	castle-rock-legistar-events
+configs/states/co-arapahoe-county.toml	arapahoe-county-calendar	arapahoe-county-legistar-events

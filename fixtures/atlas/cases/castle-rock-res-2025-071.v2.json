@@ -1,0 +1,418 @@
+{
+  "schema_version": 2,
+  "case_id": "co-castle-rock-res-2025-071-2025-06-03",
+  "synthetic": false,
+  "review_state": "source_verified",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-castle-rock",
+    "jurisdiction_ref": "us-co-place-0812415",
+    "name": {
+      "value": "Castle Rock, CO",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventLocation",
+        "quote": "Castle Rock, CO"
+      }
+    },
+    "display_name": "Castle Rock, CO"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "RES 2025-071",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemMatterFile",
+        "quote": "RES 2025-071"
+      }
+    },
+    "event_item_id": {
+      "value": "66424",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemId",
+        "quote": "66424"
+      }
+    },
+    "title": {
+      "value": "Resolution Waiving the Formal Written Bidding Requirement on the Basis of Sole Source and Approving a Master Services Agreement and Order Form with Flock Group Inc. for the Flock Safety Drone-As-First-Responder Program",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemTitle",
+        "quote": "Resolution Waiving the Formal Written Bidding Requirement on the Basis of Sole Source and Approving a Master Services Agreement and Order Form with Flock Group Inc. for the Flock Safety Drone-As-First-Responder Program"
+      }
+    },
+    "short_label": {
+      "value": "Flock Safety Drone-As-First-Responder Program",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemTitle",
+        "quote": "Flock Safety Drone-As-First-Responder Program"
+      }
+    },
+    "display_title": "RES 2025-071: Flock Safety Drone-As-First-Responder Program",
+    "date": {
+      "value": "2025-06-03",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventDate",
+        "quote": "2025-06-03T00:00:00"
+      }
+    },
+    "body": {
+      "value": "Town Council",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventBodyName",
+        "quote": "Town Council"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved",
+    "action": {
+      "value": "Approved",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemActionName",
+        "quote": "Approved"
+      }
+    }
+  },
+  "votes": [
+    {
+      "person_name": {
+        "value": "Jason Gray",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[0].VotePersonName",
+          "quote": "Jason Gray"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[0].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54377",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[0].VoteId",
+          "quote": "54377"
+        }
+      },
+      "official_person_id": {
+        "value": "419",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[0].VotePersonId",
+          "quote": "419"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[0].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Ryan Hollingshead",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[1].VotePersonName",
+          "quote": "Ryan Hollingshead"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[1].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54378",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[1].VoteId",
+          "quote": "54378"
+        }
+      },
+      "official_person_id": {
+        "value": "492",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[1].VotePersonId",
+          "quote": "492"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[1].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Kevin Bracken",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[2].VotePersonName",
+          "quote": "Kevin Bracken"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[2].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54379",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[2].VoteId",
+          "quote": "54379"
+        }
+      },
+      "official_person_id": {
+        "value": "420",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[2].VotePersonId",
+          "quote": "420"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[2].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Mark Davis",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[3].VotePersonName",
+          "quote": "Mark Davis"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[3].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54380",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[3].VoteId",
+          "quote": "54380"
+        }
+      },
+      "official_person_id": {
+        "value": "626",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[3].VotePersonId",
+          "quote": "626"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[3].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Max Brooks",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[4].VotePersonName",
+          "quote": "Max Brooks"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[4].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54381",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[4].VoteId",
+          "quote": "54381"
+        }
+      },
+      "official_person_id": {
+        "value": "342",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[4].VotePersonId",
+          "quote": "342"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[4].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Tim Dietz",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[5].VotePersonName",
+          "quote": "Tim Dietz"
+        }
+      },
+      "recorded_vote": {
+        "value": "Yes",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[5].VoteValueName",
+          "quote": "Yes"
+        }
+      },
+      "official_vote_id": {
+        "value": "54382",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[5].VoteId",
+          "quote": "54382"
+        }
+      },
+      "official_person_id": {
+        "value": "494",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[5].VotePersonId",
+          "quote": "494"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[5].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    },
+    {
+      "person_name": {
+        "value": "Laura Cavey",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[6].VotePersonName",
+          "quote": "Laura Cavey"
+        }
+      },
+      "recorded_vote": {
+        "value": "Abstain",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[6].VoteValueName",
+          "quote": "Abstain"
+        }
+      },
+      "official_vote_id": {
+        "value": "54383",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[6].VoteId",
+          "quote": "54383"
+        }
+      },
+      "official_person_id": {
+        "value": "493",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[6].VotePersonId",
+          "quote": "493"
+        }
+      },
+      "decision_ref": {
+        "value": "66424",
+        "proof": {
+          "source_id": "co-castle-rock-2025-votes",
+          "locator": "$[6].VoteEventItemId",
+          "quote": "66424"
+        }
+      }
+    }
+  ],
+  "contract_link": {
+    "state": "not_established",
+    "detail": "Council approval of a sole-source agreement is documented. Town execution and payments are not established by these records."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "Flock Safety Drone-As-First-Responder Program",
+        "proof": {
+          "source_id": "co-castle-rock-2025-event",
+          "locator": "$.EventItems[25].EventItemTitle",
+          "quote": "Flock Safety Drone-As-First-Responder Program"
+        }
+      }
+    }
+  ],
+  "supporting_sources": [
+    "co-castle-rock-2025-matter",
+    "co-castle-rock-2025-detail"
+  ],
+  "unresolved_question": "Was the agreement later executed by the Town, and what payments or deployments followed?",
+  "agreement_context": {
+    "name": {
+      "value": "Master Services Agreement and Order Form with Flock Group Inc.",
+      "proof": {
+        "source_id": "co-castle-rock-2025-event",
+        "locator": "$.EventItems[25].EventItemTitle",
+        "quote": "Master Services Agreement and Order Form with Flock Group Inc."
+      }
+    },
+    "display_name": "Master Services Agreement and Order Form with Flock Group Inc.",
+    "status": "award_authorized"
+  },
+  "vote_record_state": "direct"
+}

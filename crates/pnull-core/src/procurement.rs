@@ -378,8 +378,19 @@ pub struct SourceSnapshot {
 }
 
 impl SourceSnapshot {
+    /// Legacy identity for the first capture of a source and its exact bytes.
+    /// Historical snapshots retain this ID when later bytes revert to them.
     pub fn id_for(source_id: &str, persisted_digest: &str) -> String {
         stable_id("snapshot", &[source_id, persisted_digest])
+    }
+
+    /// Identity for a new revision. Including the prior snapshot distinguishes
+    /// a return to previously seen bytes (A -> B -> A) from the original A.
+    pub fn id_for_revision(source_id: &str, persisted_digest: &str, supersedes: &str) -> String {
+        stable_id(
+            "snapshot-revision",
+            &[source_id, persisted_digest, supersedes],
+        )
     }
 }
 

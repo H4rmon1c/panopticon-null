@@ -1,0 +1,12 @@
+[Unit]
+Description=Check reviewed private document candidates every 15 minutes
+
+[Timer]
+OnBootSec=25min
+OnUnitInactiveSec=15min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=panopticon-candidates.service
+
+[Install]
+WantedBy=timers.target

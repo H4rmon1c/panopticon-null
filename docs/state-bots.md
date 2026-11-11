@@ -1,6 +1,8 @@
 # State bot architecture
 
-`StateConfig` separates state code/name, jurisdiction, canonical site URL, source list, feed label, rate policy, and fixture metadata from application logic. Version 0.0.2 ships only `configs/states/co.toml`; no other state is implied or scaffolded.
+`StateConfig` separates state code/name, jurisdiction, canonical site URL, source list, feed label, rate policy, and fixture metadata from application logic. Colorado now has separate configurations for Colorado Springs, Denver, Commerce City, Castle Rock, Arapahoe County, Douglas County, and Littleton. The self-hosted collection matrix routes each source through its jurisdiction's config; source IDs remain unique across the private ledger. This is configured discovery coverage for those calendars, not a claim that every Colorado jurisdiction has been monitored or every source reviewed. The default collector archives official HTML calendars and writes private meeting/document link candidates. Five official API event feeds run conditionally when their HTML calendar fails, and each API requires its own current source review. A private bounded candidate queue and source-checked proposal builder exist, but neither is a public release adapter.
+
+Direct-document archive profiles now cover 39 fixed official HTML, PDF, and JSON URLs across Commerce City, Castle Rock, Denver, and Arapahoe County. Twelve release-cited endpoints have current source-level reviews and live captures; other profiles still require their own reviews. The calendar parser supplies new private URL candidates. Fourteen configured calendar host/path policies and five unscheduled town index/PDF policy pairs allow bounded capture after source review. The candidate queue's activation matrix is empty. A source-checked proposal can enter the static release only when its exact decision chain passes the verified bridge; no newly discovered proposal has done so yet. The public site reads only a locally published static snapshot and geography file; it has no runtime dependency on municipal APIs.
 
 The X component accepts a state-derived alert and canonical base URL. It does not know Colorado-specific detection logic. A draft:
 
@@ -29,9 +31,9 @@ Reconciliation decisions cover the possible states of an uncertain attempt:
 - confirm none was posted;
 - mark the attempt partially posted;
 - abandon the attempt;
-- authorize a new attempt only after the previous attempt is resolved.
+- authorize a new attempt only after confirming that none posted.
 
-There is no blind retry of uncertain attempts, no deletion of audit history, and no way for a reconciliation to rewrite a prior decision. A new attempt is authorized only after the previous attempt is resolved.
+There is no blind retry of uncertain attempts, no deletion of audit history, and no way for a reconciliation to rewrite a prior decision. Partial and abandoned attempts retain their posting reservation and block new attempts. `confirm_posted` requires a remote ID for every segment; it can fill the sole missing ID during reconciliation.
 
 ## Publication gate
 

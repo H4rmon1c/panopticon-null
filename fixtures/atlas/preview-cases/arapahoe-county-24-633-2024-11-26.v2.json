@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "case_id": "co-arapahoe-county-24-633-2024-11-26",
+  "synthetic": false,
+  "review_state": "pending",
+  "source_registry": "fixtures/atlas/sources.co.v1.json",
+  "jurisdiction": {
+    "id": "co-arapahoe-county",
+    "jurisdiction_ref": "us-co-county-08005",
+    "name": {
+      "value": "Arapahoe County",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[0].EventItemTitle",
+        "quote": "Arapahoe County"
+      }
+    },
+    "display_name": "Arapahoe County"
+  },
+  "decision": {
+    "official_matter": {
+      "value": "24-633",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemMatterFile",
+        "quote": "24-633"
+      }
+    },
+    "event_item_id": {
+      "value": "37871",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemId",
+        "quote": "37871"
+      }
+    },
+    "title": {
+      "value": "FLOCK Camera Contract 2025",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemTitle",
+        "quote": "FLOCK Camera Contract 2025"
+      }
+    },
+    "date": {
+      "value": "2024-11-26",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventDate",
+        "quote": "2024-11-26T00:00:00"
+      }
+    },
+    "body": {
+      "value": "Board of County Commissioners Business Meeting",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventBodyName",
+        "quote": "Board of County Commissioners Business Meeting"
+      }
+    },
+    "action": {
+      "value": "approved",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemActionName",
+        "quote": "approved"
+      }
+    },
+    "outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "outcome_class": "approved",
+    "short_label": {
+      "value": "FLOCK Camera Contract 2025",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemTitle",
+        "quote": "FLOCK Camera Contract 2025"
+      }
+    },
+    "display_title": "24-633: FLOCK Camera Contract 2025"
+  },
+  "vote_record_state": "consent_block",
+  "votes": [],
+  "consent_context": {
+    "item_consent": {
+      "value": "1",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[19].EventItemConsent",
+        "quote": "1"
+      }
+    },
+    "block_item_id": {
+      "value": "38020",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[13].EventItemId",
+        "quote": "38020"
+      }
+    },
+    "block_title": {
+      "value": "Approval of the Consent Agenda",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[13].EventItemTitle",
+        "quote": "Approval of the Consent Agenda"
+      }
+    },
+    "block_action": {
+      "value": "A motion was made by Commissioner Campbell, seconded by Commissioner Holen, to approve items on the Consent Agenda. The motion carried by the following vote:",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[13].EventItemActionText",
+        "quote": "A motion was made by Commissioner Campbell, seconded by Commissioner Holen, to approve items on the Consent Agenda. The motion carried by the following vote:"
+      }
+    },
+    "block_outcome": {
+      "value": "Pass",
+      "proof": {
+        "source_id": "co-arapahoe-event-2335-2024-11-26",
+        "locator": "$.EventItems[13].EventItemPassedFlagName",
+        "quote": "Pass"
+      }
+    },
+    "block_vote_source_id": "co-arapahoe-votes-38020-consent-2024-11-26"
+  },
+  "contract_link": {
+    "state": "not_established",
+    "detail": "Signed execution and actual payment are not established by the verified decision record."
+  },
+  "technology_context": [
+    {
+      "name": {
+        "value": "FLOCK",
+        "proof": {
+          "source_id": "co-arapahoe-event-2335-2024-11-26",
+          "locator": "$.EventItems[19].EventItemTitle",
+          "quote": "FLOCK"
+        }
+      }
+    }
+  ],
+  "supporting_sources": [
+    "co-arapahoe-votes-38020-consent-2024-11-26",
+    "co-arapahoe-matter-4198-24-633",
+    "co-arapahoe-24-633-detail",
+    "co-arapahoe-24-633-board-report",
+    "co-arapahoe-minutes-2024-11-26",
+    "co-arapahoe-24-633-unsigned-agreement"
+  ],
+  "unresolved_question": "Was the 2025 Flock order form signed, and what was actually paid?"
+}
