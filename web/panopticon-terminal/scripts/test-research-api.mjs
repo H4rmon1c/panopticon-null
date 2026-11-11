@@ -22,6 +22,7 @@ test('special-district references and jurisdiction filters use exact five-digit 
   record.jurisdiction_ref = 'dola-district-18053';
   report.coverage.jurisdictions_with_mentions = new Set(report.records.map((item) => item.jurisdiction_ref)).size;
   report.coverage.search_attempts ??= [];
+  report.coverage.search_attempts = report.coverage.search_attempts.filter((attempt) => attempt.jurisdiction_ref !== record.jurisdiction_ref);
   report.coverage.search_attempts.push({ jurisdiction_ref: record.jurisdiction_ref, checked_at: '2026-11-11T00:00:00Z',
     website_check: 'site_checked', documents_screened: 1, documents_failed: 0, documents_queued: 0,
     portal_pages_checked: 0, agenda_meeting_pages_screened: 0, lookback_period: null });

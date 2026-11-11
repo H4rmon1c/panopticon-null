@@ -112,6 +112,7 @@ scripts/test-client.mjs
 scripts/build-decision-pages.mjs
 scripts/filter-portraits.mjs
 scripts/validate.mjs
+scripts/validate-embedded-portrait.mjs
 styles/00.css
 styles/01.css
 styles/02.css

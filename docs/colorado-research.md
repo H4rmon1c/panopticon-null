@@ -96,6 +96,13 @@ no relevant decision exists.
    test rechecks both the page fixture and the complete archived source.
    Candi CdeBaca's portrait is bound separately to the 2020 city budget; its
    browser PNG preserves every decoded pixel of the original JPEG 2000 image.
+   A Commerce City Urban Renewal Authority vote may use Kathy Henson's Adams
+   County portrait only when the exact portal person ID, recorded authority,
+   and county profile's authority assignment all agree. The source image bytes
+   are preserved even when the server supplies a different image format from
+   the filename extension.
+   The same authority-specific check binds James Amador's portrait to his
+   Adams 14 school board profile, which explicitly names the authority role.
    Five Arapahoe County research voters also reuse the original JPEG streams
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture
