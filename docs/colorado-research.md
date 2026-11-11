@@ -12,7 +12,7 @@ no relevant decision exists.
 
 1. Seed municipality websites from the existing Colorado Municipal League
    directory and county sites from an archived county-clerks directory. Visit
-   bounded pages on each site, find linked official meeting portals and
+   up to six prioritized same-host navigation pages on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of
@@ -35,6 +35,9 @@ no relevant decision exists.
    complete extraction; a partial scan cannot become a no-match result. DOCX files are
    parsed in a separate network-isolated sandbox with ZIP, XML, memory, CPU,
    and output limits; embedded links and files are never followed.
+   A bare “Flock” mention is labeled as an unresolved identity unless the
+   cited line also identifies the company or relevant technology. Obvious
+   non-surveillance artwork context is withheld and counted separately.
 4. For matched Legistar matters, capture the matter history, corresponding
    meeting item, recorded votes, and any separate consent-agenda item. The
    exporter reopens every raw capture and verifies client, matter, meeting,

@@ -67,3 +67,13 @@ record exists. OCR-derived text is labeled. This
 dataset is not automatically added to the verified alerts/feed and must not be
 treated as an authorized posting queue. Raw documents and receipts are kept in
 private research state and rechecked during export.
+
+An optional vote `portrait` includes a local `src`, its SHA-256 digest, and a
+source URL. Resolve `src` against the site's root, not the API file's path.
+A portrait with `source_kind: "embedded_pdf"` additionally provides
+`source_document_sha256`, `source_page`, and `embedded_image_index`; it has no
+standalone `image_url` because the original JPEG is embedded in the linked PDF.
+Pages are one-based; the embedded image index follows Poppler's zero-based
+extraction order for that page.
+The portrait identifies the person and does not prove the vote or the date
+the image was taken.

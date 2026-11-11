@@ -51,6 +51,25 @@ class ResearchTests(unittest.TestCase):
             with self.assertRaises(ValueError): get('https://example.org/', {'example.org'}, interval=0)
             connect.assert_not_called()
 
+    def test_http_encodes_literal_spaces_and_unicode_without_changing_receipts(self):
+        url = 'https://example.org/Agenda 2024/caf\u00e9%20memo.pdf?file=city board%2Bvote&x=1'
+        answers = [(2, 1, 6, '', ('8.8.8.8', 443))]
+        with patch('public_http.socket.getaddrinfo', return_value=answers), \
+             patch('public_http.socket.create_connection'), \
+             patch('public_http.ssl.create_default_context') as context, \
+             patch('public_http.http.client.HTTPResponse') as response_class:
+            connection = context.return_value.wrap_socket.return_value
+            response = response_class.return_value
+            response.status = 200
+            response.getheader.return_value = None
+            response.read.side_effect = [b'%PDF-example', b'']
+            result = get(url, {'example.org'}, interval=0)
+        request = connection.sendall.call_args.args[0]
+        self.assertEqual(request.split(b'\r\n', 1)[0],
+                         b'GET /Agenda%202024/caf%C3%A9%20memo.pdf?file=city%20board%2Bvote&x=1 HTTP/1.1')
+        self.assertEqual(result[0][0]['url'], url)
+        self.assertEqual(result[0][1], b'%PDF-example')
+
     def test_low_storage_stops_new_collection_before_it_fills_the_disk(self):
         with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=100, f_frsize=4096, f_favail=100000)):
             with self.assertRaises(ValueError): module.require_storage_headroom(Path('/tmp'))
@@ -79,6 +98,25 @@ class ResearchTests(unittest.TestCase):
                 self.assertIsNone(attempt['lookback_period'])
             finally:
                 db.close()
+
+    def test_export_uses_a_consistent_snapshot_during_collection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reader = module.root_store(root)
+            writer = sqlite3.connect(root / 'research.sqlite3')
+            try:
+                def export(_root, db, _output, _assets):
+                    self.assertEqual(db.execute('SELECT count(*) FROM discovery').fetchone()[0], 0)
+                    writer.execute('INSERT INTO discovery VALUES (?,?,?,?)',
+                                   ('us-co-county-08051', 'https://example.org/', module.utcnow(), '{}'))
+                    writer.commit()
+                    self.assertEqual(db.execute('SELECT count(*) FROM discovery').fetchone()[0], 0)
+                with patch.object(module, 'export_report', side_effect=export):
+                    module.export_consistent(root, reader, root / 'public.json')
+                self.assertEqual(reader.execute('SELECT count(*) FROM discovery').fetchone()[0], 1)
+            finally:
+                writer.close()
+                reader.close()
 
     def test_legacy_result_keeps_its_index_binding_before_rediscovery(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -243,6 +281,35 @@ class ResearchTests(unittest.TestCase):
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
 
+    def test_discovery_prioritizes_same_host_agendas_with_a_bounded_probe(self):
+        page = 'https://town.example.org/'
+        links = [('/council', 'Council'), ('/commission', 'Commission'), ('/meetings', 'Meetings'),
+                 ('/minutes', 'Minutes'), ('/agendas', 'Agenda packets'), ('/legislation', 'Legislation'),
+                 ('/more-council', 'More council'), ('https://evil.example.org/agenda', 'Agenda'),
+                 ('http://town.example.org/agenda', 'Agenda'), ('https://[broken', 'Agenda'), ('/minutes', 'Minutes')]
+        targets = module.discovery_targets(links, page)
+        self.assertEqual(targets[:3], ['https://town.example.org/minutes', 'https://town.example.org/agendas',
+                                       'https://town.example.org/AgendaCenter'])
+        self.assertEqual(len(targets), 6)
+        self.assertEqual(len(set(targets)), len(targets))
+        self.assertTrue(all(url.startswith('https://town.example.org/') for url in targets))
+        self.assertEqual(module.discovery_targets([('/AgendaCenter', 'Agendas')], page),
+                         ['https://town.example.org/AgendaCenter'])
+
+    def test_discovery_skips_malformed_links_without_losing_the_site(self):
+        home = 'https://town.example.org/'
+        body = b'<a href="https://[broken">Agenda</a><a href="/minutes">Minutes</a>'
+        def page(url, *_args, **_kwargs):
+            meta = receipt(url, body)
+            meta['content_type'] = 'text/html'
+            return [(meta, body)]
+        robots = receipt('https://town.example.org/robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), \
+             patch.object(module, 'get', side_effect=page):
+            result, _ = module.discover_one('us-co-county-08051', 'Fixture', home, module.DownloadBudget(10_000_000))
+        self.assertEqual(result['state'], 'directory_site_checked')
+        self.assertGreaterEqual(result['pages_checked'], 1)
+
     def test_word_extraction_rejects_entities_and_ignores_deleted_text(self):
         xml = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                b'<w:body><w:p><w:r><w:t>Flock Safety</w:t></w:r><w:del><w:r><w:t> deleted</w:t></w:r></w:del>'
@@ -280,6 +347,11 @@ class ResearchTests(unittest.TestCase):
                 self.assertTrue(result['docx_deleted_text_excluded'])
                 self.assertIn('--unshare-net', run.call_args.args[0])
                 self.assertEqual(result['finding']['citations'][0]['quote'], 'Flock Safety discussion')
+                mixed = SimpleNamespace(returncode=0, stdout=b'The Flock art exhibit\nFlock cameras discussion\n', stderr=b'')
+                with patch.object(module.shutil, 'which', side_effect=lambda name, **_: '/usr/bin/' + name), \
+                     patch.object(module.subprocess, 'run', return_value=mixed):
+                    stronger = module.extract_saved_docx(root, ref, candidate, document_obs)
+                self.assertEqual(stronger['finding']['citations'][0]['quote'], 'Flock cameras discussion')
                 old_result = {key: value for key, value in result.items() if key != 'docx_deleted_text_excluded'}
                 with db:
                     db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
@@ -311,6 +383,20 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(module.labels_at_quote(ids, 'Axon body cameras'), ['Axon'])
         self.assertEqual(module.labels_at_quote(ids, 'A flock of birds flew overhead'), [])
         self.assertEqual(module.labels_at_quote(['vendor.soundthinking-shotspotter'], 'ShotSpotter project'), ['ShotSpotter'])
+
+    def test_ambiguous_flock_name_does_not_become_a_vendor_or_an_artwork_claim(self):
+        rule = ['vendor.flock-safety']
+        self.assertEqual(module.labels_at_quote(rule, '3. The Flock 20 feet $65,000'), ['Flock (identity not established)'])
+        self.assertEqual(module.labels_at_quote(rule, 'Trustee discussed Flock cameras'), ['Flock Safety'])
+        self.assertEqual(module.labels_at_quote(rule, 'Written notice; Flock Group, Inc.'), ['Flock Safety'])
+        art = ['WTC Roundabout Submissions', 'Artist - Jeff Reed', '3. The Flock 20 feet $65,000']
+        self.assertTrue(module.non_surveillance_flock_context(art, 3, ['Flock (identity not established)']))
+        self.assertFalse(module.non_surveillance_flock_context(['privacy legislation and FLOCK Bill'], 1,
+                                                              ['Flock (identity not established)']))
+        self.assertFalse(module.non_surveillance_flock_context(['Artist discussed Flock cameras'], 1, ['Flock Safety']))
+        mixed = ['Municipal flag artist', 'Unrelated agenda item', 'Another topic', 'Another topic',
+                 'Another topic', 'Resident spoke about flock', '208 cameras on the road']
+        self.assertFalse(module.non_surveillance_flock_context(mixed, 6, ['Flock (identity not established)']))
 
     def test_robots_404_is_cached_within_a_single_bounded_run(self):
         cache = {}
@@ -719,6 +805,39 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(len(archived), 1)
                 self.assertTrue(archived[0]['historical'])
                 self.assertEqual(db.execute('SELECT count(*) FROM document_history').fetchone()[0], 1)
+            finally:
+                db.close()
+
+    def test_artwork_called_flock_is_counted_but_not_published_as_surveillance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                pdf = b'%PDF-artwork'
+                page_obs, pdf_obs = receipt(index, page), receipt(url, pdf)
+                module.archive(root, [(page_obs, page), (pdf_obs, pdf)])
+                text = b'Roundabout Submissions\nArtist - Jeff Reed\n3. The Flock 20 feet $65,000\n'
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                result = {'state': 'matched', 'receipt': pdf_obs, 'document_sha256': module.sha(pdf),
+                          'extracted_sha256': module.sha(text), 'evidence_id': 'evidence:art',
+                          'finding': {'evidence_id': 'evidence:art', 'matched_rule_ids': ['vendor.flock-safety'],
+                                      'citations': [{'evidence_id': 'evidence:art', 'locator': {'kind': 'line', 'start': 3},
+                                                     'quote': '3. The Flock 20 feet $65,000'}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, url, json.dumps(candidate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(report['records'], [])
+                self.assertEqual(report['coverage']['non_surveillance_mentions_withheld'], 1)
+                self.assertEqual(report['coverage']['omitted_failed_provenance'], 0)
             finally:
                 db.close()
 
