@@ -51,6 +51,25 @@ class ResearchTests(unittest.TestCase):
             with self.assertRaises(ValueError): get('https://example.org/', {'example.org'}, interval=0)
             connect.assert_not_called()
 
+    def test_http_encodes_literal_spaces_and_unicode_without_changing_receipts(self):
+        url = 'https://example.org/Agenda 2024/caf\u00e9%20memo.pdf?file=city board%2Bvote&x=1'
+        answers = [(2, 1, 6, '', ('8.8.8.8', 443))]
+        with patch('public_http.socket.getaddrinfo', return_value=answers), \
+             patch('public_http.socket.create_connection'), \
+             patch('public_http.ssl.create_default_context') as context, \
+             patch('public_http.http.client.HTTPResponse') as response_class:
+            connection = context.return_value.wrap_socket.return_value
+            response = response_class.return_value
+            response.status = 200
+            response.getheader.return_value = None
+            response.read.side_effect = [b'%PDF-example', b'']
+            result = get(url, {'example.org'}, interval=0)
+        request = connection.sendall.call_args.args[0]
+        self.assertEqual(request.split(b'\r\n', 1)[0],
+                         b'GET /Agenda%202024/caf%C3%A9%20memo.pdf?file=city%20board%2Bvote&x=1 HTTP/1.1')
+        self.assertEqual(result[0][0]['url'], url)
+        self.assertEqual(result[0][1], b'%PDF-example')
+
     def test_low_storage_stops_new_collection_before_it_fills_the_disk(self):
         with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=100, f_frsize=4096, f_favail=100000)):
             with self.assertRaises(ValueError): module.require_storage_headroom(Path('/tmp'))

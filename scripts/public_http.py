@@ -11,7 +11,7 @@ import socket
 import ssl
 import threading
 import time
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 USER_AGENT = 'PanopticonNull/0.0.4 (+https://github.com/H4rmon1c/panopticon-null)'
 _last = {}
@@ -84,9 +84,14 @@ def get(url, hosts, *, maximum=1_500_000, timeout=12, interval=1.0, redirects=2,
                 conn = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
                 raw = None
                 conn.settimeout(timeout)
-                path = parsed.path or '/'
+                # Government pages sometimes link to files using literal spaces
+                # or non-ASCII characters. Keep the original URL in receipts and
+                # source bindings, but send a valid ASCII HTTP request target.
+                # Existing percent escapes and reserved URL delimiters must not
+                # be double-encoded or reinterpreted.
+                path = quote(parsed.path or '/', safe="/%:@!$&'()*+,;=-._~")
                 if parsed.query:
-                    path += '?' + parsed.query
+                    path += '?' + quote(parsed.query, safe="/?%:@!$&'()*+,;=-._~")
                 request = f'GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {USER_AGENT}\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n'
                 conn.sendall(request.encode('ascii'))
                 response = http.client.HTTPResponse(conn)
