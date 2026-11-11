@@ -3843,13 +3843,7 @@ def export_report(data_dir, db, output, assets_dir=None):
         AND EXISTS (SELECT 1 FROM document_candidates alternate
                     WHERE alternate.jurisdiction_ref=document_candidates.jurisdiction_ref
                     AND alternate.url=json_extract(document_candidates.result_json,'$.alternate_candidate.url')) THEN 'redirected'
-        WHEN state IN ('matched','no_match') AND (
-        (json_extract(result_json,'$.extraction_status')='complete_with_ocr'
-         AND (COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1
-              OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2))
-        OR (json_extract(result_json,'$.document_format')='docx'
-         AND COALESCE(json_extract(result_json,'$.docx_deleted_text_excluded'),0)!=1))
-        THEN 'error' ELSE state END"""
+        WHEN state IN ('matched','no_match') THEN 'error' ELSE state END"""
     status = dict(db.execute(f'SELECT {reported_state} AS reported,count(*) FROM document_candidates GROUP BY reported').fetchall())
     document_counts = {}
     for ref, state, count in db.execute(f'SELECT jurisdiction_ref,{reported_state} AS reported,count(*) FROM document_candidates GROUP BY jurisdiction_ref,reported'):
@@ -3895,7 +3889,8 @@ def export_report(data_dir, db, output, assets_dir=None):
             continue
     report = {'schema_version': 'pnull-research-v1', 'state': 'preliminary', 'generated_at': utcnow(),
               'notice': ('Possible references from public sources. A mention does not establish an approval, individual vote, contract execution, or deployment. '
-                         'A county-linked document does not establish the responsible public body or which jurisdiction its technology discussion concerns.'),
+                         'A county-linked document does not establish the responsible public body or which jurisdiction its technology discussion concerns. '
+                         'Documents are counted as incomplete while image, page, and document-part coverage is unverified; cited text remains available. OCR can also miss content.'),
               'coverage': {'lookback_period': None, 'jurisdictions_with_mentions': len({x['jurisdiction_ref'] for x in records if x.get('context_state') != 'withdrawn'}),
                            'matter_references': sum(x['kind'] == 'matter_reference' for x in records),
                            'document_references': sum(x['kind'] == 'meeting_document' for x in records),

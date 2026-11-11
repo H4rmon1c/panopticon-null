@@ -1,4 +1,4 @@
-import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=sterling-context-1';
+import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=pdf-coverage-1';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 
@@ -201,8 +201,8 @@ function render(report) {
 try {
   const response = await fetch('./public/research-signals.json', { cache: 'no-store' });
   const report = await readBoundedResearchResponse(response);
-  const ocrStatus = report.coverage.ocr_revalidation_pending === undefined ? 'OCR rechecks not recorded' :
-    `${report.coverage.ocr_revalidation_pending.toLocaleString()} older scans awaiting OCR recheck`;
+  const ocrStatus = report.coverage.ocr_revalidation_pending === undefined ? 'Legacy OCR mapping status not recorded' :
+    `${report.coverage.ocr_revalidation_pending.toLocaleString()} legacy OCR mappings awaiting recheck`;
   const activeReferences = report.records.filter((item) => item.context_state !== 'withdrawn').length;
   const withdrawnContexts = report.records.length - activeReferences;
   summary.textContent = `${activeReferences.toLocaleString()} preliminary references${withdrawnContexts ? ` · ${withdrawnContexts} withdrawn context${withdrawnContexts === 1 ? '' : 's'}` : ''} · ${report.coverage.jurisdictions_with_mentions} jurisdictions with linked references · ${(report.coverage.recorded_vote_entries ?? 0).toLocaleString()} recorded vote entries · ${ocrStatus} · complete search coverage is not established`;
@@ -211,12 +211,12 @@ try {
     scope.hidden = false;
     scope.textContent = attempt ?
       `Website discovery ${attempt.website_check === 'site_checked' ? 'reached the site' : 'was unavailable'} on ${attempt.checked_at.slice(0, 10)}. ` +
-        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued${attempt.documents_redirected === undefined ? '' : ` · ${attempt.documents_redirected} source redirects`} · ` +
+        `${attempt.documents_screened} documents with verified coverage · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending ? ` (${attempt.ocr_revalidation_pending} legacy OCR mappings awaiting recheck)` : ''} · ${attempt.documents_queued} queued${attempt.documents_redirected === undefined ? '' : ` · ${attempt.documents_redirected} source redirects`} · ` +
         `${attempt.portal_pages_checked} portal query pages checked · ` +
         `${attempt.historical_index_pages_checked === undefined ? 'historical index checks not recorded' : `${attempt.historical_index_pages_checked} historical index pages checked`} · ` +
         `${attempt.historical_index_errors === undefined ? 'historical index failures not recorded' : `${attempt.historical_index_errors} historical index checks failed`} · ` +
         `${attempt.agenda_meeting_pages_screened} agenda-platform meeting pages screened. ` +
-        'These are partial source checks; the dates covered are not established.' :
+        'Documents count as incomplete while image, page, and document-part coverage is unverified. OCR can also miss content. These are partial source checks; the dates covered are not established.' :
       'No website discovery attempt is recorded for this jurisdiction. Its search coverage is not established.';
   }
   search.addEventListener('input', () => render(report));
