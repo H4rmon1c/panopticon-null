@@ -112,6 +112,25 @@ test('redirected documents expose the exact source link and timestamp uncertaint
   assert.throws(() => validateResearch(base));
 });
 
+test('additional document passages remain bounded, distinct and source-located', () => {
+  const base = copy();
+  const record = base.records.find((item) => item.kind === 'meeting_document' && !item.ocr);
+  record.document_highlights = [{ locator: 'extracted line 999', title: 'Resolution about Flock cameras.', signals: ['Flock Safety'] }];
+  validateResearch(base);
+  for (const change of [
+    (item) => { item.document_highlights[0].locator = item.locator; },
+    (item) => { item.document_highlights[0].title = 'bad\u202Etext'; },
+    (item) => { item.document_highlights[0].signals = []; },
+    (item) => { item.document_highlights[0].private_note = 'not for publication'; },
+    (item) => { item.ocr = true; },
+    (item) => { item.document_highlights = Array(6).fill(item.document_highlights[0]); },
+  ]) {
+    const changed = structuredClone(base);
+    change(changed.records.find((item) => item.id === record.id));
+    assert.throws(() => validateResearch(changed));
+  }
+});
+
 test('county-linked agenda references remain scoped to their exact meeting and digest', () => {
   const base = copy();
   const sha = 'e'.repeat(64);

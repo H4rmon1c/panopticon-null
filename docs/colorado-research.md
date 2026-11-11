@@ -61,6 +61,9 @@ no relevant decision exists.
    A bare “Flock” mention is labeled as an unresolved identity unless the
    cited line also identifies the company or relevant technology. Obvious
    non-surveillance artwork context is withheld and counted separately.
+   When a packet contains a clearly delimited earlier minutes section, a
+   present official can be named as context only when that same line names
+   the official; this does not establish their vote on the topic.
 4. For matched Legistar matters, capture the matter history, corresponding
    meeting item, recorded votes, and any separate consent-agenda item. The
    exporter reopens every raw capture and verifies client, matter, meeting,
@@ -93,6 +96,9 @@ no relevant decision exists.
    each jurisdiction with a recorded website attempt, the snapshot reports
    partial screening, failure, and queue counts without asserting a complete
    date window.
+   A text-layer document may show up to five additional, separately located
+   formal passages, so an earlier discussion does not hide a later resolution.
+   These excerpts are still preliminary mentions and do not create vote claims.
 
 The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release

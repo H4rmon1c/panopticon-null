@@ -181,7 +181,7 @@ export function validateResearch(report) {
     if (!onlyKeys(record, ['id', 'kind', 'confidence', 'jurisdiction_ref', 'jurisdiction', 'file', 'title', 'signals',
       'source_status', 'source_url', 'matter_url', 'source_sha256', 'locator', 'captured_at', 'last_screened_at',
       'people_context', 'historical', 'ocr', 'actions', 'document_format',
-      'capture_adjustment', 'indexed_source_url', 'source_index_url']) ||
+      'capture_adjustment', 'indexed_source_url', 'source_index_url', 'document_highlights']) ||
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
         !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
@@ -227,6 +227,19 @@ export function validateResearch(report) {
           !/^HTML text node [1-9]\d*$/.test(record.locator)) throw new Error('Agenda portal source is inconsistent');
     }
     if (record.kind !== 'matter_reference' && record.matter_url !== undefined) throw new Error('Unexpected matter URL');
+    if (record.document_highlights !== undefined) {
+      const seenLocations = new Set([record.locator]);
+      if (record.kind !== 'meeting_document' || record.ocr === true || !Array.isArray(record.document_highlights) ||
+          !record.document_highlights.length || record.document_highlights.length > 5) throw new Error('Invalid document highlights');
+      for (const highlight of record.document_highlights) {
+        if (!onlyKeys(highlight, ['locator', 'title', 'signals']) ||
+            !/^extracted line [1-9]\d*$/.test(highlight.locator) || seenLocations.has(highlight.locator) ||
+            !safeText(highlight.title, 400) || !highlight.title.trim() || !Array.isArray(highlight.signals) ||
+            !highlight.signals.length || highlight.signals.length > 24 ||
+            highlight.signals.some((signal) => !safeText(signal, 100) || !signal.trim())) throw new Error('Invalid document highlight');
+        seenLocations.add(highlight.locator);
+      }
+    }
     const hasRedirectProof = record.capture_adjustment !== undefined || record.indexed_source_url !== undefined || record.source_index_url !== undefined;
     if (hasRedirectProof) {
       if (record.kind !== 'meeting_document' || !['timestamp_omitted', 'direct_redirect'].includes(record.capture_adjustment)) {
