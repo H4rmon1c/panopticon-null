@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 import hashlib
 from html.parser import HTMLParser
+from itertools import zip_longest
 import json
 import os
 from pathlib import Path
@@ -49,6 +50,7 @@ LEGACY_TERM_VERSION = 'colorado-legistar-title-v1'
 TERM_VERSION = 'colorado-legistar-title-v2'
 API_HOST = 'webapi.legistar.com'
 MAX_PAGE_BYTES = 2_000_000
+MAX_DISCOVERY_PAGES = 12
 MAX_RESULTS = 50_000
 ARCHIVE_LOCK = threading.Lock()
 
@@ -724,9 +726,10 @@ def discover_one(ref, name, website, budget):
             result['canonical_url'] = final_home
             result['canonical_receipt'] = home_rows[-1][0]
             result['canonical_redirects'] = [meta for meta, _ in home_rows[:-1]]
-        candidates = [(final_home, body)]
-        followed = set()
-        for page, content in candidates:
+        followed = {final_home}
+        checked = {final_home}
+
+        def inspect_page(page, content):
             links, base = page_links(content, page)
             for ordinal, (href, label) in enumerate(links):
                 try:
@@ -751,23 +754,47 @@ def discover_one(ref, name, website, budget):
                                                   'anchor_index': ordinal, 'portal_url': target})
                 except ValueError:
                     continue
-            if page != final_home:
-                continue
-            for target in discovery_targets(links, page, base):
-                if target in followed:
-                    continue
-                followed.add(target)
-                try:
-                    final_target, deeper, _ = page_for(target)
-                    candidates.append((final_target, deeper))
-                except BudgetExhausted:
-                    raise
-                except RobotsDenied as error:
-                    observations.extend(error.observations)
-                except (OSError, ValueError, RuntimeError):
-                    continue
+            return discovery_targets(links, page, base)
+
+        def visit(target):
+            if target in followed or len(followed) >= MAX_DISCOVERY_PAGES:
+                return None
+            followed.add(target)
+            try:
+                final_target, deeper, _ = page_for(target)
+                if final_target in checked:
+                    return None
+                checked.add(final_target)
+                return final_target, deeper
+            except BudgetExhausted:
+                raise
+            except RobotsDenied as error:
+                observations.extend(error.observations)
+            except (OSError, ValueError, RuntimeError):
+                pass
+            return None
+
+        # Spend the remaining page budget across first-level sections before
+        # following more links from any one section. This keeps a long council
+        # page from starving a separate meeting archive.
+        second_level = []
+        for target in inspect_page(final_home, body):
+            page = visit(target)
+            if page is not None:
+                second_level.append(inspect_page(*page))
+        for round_of_targets in zip_longest(*second_level):
+            for target in round_of_targets:
+                if len(followed) >= MAX_DISCOVERY_PAGES:
+                    break
+                if target is not None:
+                    page = visit(target)
+                    if page is not None:
+                        inspect_page(*page)
+            if len(followed) >= MAX_DISCOVERY_PAGES:
+                break
         result['state'] = 'directory_site_checked'
-        result['pages_checked'] = len(candidates)
+        result['pages_checked'] = len(checked)
+        result['pages_attempted'] = len(followed)
     except BudgetExhausted:
         result['state'] = 'deferred'
     except RobotsDenied as error:
