@@ -1,0 +1,2 @@
+# Evidence fixtures must retain their exact original bytes, including line endings.
+fixtures/atlas/portrait-sources/denver-2023-council-gallery.html -text -diff

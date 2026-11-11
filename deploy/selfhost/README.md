@@ -22,7 +22,25 @@ The candidate activation matrix is empty. Its stage reports **disabled**, rather
 
 The stage wrapper records private operational state and writes a sanitized `/api/v1/health.json` from `/srv/panopticon/status`. Publication failure can update health without mutating the last good static release. The hourly health timer reports failed stages, stale success timestamps, clock errors, missing/expired source review records, and disabled candidate collection. It contains no private reviewer notes or filesystem paths. Green health describes the configured schedule; it does not prove all published sources were fetched recently or that Colorado coverage is complete.
 
-`backup.sh` uses SQLite's online backup API while holding the collection/publication lock, then invokes encrypted restic storage for the database snapshot, evidence, canonical records, discovery candidate/archive artifacts, configured private proposal inputs, and current public release including API history. Configure an actual off-server backend and password file before enabling the optional backup timer. The accepted backend prefix is not proof of physical separation; verify the storage account and restoration independently. Retention deletion is deliberately an operator action. Original secrets and deployment environment files require their own encrypted recovery copy.
+`panopticon-research.timer` is a separate six-hour preliminary discovery and
+screening queue. After commissioning and testing the actual host sandbox, enable
+it alongside the reviewed-source timer. It checks directory-linked websites,
+preserves source bytes and network receipts in `/var/lib/panopticon/research`,
+screens supported official matter titles and linked agenda/minutes PDFs, and
+triggers publication. Its labeled references appear at `/research.html` and
+`/api/v1/research.json`; they are not verified votes or approvals. The exporter
+reopens and checks source digests, receipts, anchors, extracted lines, and
+where available the meeting action and recorded vote rows before including a
+reference. Vote scope stays explicit. Failed extraction is not a no-match result. The existing
+12-source review schedule and publication gates remain separate. Move the
+private research directory with the other encrypted state when provisioning a
+new VPS; the checked-in static report alone does not contain the raw archive.
+
+The health endpoint includes the research stage's last run and failure state.
+A successful stage does not mean every site or PDF succeeded; individual
+screening errors and pending work are counted in the preliminary dataset.
+
+`backup.sh` uses SQLite's online backup API while holding the collection/publication lock, then invokes encrypted restic storage for coherent copies of both databases, evidence, canonical records, discovery and research archives, configured private proposal inputs, and the current public release including API history. Configure an actual off-server backend and password file before enabling the optional backup timer. The accepted backend prefix is not proof of physical separation; verify the storage account and restoration independently. Retention deletion is deliberately an operator action. Original secrets and deployment environment files require their own encrypted recovery copy.
 
 ## Verification
 

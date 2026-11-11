@@ -12,7 +12,7 @@ Panopticon Null is lawful, nonviolent, evidence infrastructure for dismantling t
 
 The current Colorado atlas static release contains five decisions across Colorado Springs, Commerce City, Denver, and Castle Rock. See the [production release](docs/colorado-production-release.md) and [statewide coverage inventory](docs/colorado-coverage.md) for the evidence, update behavior, and remaining gaps.
 
-Statewide collection is unfinished: the geography directory is not a searched-record count, and the default updater rechecks 12 known URLs. The [search-status audit](docs/statewide-search-status.md) records the missing archive, decision-extraction, and portrait automation needed to reach every Colorado public body.
+Statewide collection is underway but incomplete. The geography directory is not a count of searched governments. The [Colorado research pipeline](docs/colorado-research.md) discovers public meeting sources, preserves and screens documents, checks recorded actions and votes where supported, and publishes explicitly preliminary source references separately from verified decisions. Its current counts are generated from the local capture store rather than hardcoded as evidence of statewide coverage.
 
 Version 0.0.3 ("The Procurement Chain") stays deliberately narrow: one Colorado jurisdiction, one complete local-first pipeline, and no live posting. It builds a verifiable institutional money trail — solicitation → amendment → award → contract → expenditure — connecting official records only when the evidence supports the connection. Missing records, inaccessible portals, ambiguous vendor names, contradictory amounts, and incomplete coverage remain visible as explicit evidence gaps.
 

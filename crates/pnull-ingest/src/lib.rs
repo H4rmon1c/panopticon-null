@@ -909,13 +909,7 @@ fn ocr_pdf(
         &[input],
     )?;
     require_sandbox_output_directory(&ocr_dir)?;
-    let mut images: Vec<PathBuf> = fs::read_dir(&ocr_dir)
-        .map_err(external_io)?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "png"))
-        .collect();
-    images.sort();
+    let images = ocr_page_images(&ocr_dir, pages)?;
     let mut text = String::new();
     let mut maps = Vec::new();
     for (index, image) in images.iter().enumerate() {
@@ -933,7 +927,10 @@ fn ocr_pdf(
                 tsv_base.as_os_str(),
                 std::ffi::OsStr::new("-l"),
                 std::ffi::OsStr::new(ocr_language),
-                std::ffi::OsStr::new("tsv"),
+                // Avoid relying on a separate tessdata/configs/tsv file:
+                // language-only installations still support this parameter.
+                std::ffi::OsStr::new("-c"),
+                std::ffi::OsStr::new("tessedit_create_tsv=1"),
             ],
             &[image],
         )?;
@@ -971,6 +968,29 @@ fn ocr_pdf(
             maps,
         ))
     }
+}
+
+fn ocr_page_images(directory: &Path, pages: u32) -> Result<Vec<PathBuf>, (&'static str, String)> {
+    let mut images: Vec<PathBuf> = fs::read_dir(directory)
+        .map_err(external_io)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(external_io)?
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|extension| extension == "png"))
+        .collect();
+    images.sort();
+    if images.len() != usize::try_from(pages).unwrap_or(usize::MAX)
+        || images.iter().enumerate().any(|(index, path)| {
+            path.file_name() != Some(std::ffi::OsStr::new(&format!("page-{}.png", index + 1)))
+        })
+    {
+        return Err((
+            "ocr_page_count",
+            "Rendered OCR page count does not match the PDF".to_owned(),
+        ));
+    }
+    Ok(images)
 }
 
 fn image_dimensions(path: &Path) -> Result<(u32, u32), (&'static str, String)> {
@@ -1843,6 +1863,27 @@ mod tests {
             .save(&path)
             .unwrap();
         assert_eq!(image_dimensions(&path).unwrap_err().0, "ocr_image_limit");
+    }
+
+    #[test]
+    fn ocr_rejects_an_incomplete_rendered_page_set() {
+        let directory = tempdir().expect("temporary directory");
+        fs::write(directory.path().join("page-1.png"), b"fixture").expect("page fixture");
+        assert_eq!(
+            ocr_page_images(directory.path(), 2).unwrap_err().0,
+            "ocr_page_count"
+        );
+        assert_eq!(
+            ocr_page_images(directory.path(), 1)
+                .expect("one page")
+                .len(),
+            1
+        );
+        fs::write(directory.path().join("page-3.png"), b"fixture").expect("wrong page");
+        assert_eq!(
+            ocr_page_images(directory.path(), 2).unwrap_err().0,
+            "ocr_page_count"
+        );
     }
 
     #[test]

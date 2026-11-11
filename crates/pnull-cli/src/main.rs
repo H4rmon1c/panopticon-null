@@ -35,6 +35,7 @@ mod archive;
 mod case_proposal;
 mod procurement_cmd;
 mod refresh;
+mod research_screen;
 
 const DEFAULT_CONFIG_PATH: &str = "configs/states/co.toml";
 const DEFAULT_RULES_PATH: &str = "rules/surveillance.yml";
@@ -393,6 +394,19 @@ enum SourceCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Sandboxed screening of a private discovery PDF; never publishes a claim.
+    ScreenResearchPdf {
+        #[arg(long)]
+        digest: String,
+        #[arg(long)]
+        source_url: String,
+        #[arg(long)]
+        jurisdiction_ref: String,
+        #[arg(long)]
+        retrieved_at: String,
+        #[arg(long)]
+        ocr: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -630,6 +644,24 @@ fn run(cli: Cli) -> Result<()> {
             max_fetches,
             refresh_after_seconds,
             dry_run,
+        ),
+        Command::Source {
+            command:
+                SourceCommand::ScreenResearchPdf {
+                    digest,
+                    source_url,
+                    jurisdiction_ref,
+                    retrieved_at,
+                    ocr,
+                },
+        } => research_screen::screen_pdf(
+            &cli.data_dir,
+            &cli.rules,
+            &digest,
+            &source_url,
+            &jurisdiction_ref,
+            &retrieved_at,
+            ocr,
         ),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
         Command::Scan => scan_all(&cli.data_dir, &cli.rules),

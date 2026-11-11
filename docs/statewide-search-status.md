@@ -1,5 +1,9 @@
 # Statewide search status — November 10, 2026
 
+**Historical audit:** this page records the November 10 baseline. The November 11
+implementation and current output are described in [Colorado research](colorado-research.md).
+Statements below about the current state and missing features refer to that earlier audit.
+
 The current website is a five-decision release, **not a statewide search engine**.
 The 4,111 geography entries are a directory. They do not mean 4,111 governments
 have been investigated. The owner’s target remains every Colorado public body

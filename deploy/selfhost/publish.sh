@@ -147,6 +147,14 @@ while IFS= read -r asset || [[ -n "$asset" ]]; do
     cp -- "$source_path" "$stage/$asset"
 done < "$asset_manifest"
 mkdir -p -- "$stage/public"
+research_dir="$PNUL_DATA_DIR/research"
+if [[ -e "$research_dir/research.sqlite3" || -L "$research_dir/research.sqlite3" ]]; then
+    [[ -d "$research_dir" && ! -L "$research_dir" && -f "$research_dir/research.sqlite3" && ! -L "$research_dir/research.sqlite3" ]] || {
+        echo "research state must be a real private directory and database" >&2; exit 1;
+    }
+    python3 "$PNUL_REPO_DIR/scripts/colorado-research.py" --data-dir "$research_dir" \
+        export --output "$stage/public/research-signals.json" --assets-dir "$stage/research-portraits"
+fi
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2
     exit 1
@@ -167,6 +175,7 @@ PNUL_PORTRAIT_PROOF_ROOT="$PNUL_REPO_DIR" PNUL_VALIDATE_RELEASE=1 "$node_bin" "$
 PNUL_VALIDATE_RELEASE=1 "$node_bin" --test "$stage/scripts/test-client.mjs"
 "$node_bin" "$stage/scripts/build-alert-api.mjs" "$stage" "$PNUL_SITE_URL" "${prior_api_args[@]}"
 "$node_bin" "$PNUL_REPO_DIR/web/panopticon-terminal/scripts/build-coverage-api.mjs" "$stage"
+cp -- "$stage/public/research-signals.json" "$stage/api/v1/research.json"
 
 # Operator scripts are needed for staging validation, not for browsers.
 rm -- "$stage/scripts/build-alert-api.mjs" "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"

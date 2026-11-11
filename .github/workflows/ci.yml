@@ -91,5 +91,7 @@ jobs:
         # outside the derivation, where real Bubblewrap and Poppler execute.
         # This step fails if PDF extraction does not work.
         run: nix develop --command cargo test -p pnull-ingest --test real_sandbox_pdf -- --ignored --nocapture
+      - name: Real sandbox extraction (Word documents)
+        run: nix develop --command bash -c 'PNUL_EXTRACTOR_PATH="$PATH" python3 scripts/test-docx-sandbox.py'
       - name: Dependency policy
         run: nix develop --command cargo deny check

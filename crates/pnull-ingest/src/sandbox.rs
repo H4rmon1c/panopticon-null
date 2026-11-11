@@ -235,7 +235,18 @@ impl Sandbox for BubblewrapSandbox {
             .arg("C.UTF-8")
             .arg("--setenv")
             .arg("OMP_THREAD_LIMIT")
-            .arg("1")
+            .arg("1");
+        // Only a directory already exposed by the read-only runtime mounts
+        // may be passed through; no other host environment is inherited.
+        if program == "tesseract"
+            && let Some(raw) = std::env::var_os("PNUL_TESSDATA_DIR")
+        {
+            command
+                .arg("--setenv")
+                .arg("TESSDATA_PREFIX")
+                .arg(checked_tessdata_dir(Path::new(&raw))?);
+        }
+        command
             .arg("--")
             .arg(&executable)
             .args(rewrite_args(args, workdir, &input_rewrites))
@@ -382,6 +393,22 @@ impl Sandbox for FakeSandbox {
     }
 }
 
+fn checked_tessdata_dir(path: &Path) -> Result<PathBuf, SandboxError> {
+    let resolved = fs::canonicalize(path).map_err(|_| {
+        SandboxError::Unavailable("configured OCR language directory is unavailable".to_owned())
+    })?;
+    if !(resolved.starts_with("/usr") || resolved.starts_with("/nix/store"))
+        || !resolved.is_dir()
+        || !fs::symlink_metadata(resolved.join("eng.traineddata"))
+            .is_ok_and(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+    {
+        return Err(SandboxError::Unavailable(
+            "configured OCR language data must be in a read-only runtime directory".to_owned(),
+        ));
+    }
+    Ok(resolved)
+}
+
 fn bind_readonly_runtime(command: &mut Command) {
     command.arg("--tmpfs").arg("/etc");
     for path in readonly_runtime_paths() {
@@ -524,6 +551,15 @@ mod tests {
                 .filter(|path| path.starts_with("/etc/"))
                 .all(|path| { matches!(*path, "/etc/fonts" | "/etc/ld.so.cache") })
         );
+    }
+
+    #[test]
+    fn ocr_language_data_cannot_expand_the_sandbox_read_boundary() {
+        let outside = TempDir::new().expect("temporary directory");
+        fs::write(outside.path().join("eng.traineddata"), b"fixture").expect("fixture");
+        assert!(checked_tessdata_dir(outside.path()).is_err());
+        assert!(checked_tessdata_dir(Path::new("/etc")).is_err());
+        assert!(checked_tessdata_dir(Path::new("/definitely-missing-ocr-data")).is_err());
     }
 
     #[test]

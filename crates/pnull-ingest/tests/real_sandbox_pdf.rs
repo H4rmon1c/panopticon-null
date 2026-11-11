@@ -77,3 +77,47 @@ fn real_pdf_fixture_is_extracted_by_poppler_in_sandbox() {
     assert!(!outcome.text_maps.is_empty());
     store.verify(&outcome.record.id).expect("stored digest");
 }
+
+#[test]
+#[ignore = "requires real Bubblewrap, Poppler, and English Tesseract data outside the Nix derivation"]
+fn scanned_pdf_is_ocr_extracted_in_the_real_sandbox() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let bytes = fs::read(workspace.join("fixtures/pdf/scanned-surveillance-text.pdf"))
+        .expect("scanned PDF fixture");
+    let dir = tempdir().expect("temporary directory");
+    let store = pnull_core::Store::open(dir.path()).expect("store");
+    let request = IngestRequest {
+        jurisdiction: "Colorado".to_owned(),
+        source_url: "https://example.test/scanned".to_owned(),
+        source_type: SourceType::Pdf,
+        document_title: "Scanned test document".to_owned(),
+        publication_date: None,
+        retrieval_timestamp: "2026-08-16T00:00:00Z".to_owned(),
+        mime_type: "application/pdf".to_owned(),
+        original_filename: "scanned.pdf".to_owned(),
+        supersedes: None,
+        enable_ocr: true,
+        ocr_language: "eng".to_owned(),
+        max_bytes: DEFAULT_MAX_BYTES,
+    };
+    let sandbox = RealSandbox::new(ExtractionSandboxConfig::defaults()).expect("bwrap sandbox");
+    let mut budgets = Tracker::new(Budgets::defaults());
+    let outcome = ingest_bytes(
+        &store,
+        &sandbox,
+        &mut budgets,
+        &BuildMetadata::local(),
+        &request,
+        &bytes,
+    )
+    .expect("scanned PDF ingestion");
+    assert_eq!(
+        outcome.record.extraction_status,
+        ExtractionStatus::CompleteWithOcr,
+        "OCR error: {:?}",
+        outcome.record.extraction_error
+    );
+    assert!(outcome.extracted_text.trim().len() > 10);
+    assert!(!outcome.text_maps.is_empty());
+    store.verify(&outcome.record.id).expect("stored digest");
+}

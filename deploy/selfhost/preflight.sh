@@ -6,7 +6,17 @@ set -euo pipefail
 : "${PNUL_SITE_URL:?load /etc/panopticon/panopticon.env}"
 [[ "$(id -un)" == panopticon ]] || { echo 'run preflight as the panopticon service account' >&2; exit 1; }
 [[ "$PNUL_SITE_URL" == https://panopticon.fail ]] || { echo 'review canonical hostname and generated metadata before changing it' >&2; exit 1; }
-for binary in python3 node caddy bwrap pdftotext flock realpath; do command -v "$binary" >/dev/null; done
+for binary in python3 node caddy flock realpath; do command -v "$binary" >/dev/null; done
+for binary in bwrap pdfinfo pdftotext pdftoppm tesseract prlimit; do
+    PATH="${PNUL_EXTRACTOR_PATH:-/usr/bin:/bin}" command -v "$binary" >/dev/null
+done
+if [[ -n "${PNUL_TESSDATA_DIR:-}" ]]; then
+    tessdata_dir="$(realpath -e -- "$PNUL_TESSDATA_DIR")"
+    [[ "$tessdata_dir" == /usr/* || "$tessdata_dir" == /nix/store/* ]] || { echo 'OCR data must be in a read-only runtime directory' >&2; exit 1; }
+    [[ -f "$tessdata_dir/eng.traineddata" && ! -L "$tessdata_dir/eng.traineddata" ]] || { echo 'English OCR language data is missing' >&2; exit 1; }
+else
+    PATH="${PNUL_EXTRACTOR_PATH:-/usr/bin:/bin}" tesseract --list-langs 2>/dev/null | grep -Fxq eng || { echo 'English OCR language data is missing' >&2; exit 1; }
+fi
 pnull_binary="${PNUL_BIN:-/usr/local/bin/pnull}"
 [[ -x "$pnull_binary" && ! -L "$pnull_binary" && "$(stat -c %U "$pnull_binary")" == root && -z "$(find "$pnull_binary" -perm /022 -print)" ]]
 [[ -f /etc/panopticon/panopticon.env && ! -L /etc/panopticon/panopticon.env && "$(stat -c %U /etc/panopticon/panopticon.env)" == root && -z "$(find /etc/panopticon/panopticon.env -perm /022 -print)" ]]
