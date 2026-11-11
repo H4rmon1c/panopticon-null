@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[3]
 GEOGRAPHY = ROOT / "web/panopticon-terminal/geography/colorado-jurisdictions.json"
 MAPPING = ROOT / "configs/states/co-calendar-geography.v1.json"
 INDEX_MAPPING = ROOT / "configs/states/co-document-index-geography.v1.json"
+MUNICIPAL_DIRECTORY = ROOT / "configs/states/co-municipal-websites.v1.json"
 MATRIX = ROOT / "deploy/selfhost/collection-sources.tsv"
 ATLAS = ROOT / "fixtures/atlas"
 PUBLIC = ROOT / "web/panopticon-terminal/public/public-snapshot.json"
@@ -99,6 +100,42 @@ def document_index_bindings(valid_refs):
     return indexes
 
 
+def municipal_website_leads(valid_refs):
+    directory = read_json(MUNICIPAL_DIRECTORY)
+    source = directory.get("source", {})
+    if (directory.get("schema_version") != 1
+            or source.get("url") != "https://www.cml.org/home/networking-events/membership/membership"
+            or not re.fullmatch(r"[0-9a-f]{64}", source.get("sha256", ""))):
+        raise ValueError("invalid municipal directory provenance")
+    entries = directory.get("municipalities", [])
+    leads = {}
+    for item in entries:
+        ref = item["jurisdiction_ref"]
+        url = item["website_url"]
+        name = item["listing_name"]
+        if (ref in leads or ref not in valid_refs or valid_refs[ref]["kind"] != "municipality"
+                or not name or item["source_locator"] != f"Links to Colorado cities and towns > {name}"):
+            raise ValueError(f"invalid municipal directory binding: {item}")
+        if url is not None:
+            parts = urlsplit(url)
+            if (parts.scheme not in ("http", "https") or not parts.hostname
+                    or parts.username or parts.password or len(url) > 2_048):
+                raise ValueError(f"invalid municipal website lead: {item}")
+        leads[ref] = item
+    counts = directory["counts"]
+    municipal_count = sum(row["kind"] == "municipality" for row in valid_refs.values())
+    linked = sum(item["website_url"] is not None for item in entries)
+    http = sum(item["website_url"] is not None and item["website_url"].startswith("http:")
+               for item in entries)
+    expected = {"census_municipalities": municipal_count, "listed": len(entries),
+                "with_website": linked, "without_website": len(entries) - linked,
+                "http_leads": http, "https_leads": linked - http,
+                "not_listed": municipal_count - len(entries)}
+    if counts != expected:
+        raise ValueError("municipal directory counts do not match its bindings")
+    return leads
+
+
 def case_inventory(valid_refs):
     cases = defaultdict(list)
     seen = set()
@@ -174,6 +211,7 @@ def build_rows():
     if mapped_ids != calendar_source_ids():
         raise ValueError("calendar mapping does not match scheduled discovery sources")
     indexes = document_index_bindings(by_ref)
+    website_leads = municipal_website_leads(by_ref)
     cases = case_inventory(by_ref)
     published = published_inventory(records)
     rows = []
@@ -182,6 +220,15 @@ def build_rows():
         source_verified = [case_id for case_id, state in cases[ref] if state == "source_verified"]
         pending = [case_id for case_id, state in cases[ref] if state == "pending"]
         public = published[ref]
+        directory = website_leads.get(ref)
+        if record["kind"] != "municipality":
+            directory_status = "not_applicable"
+        elif directory is None:
+            directory_status = "not_listed"
+        elif directory["website_url"]:
+            directory_status = "listed_with_url"
+        else:
+            directory_status = "listed_without_url"
         stage = ("published_case" if public else "source_verified_manifest" if source_verified
                  else "pending_manifest" if pending else "calendar_configured" if calendar_by_ref[ref]
                  else "document_index_configured" if indexes[ref] else "not_started")
@@ -190,6 +237,9 @@ def build_rows():
             "kind": record["kind"],
             "name": record["name"],
             "stage": stage,
+            "municipal_directory_status": directory_status,
+            "municipal_website_lead": directory["website_url"] if directory else "",
+            "municipal_directory_locator": directory["source_locator"] if directory else "",
             "scheduled_calendar_ids": ";".join(sorted(calendar_by_ref[ref])),
             "document_index_ids": ";".join(sorted(indexes[ref])),
             "source_verified_case_ids": ";".join(sorted(source_verified)),
