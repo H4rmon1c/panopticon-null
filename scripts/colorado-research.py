@@ -869,7 +869,7 @@ def discovery_targets(links, page, base=_DEFAULT_BASE):
     return ordered[:6]
 
 
-def discover_one(ref, name, website, budget):
+def discover_one(ref, name, website, budget, county_root_recon=False):
     observations = []
     result = {'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
               'checked_at': utcnow(), 'state': 'failed', 'portals': [], 'documents': []}
@@ -968,7 +968,17 @@ def discover_one(ref, name, website, budget):
         # following more links from any one section. This keeps a long council
         # page from starving a separate meeting archive.
         second_level = []
-        for target in inspect_page(final_home, body):
+        targets = inspect_page(final_home, body)
+        # County directory leads often point to the clerk rather than the
+        # county homepage. Probe only that same host's root, and preserve the
+        # original directory binding and every source-page receipt.
+        if county_root_recon and ref.startswith('us-co-county-') and urlsplit(final_home).path not in ('', '/'):
+            parsed_home = urlsplit(final_home)
+            root_url = urlunsplit(('https', parsed_home.netloc, '/', '', ''))
+            root_page = visit(root_url)
+            if root_page is not None:
+                targets = list(dict.fromkeys(inspect_page(*root_page) + targets))
+        for target in targets:
             page = visit(target)
             if page is not None:
                 second_level.append(inspect_page(*page))
@@ -3884,7 +3894,8 @@ def export_report(data_dir, db, output, assets_dir=None):
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             continue
     report = {'schema_version': 'pnull-research-v1', 'state': 'preliminary', 'generated_at': utcnow(),
-              'notice': 'Possible references from public sources. A mention does not establish an approval, individual vote, contract execution, or deployment.',
+              'notice': ('Possible references from public sources. A mention does not establish an approval, individual vote, contract execution, or deployment. '
+                         'A county-linked document does not establish the responsible public body or which jurisdiction its technology discussion concerns.'),
               'coverage': {'lookback_period': None, 'jurisdictions_with_mentions': len({x['jurisdiction_ref'] for x in records if x.get('context_state') != 'withdrawn'}),
                            'matter_references': sum(x['kind'] == 'matter_reference' for x in records),
                            'document_references': sum(x['kind'] == 'meeting_document' for x in records),

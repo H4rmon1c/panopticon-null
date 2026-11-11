@@ -1,10 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { matchesResearchQuery, readBoundedResearchResponse, validateResearch, validResearchJurisdiction } from '../research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validateResearch, validResearchJurisdiction } from '../research-api.js';
 
 const original = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(original);
+
+test('county document scope distinguishes host from the body and technology mentioned', () => {
+  // These actual snapshot examples include a different county and multiple bodies.
+  const otherCounty = original.records.find((item) => item.kind === 'meeting_document' &&
+    item.jurisdiction === 'Logan County' && item.title.includes('Gunnison County'));
+  const multiBody = original.records.find((item) => item.kind === 'meeting_document' &&
+    item.jurisdiction === 'Gunnison County' && item.file.includes('Local Marketing District'));
+  assert.ok(otherCounty); assert.ok(multiBody);
+  for (const item of [otherCounty, multiBody]) {
+    const scope = researchReferenceScope(item);
+    assert.equal(scope.heading, `${item.jurisdiction} · county-linked source`);
+    assert.match(scope.notice, /does not establish the responsible public body/);
+    assert.match(scope.notice, /may refer to another jurisdiction/);
+  }
+  const cityDocument = original.records.find((item) => item.kind === 'meeting_document' &&
+    item.jurisdiction_ref.startsWith('us-co-place-'));
+  assert.ok(cityDocument);
+  assert.deepEqual(researchReferenceScope(cityDocument), { heading: cityDocument.jurisdiction, notice: '' });
+  assert.deepEqual(researchReferenceScope({ ...otherCounty, kind: 'matter_reference' }),
+    { heading: otherCounty.jurisdiction, notice: '' });
+});
+
+test('v1 snapshot warns about county document attribution without changing record keys', () => {
+  const report = copy();
+  const county = report.records.find((item) => item.kind === 'meeting_document' && item.jurisdiction_ref.startsWith('us-co-county-'));
+  assert.ok(county);
+  assert.match(report.notice, /county-linked document does not establish the responsible public body/);
+  assert.match(report.notice, /which jurisdiction its technology discussion concerns/);
+  assert.equal(county.source_scope_notice, undefined);
+  validateResearch(report);
+  county.source_scope_notice = 'unexpected extension';
+  assert.throws(() => validateResearch(report), /Invalid preliminary research record/);
+});
 
 test('Colorado Springs original index, redirect receipt, and landing chain remain source scoped', () => {
   const report = copy();
