@@ -30,5 +30,6 @@ python3 scripts/colorado-research.py --data-dir "$data" docx-saved --limit 50 --
 python3 scripts/colorado-research.py --data-dir "$data" ocr-saved --pnull-bin "$binary" --revalidate-ocr --limit 30 --workers 2 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" ocr-saved --pnull-bin "$binary" --retry-previous-limit --limit 30 --workers 2 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" screen-documents --pnull-bin "$binary" --retry-errors --ocr --limit 30 --per-place 3 --workers 2 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" official-context || status=1
 python3 scripts/colorado-research.py --data-dir "$data" portraits --limit 32 || status=1
 exit "$status"

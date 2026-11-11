@@ -51,6 +51,7 @@ raise SystemExit(1 if sys.argv[4] == os.environ.get('PNUL_TEST_FAIL') else 0)
         commands = [call[3] for call in calls]
         assert commands[:3] == ['discover', 'civic-history', 'scan']
         assert commands.count('scan') == 2
+        assert commands.count('official-context') == 1
         history = calls[1]
         assert history[4:] == ['--limit', '20', '--per-place', '4', '--workers', '8']
         assert commands.count('screen-documents') == 3 and commands[-1] == 'portraits'

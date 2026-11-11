@@ -24,10 +24,12 @@ import sys
 import threading
 import time
 import tomllib
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 
 from public_http import USER_AGENT, BudgetExhausted, get, public_ip
 import colorado_special_districts as special_districts
+import colorado_official_context as official_context
 from vendor.protego import Protego
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,6 +145,14 @@ def root_store(path):
       CREATE TABLE IF NOT EXISTS portrait_attempts (
         jurisdiction_ref TEXT PRIMARY KEY, attempted_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS official_context_pages (
+        seed_id TEXT PRIMARY KEY, receipt_json TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS official_context_history (
+        seed_id TEXT NOT NULL, source_sha256 TEXT NOT NULL, receipt_json TEXT NOT NULL,
+        event TEXT NOT NULL, event_at TEXT NOT NULL,
+        PRIMARY KEY(seed_id,source_sha256,event,event_at)
+      );
       CREATE TABLE IF NOT EXISTS document_history (
         jurisdiction_ref TEXT NOT NULL, url TEXT NOT NULL, source_sha256 TEXT NOT NULL,
         candidate_json TEXT NOT NULL, result_json TEXT NOT NULL, captured_at TEXT NOT NULL,
@@ -191,6 +201,8 @@ def root_store(path):
       );
     ''')
     columns = {row[1] for row in db.execute('PRAGMA table_info(document_candidates)')}
+    if 'state' not in {row[1] for row in db.execute('PRAGMA table_info(official_context_pages)')}:
+        db.execute("ALTER TABLE official_context_pages ADD COLUMN state TEXT NOT NULL DEFAULT 'active'")
     for name in ('last_attempt_at', 'last_error'):
         if name not in columns:
             db.execute(f'ALTER TABLE document_candidates ADD COLUMN {name} TEXT')
@@ -3806,6 +3818,12 @@ def export_report(data_dir, db, output, assets_dir=None):
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             omitted += 1
             omission_reasons['meeting page: ' + str(error)[:85]] += 1
+    for name, receipt, updated, state in db.execute('SELECT seed_id,receipt_json,updated_at,state FROM official_context_pages ORDER BY seed_id'):
+        try:
+            records.append(official_context.materialize(SimpleNamespace(**globals()), data_dir, db, receipts, name, receipt, updated, state))
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+            omitted += 1
+            omission_reasons['official context: ' + str(error)[:80]] += 1
     if len(records) > MAX_RESULTS:
         raise ValueError('research report exceeds record limit')
     records.sort(key=lambda item: (item['jurisdiction'], item['id']))
@@ -3867,10 +3885,11 @@ def export_report(data_dir, db, output, assets_dir=None):
             continue
     report = {'schema_version': 'pnull-research-v1', 'state': 'preliminary', 'generated_at': utcnow(),
               'notice': 'Possible references from public sources. A mention does not establish an approval, individual vote, contract execution, or deployment.',
-              'coverage': {'lookback_period': None, 'jurisdictions_with_mentions': len({x['jurisdiction_ref'] for x in records}),
+              'coverage': {'lookback_period': None, 'jurisdictions_with_mentions': len({x['jurisdiction_ref'] for x in records if x.get('context_state') != 'withdrawn'}),
                            'matter_references': sum(x['kind'] == 'matter_reference' for x in records),
                            'document_references': sum(x['kind'] == 'meeting_document' for x in records),
                            'agenda_portal_references': sum(x['kind'] == 'agenda_portal_reference' for x in records),
+                           'official_page_references': sum(x['kind'] == 'official_page_context' for x in records),
                            'agenda_portal_screening': dict(db.execute('SELECT state,count(*) FROM suite_meetings GROUP BY state').fetchall()),
                            'search_attempts': attempts,
                            'recorded_actions': sum(len(x.get('actions', [])) for x in records),
@@ -3932,6 +3951,7 @@ def main():
     suite = subs.add_parser('agendasuite')
     suite.add_argument('--limit', type=int, default=60, help='maximum recent meeting pages to screen')
     suite.add_argument('--pages', type=int, default=3, help='maximum linked calendar pages')
+    subs.add_parser('official-context', help='capture three explicitly scoped official agency technology pages')
     p = subs.add_parser('screen-documents')
     p.add_argument('--pnull-bin', default=os.environ.get('PNUL_BIN', str(ROOT / 'target/debug/pnull')))
     p.add_argument('--limit', type=int, default=100)
@@ -4003,6 +4023,9 @@ def main():
             collect_actions(args.data_dir, db, args.limit)
         elif args.command == 'agendasuite':
             collect_suite(args.data_dir, db, args.limit, args.pages)
+        elif args.command == 'official-context':
+            if official_context.capture(SimpleNamespace(**globals()), args.data_dir, db) != len(official_context.SEEDS):
+                raise ValueError('one or more official technology context captures failed')
         elif args.command == 'screen-documents':
             screen_documents(args.data_dir, db, args.pnull_bin, args.limit, args.per_place, args.workers,
                              args.retry_errors, args.ocr, args.refresh_existing, args.jurisdiction,
