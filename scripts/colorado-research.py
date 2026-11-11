@@ -627,6 +627,43 @@ def revize_file_redirect(origin, target):
         return False
 
 
+def springs_document_page(origin, target):
+    """Recognize the city's legacy file-to-document-page migration."""
+    try:
+        source, dest = urlsplit(origin), urlsplit(target)
+        if any(p.scheme != 'https' or p.hostname != 'coloradosprings.gov' or p.port not in (None, 443)
+               or p.username or p.password or p.query or p.fragment for p in (source, dest)):
+            return False
+        old = re.fullmatch(r'/sites/default/files/(?:inline-images/)?([A-Za-z0-9._-]+\.pdf)', source.path, re.I)
+        new = re.fullmatch(r'/document/([A-Za-z0-9.-]+\.pdf)', dest.path, re.I)
+        return bool(old and new and '..' not in old.group(1) and '..' not in new.group(1)
+                    and old.group(1).replace('_', '').lower() == new.group(1).lower())
+    except (TypeError, ValueError):
+        return False
+
+
+def springs_page_candidate(candidate, landing_url, body):
+    """Rebind to the landing page's exact download anchor, not an inferred URL."""
+    origin = candidate['url']
+    if not springs_document_page(origin, landing_url):
+        return None
+    old = urlsplit(origin).path
+    expected = 'https://coloradosprings.gov/system' + old.removeprefix('/sites/default')
+    links, base = page_links(body, landing_url)
+    matches = []
+    for ordinal, (href, label) in enumerate(links):
+        try:
+            url = resolve_page_link(landing_url, base, href)
+            kind = candidate_kind(url, landing_url, label) if url else None
+            if url == expected and ' '.join(label.split()) == 'Download PDF' and kind:
+                matches.append({'url': url, 'index_url': landing_url, 'index_sha256': sha(body),
+                                'anchor_index': ordinal, 'kind': kind[0],
+                                'meeting_date': candidate.get('meeting_date'), 'label': 'Download PDF'})
+        except ValueError:
+            continue
+    return matches[0] if len(matches) == 1 else None
+
+
 def verified_redirect_receipt(data_dir, receipt, origin, target):
     """Require the exact archived redirect receipt, not a constructed mapping."""
     try:
@@ -1627,6 +1664,22 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
                 if alternate:
                     return {'state': 'error', 'error': 'source redirected; alternate document queued',
                             'alternate_candidate': alternate}, observations
+                landing = receipt.get('redirect_target', '')
+                if (ref == 'us-co-place-0816000' and springs_document_page(url, landing)
+                        and allowed(rules, landing)):
+                    reserved = budget.reserve(MAX_PAGE_BYTES)
+                    if not reserved:
+                        return {'state': 'deferred'}, observations
+                    pages = get(landing, {host}, maximum=reserved, timeout=30, redirects=0,
+                                stop_at_redirect=True)
+                    observations.extend(pages)
+                    page_receipt, page = pages[-1]
+                    budget.release_unused(reserved - len(page))
+                    if page_receipt['status'] == 200 and 'html' in page_receipt.get('content_type', '').lower():
+                        alternate = springs_page_candidate(candidate, landing, page)
+                        if alternate:
+                            return {'state': 'error', 'error': 'source redirected; alternate document queued',
+                                    'alternate_candidate': alternate}, observations
         if receipt['status'] != 200:
             raise ValueError(f"not a PDF (HTTP {receipt['status']})")
         archive(data_dir, observations)
@@ -1652,14 +1705,19 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
         return {'state': 'error', 'error': str(error)[:180]}, observations
 
 
-def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_errors=False, ocr=False, refresh_existing=False):
+def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_errors=False, ocr=False, refresh_existing=False,
+                     jurisdiction=None, retry_now=False, retry_redirects=False):
     if not Path(binary).is_absolute() or not Path(binary).is_file():
         raise ValueError('pnull binary must be an absolute path to an existing file')
+    if jurisdiction is not None and not re.fullmatch(r'(?:us-co-(?:place|county|school)-[0-9]{5,7}|dola-district-[0-9]{5})', jurisdiction):
+        raise ValueError('invalid jurisdiction filter')
+    if (retry_now or retry_redirects) and (not retry_errors or not jurisdiction):
+        raise ValueError('immediate or redirect retries require retry-errors and a jurisdiction')
     now = datetime.now(timezone.utc)
     day_ago = (now - timedelta(days=1)).isoformat()
     week_ago = (now - timedelta(days=7)).isoformat()
     if retry_errors:
-        condition, parameters = "state='error' AND (last_attempt_at IS NULL OR last_attempt_at<=?)", (day_ago,)
+        condition, parameters = ("state='error'", ()) if retry_now else ("state='error' AND (last_attempt_at IS NULL OR last_attempt_at<=?)", (day_ago,))
     elif refresh_existing:
         condition, parameters = ("state IN ('matched','no_match') AND updated_at<=? AND (last_attempt_at IS NULL OR last_attempt_at<=?) "
                                  "AND NOT (COALESCE(json_extract(result_json,'$.extraction_status'),'')='complete_with_ocr' "
@@ -1667,6 +1725,11 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
                                  "OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2))"), (week_ago, day_ago)
     else:
         condition, parameters = "state='pending'", ()
+    if jurisdiction:
+        condition += ' AND jurisdiction_ref=?'
+        parameters += (jurisdiction,)
+    if retry_redirects:
+        condition += " AND json_extract(result_json,'$.error') IN ('not a PDF (HTTP 301)','not a PDF (HTTP 302)')"
     rows = db.execute(f'''
       WITH last_by_place AS (
         SELECT jurisdiction_ref,MAX(last_attempt_at) AS last_place_attempt
@@ -1692,11 +1755,11 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     print(f'Screening up to {len(rows)} official agenda/minutes documents across '
           f'{len({ref for ref, _, _ in rows})} jurisdictions', flush=True)
     started = time.monotonic()
-    completed = errors = deferred = 0
+    completed = errors = deferred = redirected = 0
 
     def progress(finished, total):
         print(f'Document jobs {finished}/{total}; completed screens {completed}; '
-              f'errors {errors}; deferred {deferred}; elapsed {int(time.monotonic()-started)}s', flush=True)
+              f'errors {errors}; deferred {deferred}; redirected {redirected}; elapsed {int(time.monotonic()-started)}s', flush=True)
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = {pool.submit(screen_one, data_dir, ref, json.loads(raw), binary,
@@ -1714,6 +1777,8 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
                 continue
             if result['state'] in ('matched', 'no_match'):
                 completed += 1
+            elif result.get('alternate_candidate'):
+                redirected += 1
             else:
                 errors += 1
             with db:
@@ -3822,6 +3887,9 @@ def main():
     p.add_argument('--per-place', type=int, default=10)
     p.add_argument('--workers', type=int, default=4)
     p.add_argument('--retry-errors', action='store_true')
+    p.add_argument('--jurisdiction', help='limit document work to one Colorado jurisdiction')
+    p.add_argument('--retry-now', action='store_true', help='bypass the one-day retry cooldown for a specified jurisdiction')
+    p.add_argument('--retry-redirects', action='store_true', help='retry only HTTP 301/302 document errors for a specified jurisdiction')
     p.add_argument('--refresh-existing', action='store_true', help='recheck documents not successfully refreshed in seven days')
     p.add_argument('--ocr', action='store_true', help='enable bounded OCR for scanned PDFs of at most 20 pages')
     ocr = subs.add_parser('ocr-saved')
@@ -3857,6 +3925,10 @@ def main():
         parser.error('document screening bounds exceeded')
     if args.command == 'screen-documents' and args.retry_errors and args.refresh_existing:
         parser.error('choose either error retries or existing-document refreshes')
+    if args.command == 'screen-documents' and (args.retry_now or args.retry_redirects) and (not args.retry_errors or not args.jurisdiction):
+        parser.error('immediate or redirect retries require --retry-errors and --jurisdiction')
+    if args.command == 'screen-documents' and args.jurisdiction is not None and not re.fullmatch(r'(?:us-co-(?:place|county|school)-[0-9]{5,7}|dola-district-[0-9]{5})', args.jurisdiction):
+        parser.error('invalid jurisdiction filter')
     if args.command == 'ocr-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 8):
         parser.error('saved OCR bounds exceeded')
     if args.command == 'ocr-saved' and args.revalidate_ocr and (args.retry_unavailable or args.retry_previous_limit):
@@ -3882,7 +3954,8 @@ def main():
             collect_suite(args.data_dir, db, args.limit, args.pages)
         elif args.command == 'screen-documents':
             screen_documents(args.data_dir, db, args.pnull_bin, args.limit, args.per_place, args.workers,
-                             args.retry_errors, args.ocr, args.refresh_existing)
+                             args.retry_errors, args.ocr, args.refresh_existing, args.jurisdiction,
+                             args.retry_now, args.retry_redirects)
         elif args.command == 'ocr-saved':
             ocr_saved_documents(args.data_dir, db, args.pnull_bin, args.limit, args.workers,
                                 args.retry_unavailable, args.revalidate_ocr, args.retry_previous_limit)
