@@ -144,6 +144,9 @@ function render(report) {
       ? 'Recorded votes are shown with their scope above. A specific contract approval or deployment is not yet established.'
       : 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
+    if (item.kind === 'meeting_document' && new URL(item.indexed_source_url ?? item.source_url).hostname === 'towncloud.io') {
+      card.append(node('p', 'meta', 'The government website links this meeting document; the responsible public body is not established.'));
+    }
     const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
       item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
     card.append(external(item.source_url, sourceLabel));

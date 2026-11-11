@@ -121,6 +121,8 @@ to a narrowly scoped Revize host. A vendor document is only followed when an
 archived government link and vendor redirect bind it to the same document or
 TownCloud tenant;
 the vendor does not become a general trusted source for that jurisdiction.
+Linked TownCloud calendars can include other public bodies, so a meeting's
+responsible body remains unestablished until separately sourced.
 The collector uses TLS verification, public-IP-only DNS checks with connection
 pinning, bounded reads, per-host pacing, and restricted redirects. Archive
 bytes are content-addressed. The document queue is resumable and retains
