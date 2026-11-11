@@ -540,6 +540,44 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_portrait_search_continues_to_linked_council_when_directory_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, name = 'us-co-county-08051', 'Alex Example'
+                home, council = 'https://town.example.org/', 'https://town.example.org/council'
+                image_url = 'https://town.example.org/alex.jpg'
+                extracted = b'fixture\n'
+                digest = module.sha(extracted)
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / digest).write_bytes(extracted)
+                finding = json.dumps({'extracted_sha256': digest, 'finding': {'citations': [{'locator': {'start': 1}}]}})
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, home, module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, home + 'minutes.pdf', '{}', finding, module.utcnow()))
+                html = {home: b'<a href="/council">Town Council</a>',
+                        council: b'<img alt="Councilmember Alex Example" src="/alex.jpg">'}
+                calls = []
+                def fetch_page(url, *_args):
+                    calls.append(url)
+                    if url not in html:
+                        raise ValueError('HTTP 404')
+                    return html[url], [(receipt(url, html[url]), html[url])]
+                jpeg = b'\xff\xd8\xfforiginal'
+                with patch.object(module, 'officials_near_reference', return_value=[{'name': name}]), \
+                     patch.object(module, 'clients_from_store', return_value={}), \
+                     patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'html_page', side_effect=fetch_page), \
+                     patch.object(module, 'get', return_value=[(receipt(image_url, jpeg), jpeg)]):
+                    module.collect_portraits(root, db, 1)
+                self.assertEqual(calls, [home + 'm/Directory', home, council])
+                result = module.checked_portrait(root, db, module.observation_keys(root), ref, name, root / 'assets')
+                self.assertEqual(result['source_url'], council)
+            finally:
+                db.close()
+
     def test_candidate_document_scope(self):
         index = 'https://city.example.org/agenda'
         good = 'https://city.example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
@@ -1277,9 +1315,57 @@ class ResearchTests(unittest.TestCase):
 
     def test_portrait_nickname_needs_explicit_official_alias(self):
         self.assertTrue(module.portrait_name_matches('Laura Puckett Daniels', 'Profile picture of Laura Puckett Daniels'))
+        self.assertTrue(module.portrait_name_matches('Alex Example', 'Councilmember Alex Example'))
+        self.assertFalse(module.portrait_name_matches('Alex Example', 'Councilmember Other Example'))
         self.assertFalse(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Smith'))
         self.assertTrue(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Smith', 'Elizabeth (Liz) Smith, Commissioner'))
         self.assertFalse(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Jones', 'Elizabeth (Liz) Smith, Commissioner'))
+
+    def test_portrait_navigation_is_bounded_and_stays_on_the_official_host(self):
+        page = 'https://town.example.org/'
+        body = (b'<a href="https://outside.example/council">Council</a>'
+                b'<a href="/news">News</a>' + b''.join(
+                    f'<a href="/council-{i}">Council {i}</a>'.encode() for i in range(7)))
+        self.assertEqual(module.portrait_navigation(body, page),
+                         [page + f'council-{i}' for i in range(4)])
+        foreign_base = b'<base href="https://outside.example/"><a href="council">Council</a>'
+        self.assertEqual(module.portrait_navigation(foreign_base, page), [])
+
+    def test_portrait_collection_requires_named_unique_same_host_source_and_original_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, name = 'us-co-county-08051', 'Alex Example'
+                page = 'https://town.example.org/council'
+                image_url = 'https://town.example.org/portraits/alex.jpg'
+                body = b'<img alt="Councilmember Alex Example" src="/portraits/alex.jpg">'
+                jpeg = b'\xff\xd8\xfforiginal'
+                module.archive(root, [(receipt(page, body), body)])
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://town.example.org/', module.utcnow(), '{}'))
+                people = {name}
+                with patch.object(module, 'get', return_value=[(receipt(image_url, jpeg), jpeg)]) as fetch:
+                    count = module.collect_labeled_portraits(root, db, ref, people, 'town.example.org', None,
+                                                              module.DownloadBudget(10_000), page, body)
+                self.assertEqual(count, 1)
+                self.assertEqual(people, set())
+                fetch.assert_called_once()
+                result = module.checked_portrait(root, db, module.observation_keys(root), ref, name, root / 'assets')
+                self.assertEqual(result['sha256'], module.sha(jpeg))
+                self.assertEqual((root / 'assets' / (module.sha(jpeg) + '.jpg')).read_bytes(), jpeg)
+                for unsafe in [
+                    body + body,
+                    b'<base href="https://outside.example/"><img alt="Councilmember Alex Example" src="alex.jpg">',
+                    b'<img alt="Councilmember Alex Example" src="https://outside.example/alex.jpg">',
+                    b'<img alt="Councilmember Other Example" src="/portraits/alex.jpg">',
+                ]:
+                    with patch.object(module, 'get') as rejected:
+                        self.assertEqual(module.collect_labeled_portraits(root, db, ref, {name}, 'town.example.org',
+                                                                         None, module.DownloadBudget(10_000), page, unsafe), 0)
+                    rejected.assert_not_called()
+            finally:
+                db.close()
 
     def test_budget_portrait_requires_source_receipt_and_exact_portal_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
