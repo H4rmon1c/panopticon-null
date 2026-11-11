@@ -12,7 +12,7 @@ no relevant decision exists.
 
 1. Seed municipality websites from the existing Colorado Municipal League
    directory and county sites from an archived county-clerks directory. Visit
-   bounded pages on each site, find linked official meeting portals and
+   up to six prioritized same-host navigation pages on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of

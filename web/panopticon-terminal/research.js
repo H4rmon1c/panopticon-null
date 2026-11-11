@@ -75,6 +75,7 @@ function render(report) {
             if (portrait.source_kind === 'embedded_pdf') {
               const portraitProof = node('details', 'proof');
               portraitProof.append(node('summary', '', 'Portrait capture details'));
+              portraitProof.append(node('p', 'meta', portrait.caption));
               portraitProof.append(node('p', 'meta', `Original portrait embedded on source page ${portrait.source_page}.`));
               portraitProof.append(node('p', 'meta digest', `Source SHA-256 ${portrait.source_document_sha256}`));
               detail.append(portraitProof);

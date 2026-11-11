@@ -243,6 +243,35 @@ class ResearchTests(unittest.TestCase):
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
 
+    def test_discovery_prioritizes_same_host_agendas_with_a_bounded_probe(self):
+        page = 'https://town.example.org/'
+        links = [('/council', 'Council'), ('/commission', 'Commission'), ('/meetings', 'Meetings'),
+                 ('/minutes', 'Minutes'), ('/agendas', 'Agenda packets'), ('/legislation', 'Legislation'),
+                 ('/more-council', 'More council'), ('https://evil.example.org/agenda', 'Agenda'),
+                 ('http://town.example.org/agenda', 'Agenda'), ('https://[broken', 'Agenda'), ('/minutes', 'Minutes')]
+        targets = module.discovery_targets(links, page)
+        self.assertEqual(targets[:3], ['https://town.example.org/minutes', 'https://town.example.org/agendas',
+                                       'https://town.example.org/AgendaCenter'])
+        self.assertEqual(len(targets), 6)
+        self.assertEqual(len(set(targets)), len(targets))
+        self.assertTrue(all(url.startswith('https://town.example.org/') for url in targets))
+        self.assertEqual(module.discovery_targets([('/AgendaCenter', 'Agendas')], page),
+                         ['https://town.example.org/AgendaCenter'])
+
+    def test_discovery_skips_malformed_links_without_losing_the_site(self):
+        home = 'https://town.example.org/'
+        body = b'<a href="https://[broken">Agenda</a><a href="/minutes">Minutes</a>'
+        def page(url, *_args, **_kwargs):
+            meta = receipt(url, body)
+            meta['content_type'] = 'text/html'
+            return [(meta, body)]
+        robots = receipt('https://town.example.org/robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), \
+             patch.object(module, 'get', side_effect=page):
+            result, _ = module.discover_one('us-co-county-08051', 'Fixture', home, module.DownloadBudget(10_000_000))
+        self.assertEqual(result['state'], 'directory_site_checked')
+        self.assertGreaterEqual(result['pages_checked'], 1)
+
     def test_word_extraction_rejects_entities_and_ignores_deleted_text(self):
         xml = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                b'<w:body><w:p><w:r><w:t>Flock Safety</w:t></w:r><w:del><w:r><w:t> deleted</w:t></w:r></w:del>'

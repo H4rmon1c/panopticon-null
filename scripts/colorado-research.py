@@ -443,6 +443,33 @@ def candidate_kind(url, index_url, label):
     return None
 
 
+def discovery_targets(links, page):
+    """Prioritize bounded same-host agenda and meeting navigation."""
+    host = urlsplit(page).hostname
+    ranked = []
+    for ordinal, (href, label) in enumerate(links):
+        try:
+            target = urljoin(page, href)
+            item = urlsplit(target)
+            if (item.scheme != 'https' or item.hostname != host or item.port not in (None, 443)
+                    or item.username or item.password or item.fragment or len(target) > 2000):
+                continue
+            context = label + ' ' + item.path
+            if not re.search(r'agenda|meeting|council|commission|minutes|legislat', context, re.I):
+                continue
+            priority = 0 if re.search(r'agenda|minutes', context, re.I) else (
+                1 if re.search(r'meeting', context, re.I) else 2 if re.search(r'legislat', context, re.I) else 3)
+            ranked.append((priority, ordinal, target))
+        except ValueError:
+            continue
+    ordered = list(dict.fromkeys(target for _, _, target in sorted(ranked)))
+    # CivicPlus frequently renders navigation in JavaScript. Probe its
+    # standard index, but let explicit agenda links take precedence.
+    if not any('/agendacenter' in urlsplit(item).path.lower() for item in ordered):
+        ordered.insert(min(2, len(ordered)), f'https://{host}/AgendaCenter')
+    return ordered[:6]
+
+
 def discover_one(ref, name, website, budget):
     observations = []
     result = {'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
@@ -476,14 +503,13 @@ def discover_one(ref, name, website, budget):
             return meta['url'], body
 
         final_home, body = page_for(home)
-        host = urlsplit(final_home).hostname
         candidates = [(final_home, body)]
         followed = set()
         for page, content in candidates:
             links = parse_links(content)
             for ordinal, (href, label) in enumerate(links):
-                target = urljoin(page, href)
                 try:
+                    target = urljoin(page, href)
                     url = urlsplit(target)
                     shape = candidate_kind(target, page, label)
                     if shape and len(result['documents']) < 500:
@@ -504,23 +530,7 @@ def discover_one(ref, name, website, budget):
                     continue
             if page != final_home:
                 continue
-            ranked = []
-            for href, label in links:
-                target = urljoin(page, href)
-                try:
-                    item = urlsplit(target)
-                    if (item.scheme != 'https' or item.hostname != host or item.port not in (None, 443)
-                            or item.username or item.password or item.fragment or len(target) > 2000):
-                        continue
-                    if re.search(r'agenda|meeting|council|commission|minutes|legislat', label + ' ' + item.path, re.I):
-                        ranked.append(target)
-                except ValueError:
-                    continue
-            # A bounded same-host probe covers the standard CivicPlus index
-            # when navigation is rendered by JavaScript and has no anchor.
-            if not any('/agendacenter' in urlsplit(item).path.lower() for item in ranked):
-                ranked.insert(0, f'https://{host}/AgendaCenter')
-            for target in list(dict.fromkeys(ranked))[:3]:
+            for target in discovery_targets(links, page):
                 if target in followed:
                     continue
                 followed.add(target)
