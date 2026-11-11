@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('context_research', ROOT / 'scripts/colorado-research.py')
 r = importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
 c = r.official_context
+sync_spec = importlib.util.spec_from_file_location('context_sync', ROOT / 'scripts/sync-colorado-context-allowlist.py')
+sync_module = importlib.util.module_from_spec(sync_spec); sync_spec.loader.exec_module(sync_module)
 
 class ContextTests(unittest.TestCase):
     def setUp(self):
@@ -46,6 +48,30 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(record['jurisdiction_ref'], self.seed['jurisdiction_ref'])
         self.assertNotIn('actions', record); self.assertNotIn('people_context', record)
         self.assertEqual(record['locator'], 'HTML text node 1')
+    def test_compiled_allowlist_matches_each_current_seed(self):
+        # Registry is patched in setUp; restore the canonical seed for this check.
+        seed = dict(self.seed)
+        seed['context_sha256'] = 'd6ccfbbfb2b950fdf607e5663e16b448312a3ee11203dd522ec01b5e87980ed3'
+        with patch.dict(c.SEEDS, {self.name: seed}):
+            source = sync_module.API.read_text()
+            self.assertEqual(sync_module.sync(source, c.SEEDS), source)
+            rows = sync_module.allowlist(c.SEEDS)
+            self.assertEqual(len(rows), len(c.SEEDS))
+            for name, entry in c.SEEDS.items():
+                self.assertEqual(rows['co-official-context-' + name], [entry['jurisdiction_ref'], entry['jurisdiction'],
+                                 entry['url'], entry['title'], entry['signals']])
+            changed = source.replace('Sterling police describe their body-worn camera program.', 'Other claim.')
+            self.assertNotEqual(sync_module.sync(changed, c.SEEDS), changed)
+        with self.assertRaises(ValueError): sync_module.sync('no generated markers', c.SEEDS)
+        with self.assertRaises(ValueError): sync_module.sync(sync_module.BEGIN + sync_module.BEGIN + sync_module.END, c.SEEDS)
+    def test_registry_compiler_rejects_unsafe_source_bindings(self):
+        for changed in ({'jurisdiction_ref':'us-co-county-08031'}, {'jurisdiction_ref':'us-co-place-0820000'},
+                        {'jurisdiction':'Other City'}, {'url':'https://gov.example@evil.example/a'},
+                        {'url':'http://sterlingcolo.com/a'}, {'url':'https://sterlingcolo.com/a#f'},
+                        {'context_sha256':'not-a-digest'}, {'signals':['']}, {'combined_start':''},
+                        {'title':'Approved\ncontract'}):
+            with self.subTest(changed=changed):
+                with self.assertRaises(ValueError): sync_module.allowlist({'example': {**self.seed, **changed}})
     def test_bad_receipt_or_agency_website_rejected(self):
         self.receipt['url'] = 'https://evil.example/context'
         with self.assertRaises(ValueError): self.result()

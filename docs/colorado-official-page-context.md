@@ -39,3 +39,19 @@ The public validator keeps an explicit allowlist of official context records.
 External `pnull-research-v1` consumers that copy that strict allowlist must
 update it before accepting snapshots containing the Sterling reference. The
 research page versions both JavaScript modules together when this list changes.
+
+The source-reviewed seed registry in `scripts/colorado_official_context.py` is
+the single source for the public identity allowlist. After adding or changing a
+seed, run `python3 scripts/sync-colorado-context-allowlist.py --write` and
+include the generated `research-api.js` change. Running the script without
+`--write` checks for drift; the context test suite also checks it. This tool
+only compiles explicitly configured source bindings. It does not evaluate
+whether a proposed statement identifies an agency or approves publication.
+That binding must be established from preserved evidence, including
+adversarial tests. The normal capture and withdrawal checks still apply.
+
+The v1 per-record identity allowlist remains strict. A client with an older
+copied allowlist will reject a newly added ID, even if the JSON shape remains
+unchanged; ship browser modules together and notify external integrators.
+Automatic statewide publishing requires a separately versioned API and a
+source-validation design that gives consumers a verifiable trust boundary.

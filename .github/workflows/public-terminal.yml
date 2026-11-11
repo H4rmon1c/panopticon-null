@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 scripts/test-colorado-research.py
           python3 scripts/test-colorado-official-context.py
+          python3 scripts/sync-colorado-context-allowlist.py
           python3 scripts/test-colorado-cisc-2018-members.py
           python3 scripts/test-colorado-county-root-recon.py
           python3 scripts/test-colorado-large-pdf-private.py
