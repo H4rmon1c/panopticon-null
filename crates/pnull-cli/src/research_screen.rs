@@ -152,6 +152,7 @@ pub(super) fn screen_pdf(
             "extracted_sha256": text_digest, "rules_digest": rule_digest,
             "extraction_status": result.record.extraction_status,
             "ocr_page_set_validated": result.record.extraction_status == ExtractionStatus::CompleteWithOcr,
+            "ocr_page_text_mapping_version": if result.record.extraction_status == ExtractionStatus::CompleteWithOcr { 2 } else { 0 },
             "finding": finding,
         }))?
     );

@@ -72,6 +72,8 @@ jobs:
           python3 deploy/selfhost/test-worklist-schedules.py
       - name: Test bounded private candidate queue schedule
         run: bash deploy/selfhost/test-candidate-queue.sh
+      - name: Test locked preliminary research schedule
+        run: python3 deploy/selfhost/test-research-schedule.py
       - name: Verify fixed official archive profiles
         run: python3 deploy/selfhost/test-archive-profiles.py
       - name: Test exact Colorado source review batch

@@ -16,6 +16,7 @@ binary="${PNUL_BIN:-/usr/local/bin/pnull}"
 [[ "$binary" == /* && -x "$binary" && ! -L "$binary" ]] || { echo 'pnull binary missing or unsafe' >&2; exit 1; }
 status=0
 python3 scripts/colorado-research.py --data-dir "$data" discover --limit 320 --workers 8 || status=1
+python3 scripts/colorado-research.py --data-dir "$data" civic-history --limit 20 --per-place 4 --workers 8 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" scan --max-clients 100 --pages 10 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" actions --limit 100 || status=1
 python3 scripts/colorado-research.py --data-dir "$data" agendasuite --limit 60 --pages 3 || status=1

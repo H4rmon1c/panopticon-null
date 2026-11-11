@@ -3,8 +3,11 @@
 import importlib.util
 import io
 import json
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import threading
 from types import SimpleNamespace
@@ -91,10 +94,16 @@ class ResearchTests(unittest.TestCase):
                     for number, state in enumerate(['no_match', 'no_match', 'error', 'pending']):
                         db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
                                       VALUES (?,?,?,?,?)''', (ref, f'https://example.org/{number}.pdf', '{}', state, '2026-11-11T00:00:00+00:00'))
+                    db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
+                               (ref, 'example.org', 1, 2025, '{}', module.utcnow(), 'ok', None, '{}'))
+                    db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
+                               (ref, 'example.org', 2, 2025, '{}', module.utcnow(), 'error', 'timeout', None))
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
                 self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 1))
+                self.assertEqual(attempt['historical_index_pages_checked'], 1)
+                self.assertEqual(attempt['historical_index_errors'], 1)
                 self.assertIsNone(attempt['lookback_period'])
             finally:
                 db.close()
@@ -284,6 +293,154 @@ class ResearchTests(unittest.TestCase):
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
 
+    def test_civic_year_selectors_accept_only_bounded_numeric_values(self):
+        body = (b'<a href="javascript:changeYear(2025, 1, \'a1\')">2025</a>'
+                b'<a href="javascript:changeYear(2025, 1, \'a1\')">duplicate</a>'
+                b'<a href="javascript:changeYear(2024, 9, \'a2\');alert(1)">bad</a>'
+                b'<a href="javascript:changeYear(1999, 9, \'a2\')">old</a>'
+                b'<a href="javascript:changeYear(2026, 9, \'a2\')">current</a>')
+        self.assertEqual(module.civic_year_selectors(body, 2026), [(2025, 1, 0)])
+
+    def test_civic_history_binds_official_index_and_queues_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                year = datetime.now(timezone.utc).year - 1
+                page = 'https://town.example.org/AgendaCenter'
+                selector = f'<a href="javascript:changeYear({year}, 1, \'a1\')">{year}</a>'.encode()
+                observed = receipt(page, selector)
+                observed['content_type'] = 'text/html'
+                module.archive(root, [(observed, selector)])
+                candidate = {'index_url': page, 'index_sha256': module.sha(selector)}
+                entry = {'state': 'directory_site_checked', 'documents': [candidate]}
+                db.execute('INSERT INTO discovery VALUES (?,?,?,?)', ('us-co-place-0810105', 'https://town.example.org/', module.utcnow(), json.dumps(entry)))
+                db.commit()
+                calls = []
+
+                def fetch(url, *_args, **_kwargs):
+                    calls.append(url)
+                    body = (f'<a href="/AgendaCenter/ViewFile/Minutes/_0128{year}-1883">Minutes</a>'
+                            f'<a href="/AgendaCenter/ViewFile/Minutes/_0128{year-1}-1884">Wrong year</a>').encode()
+                    metadata = receipt(url, body)
+                    metadata['content_type'] = 'text/html'
+                    return [(metadata, body)]
+
+                with patch.object(module, 'get_robots', return_value=(None, [])), patch.object(module, 'get', side_effect=fetch):
+                    module.civic_history(root, db, 5, 5, 1)
+                    module.civic_history(root, db, 5, 5, 1)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(parse_qs(urlsplit(calls[0]).query)['year'], [str(year)])
+                row = db.execute('SELECT url,candidate_json,state FROM document_candidates').fetchone()
+                self.assertEqual(row[2], 'pending')
+                self.assertEqual(db.execute('SELECT count(*) FROM document_candidates').fetchone()[0], 1)
+                module.checked_document_candidate(root, row[0], json.loads(row[1]))
+                self.assertEqual(db.execute('SELECT state FROM civic_history_checks').fetchone()[0], 'ok')
+                db.execute('DELETE FROM civic_history_checks')
+                db.execute('DELETE FROM document_candidates')
+                db.commit()
+                with patch.object(module, 'get_robots', return_value=(None, [])), \
+                     patch.object(module, 'get', side_effect=module.BudgetExhausted('job budget exhausted')):
+                    module.civic_history(root, db, 5, 5, 1)
+                self.assertEqual(db.execute('SELECT count(*) FROM civic_history_checks').fetchone()[0], 0)
+            finally:
+                db.close()
+
+    def test_civic_history_rotates_places_and_respects_robots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                year = datetime.now(timezone.utc).year - 1
+                for ref, host in [('us-co-county-08001', 'a.example.org'), ('us-co-county-08003', 'b.example.org')]:
+                    page = f'https://{host}/AgendaCenter'
+                    body = f'<a href="javascript:changeYear({year}, 1, \'a1\')">{year}</a>'.encode()
+                    metadata = receipt(page, body)
+                    metadata['content_type'] = 'text/html'
+                    module.archive(root, [(metadata, body)])
+                    entry = {'state': 'directory_site_checked', 'documents': [{'index_url': page, 'index_sha256': module.sha(body)}]}
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, f'https://{host}/', module.utcnow(), json.dumps(entry)))
+                db.commit()
+                calls = []
+
+                def fetch(url, *_args, **_kwargs):
+                    calls.append(urlsplit(url).hostname)
+                    metadata = receipt(url, b'<p>No entries</p>')
+                    metadata['content_type'] = 'text/html'
+                    return [(metadata, b'<p>No entries</p>')]
+
+                with patch.object(module, 'get_robots', return_value=(None, [])), patch.object(module, 'get', side_effect=fetch):
+                    module.civic_history(root, db, 1, 1, 1)
+                    module.civic_history(root, db, 1, 1, 1)
+                self.assertEqual(calls, ['a.example.org', 'b.example.org'])
+                db.execute('DELETE FROM civic_history_checks')
+                db.commit()
+                denied = SimpleNamespace(can_fetch=lambda *_args: False)
+                with patch.object(module, 'get_robots', return_value=(denied, [])), patch.object(module, 'get') as fetch_mock:
+                    module.civic_history(root, db, 2, 1, 2)
+                fetch_mock.assert_not_called()
+                self.assertEqual(db.execute("SELECT count(*) FROM civic_history_checks WHERE state='error'").fetchone()[0], 2)
+                self.assertEqual(db.execute('SELECT count(*) FROM document_candidates').fetchone()[0], 0)
+            finally:
+                db.close()
+
+    def test_deferred_document_is_not_reported_as_a_completed_screen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                url = 'https://town.example.org/agenda.pdf'
+                db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                              VALUES (?,?,?,'pending',?)''', ('us-co-county-08001', url, json.dumps({'url': url}), module.utcnow()))
+                db.commit()
+                output = io.StringIO()
+                with patch.object(module, 'screen_one', return_value=({'state': 'deferred'}, [])), redirect_stdout(output):
+                    module.screen_documents(root, db, sys.executable, 1, 1, 1)
+                self.assertIn('completed screens 0; errors 0; deferred 1', output.getvalue())
+                self.assertEqual(db.execute('SELECT state FROM document_candidates').fetchone()[0], 'pending')
+            finally:
+                db.close()
+
+    def test_civic_history_waits_for_an_overfull_document_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                              VALUES (?,?,?,'pending',?)''', ('us-co-county-08001', 'https://example.org/agenda.pdf', '{}', module.utcnow()))
+                db.commit()
+                output = io.StringIO()
+                with patch.object(module, 'get') as fetch, redirect_stdout(output):
+                    module.civic_history(root, db, 2, 1, 1, pending_cap=1)
+                fetch.assert_not_called()
+                self.assertIn('document queue has 1 pending', output.getvalue())
+            finally:
+                db.close()
+
+    def test_civic_history_rejects_a_foreign_or_unobserved_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                year = datetime.now(timezone.utc).year - 1
+                page = 'https://foreign.example.org/AgendaCenter'
+                body = f'<a href="javascript:changeYear({year}, 1, \'a1\')">year</a>'.encode()
+                module.archive(root, [(receipt(page, body), body)])
+                entry = {'state': 'directory_site_checked', 'documents': [{'index_url': page, 'index_sha256': module.sha(body)}]}
+                db.execute('INSERT INTO discovery VALUES (?,?,?,?)', ('us-co-county-08001', 'https://town.example.org/', module.utcnow(), json.dumps(entry)))
+                db.commit()
+                with patch.object(module, 'get_robots') as robots, patch.object(module, 'get') as fetch:
+                    module.civic_history(root, db, 2, 1, 1)
+                    entry['documents'][0]['index_url'] = 'https://town.example.org/AgendaCenter'
+                    db.execute('UPDATE discovery SET result_json=?', (json.dumps(entry),))
+                    db.commit()
+                    module.civic_history(root, db, 2, 1, 1)
+                robots.assert_not_called()
+                fetch.assert_not_called()
+                self.assertEqual(db.execute('SELECT count(*) FROM civic_history_checks').fetchone()[0], 0)
+            finally:
+                db.close()
+
     def test_discovery_prioritizes_same_host_agendas_with_a_bounded_probe(self):
         page = 'https://town.example.org/'
         links = [('/council', 'Council'), ('/commission', 'Commission'), ('/meetings', 'Meetings'),
@@ -379,6 +536,14 @@ class ResearchTests(unittest.TestCase):
         self.assertIn('Flock', title)
         self.assertNotIn('123 Main', module.public_text('Contract at 123 Main Street'))
         self.assertNotIn('jane@example.org', module.public_text('Email jane@example.org'))
+        self.assertNotIn('Example', module.reference_title('Example v. Flock Group, Inc.', ['Flock Safety']))
+        lines = ['Citizen Comments', 'Jane Example suggested facial recognition.',
+                 'Approval of the previous minutes', 'A camera policy was considered.']
+        self.assertTrue(module.public_comment_context(lines, 2))
+        self.assertFalse(module.public_comment_context(lines, 4))
+        title = module.reference_title(lines[1], ['Facial recognition'], module.public_comment_context(lines, 2))
+        self.assertNotIn('Jane Example', title)
+        self.assertIn('Facial recognition', title)
 
     def test_document_signal_labels_must_occur_at_the_cited_line(self):
         ids = ['vendor.flock-safety', 'vendor.axon']
@@ -504,6 +669,22 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_ocr_worker_without_corrected_page_mapping_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            url = 'https://example.org/agenda.pdf'
+            pdf = b'%PDF-scan'
+            observed = receipt(url, pdf)
+            output = {'state': 'no_match', 'document_sha256': module.sha(pdf),
+                      'extraction_status': 'complete_with_ocr', 'ocr_page_set_validated': True}
+            execution = SimpleNamespace(returncode=0, stderr=b'', stdout=json.dumps(output).encode())
+            with patch.object(module, 'source_blob', return_value=pdf), patch.object(module.subprocess, 'run', return_value=execution):
+                with self.assertRaisesRegex(ValueError, 'per-page text mapping'):
+                    module.extract_captured_pdf(root, 'us-co-county-08051', {'url': url}, '/bin/true', observed, True)
+                output['ocr_page_text_mapping_version'] = 2
+                execution.stdout = json.dumps(output).encode()
+                self.assertEqual(module.extract_captured_pdf(root, 'us-co-county-08051', {'url': url}, '/bin/true', observed, True)['state'], 'no_match')
+
     def test_older_ocr_no_match_is_not_counted_until_page_set_is_revalidated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -515,7 +696,7 @@ class ResearchTests(unittest.TestCase):
                 page_obs, pdf_obs = receipt(index, page), receipt(url, pdf)
                 module.archive(root, [(page_obs, page), (pdf_obs, pdf)])
                 candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
-                old = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'receipt': pdf_obs}
+                old = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'ocr_page_set_validated': True, 'receipt': pdf_obs}
                 newer_pdf = b'%PDF-a-newer-version'
                 newer_obs = receipt(url, newer_pdf)
                 newer_obs['retrieved_at'] = '2026-11-11T00:05:00+00:00'
@@ -528,12 +709,20 @@ class ResearchTests(unittest.TestCase):
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'error': 1})
-                result = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'ocr_page_set_validated': True}
+                self.assertEqual(json.loads(output.read_text())['coverage']['ocr_revalidation_pending'], 1)
+                db.execute("UPDATE document_candidates SET updated_at='2020-01-01T00:00:00+00:00',last_attempt_at=NULL")
+                db.commit()
+                with patch.object(module, 'screen_one') as refresh:
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1, refresh_existing=True)
+                refresh.assert_not_called()
+                result = {'state': 'no_match', 'extraction_status': 'complete_with_ocr', 'ocr_page_set_validated': True,
+                          'ocr_page_text_mapping_version': 2}
                 with patch.object(module, 'extract_captured_pdf', return_value=result) as extract, patch.object(module, 'get', side_effect=AssertionError('no network')):
                     module.ocr_saved_documents(root, db, '/bin/true', 1, 1, revalidate=True)
                 self.assertEqual(extract.call_args.args[4]['sha256'], module.sha(pdf))
                 module.export_report(root, db, output)
                 self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'no_match': 1})
+                self.assertEqual(json.loads(output.read_text())['coverage']['ocr_revalidation_pending'], 0)
                 self.assertEqual(db.execute('SELECT count(*) FROM ocr_history').fetchone()[0], 1)
                 old['state'] = 'matched'
                 db.execute('UPDATE document_candidates SET state=?,result_json=?', ('matched', json.dumps(old)))
@@ -805,7 +994,14 @@ class ResearchTests(unittest.TestCase):
                 db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
                 db.commit()
                 module.export_report(root, db, output)
-                self.assertEqual(len(json.loads(output.read_text())['records']), 1)
+                self.assertEqual(json.loads(output.read_text())['records'], [])
+                result['ocr_page_text_mapping_version'] = 2
+                db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
+                db.commit()
+                module.export_report(root, db, output)
+                ocr_record = json.loads(output.read_text())['records'][0]
+                self.assertEqual(ocr_record['title'], 'Possible Flock Safety reference in a public record.')
+                self.assertEqual(ocr_record['people_context'], [])
                 result['finding']['citations'][0]['quote'] = 'Flock was approved'
                 db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))
                 db.commit()
@@ -839,6 +1035,39 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(len(archived), 1)
                 self.assertTrue(archived[0]['historical'])
                 self.assertEqual(db.execute('SELECT count(*) FROM document_history').fetchone()[0], 1)
+            finally:
+                db.close()
+
+    def test_public_comment_name_is_not_repeated_in_document_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                pdf = b'%PDF-comment'
+                page_obs, pdf_obs = receipt(index, page), receipt(url, pdf)
+                module.archive(root, [(page_obs, page), (pdf_obs, pdf)])
+                text = b'Citizen Comments\nJane Example suggested facial recognition.\n'
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                result = {'state': 'matched', 'receipt': pdf_obs, 'document_sha256': module.sha(pdf),
+                          'extracted_sha256': module.sha(text), 'evidence_id': 'evidence:comment',
+                          'finding': {'evidence_id': 'evidence:comment', 'matched_rule_ids': ['technology.facial-recognition'],
+                                      'citations': [{'evidence_id': 'evidence:comment', 'locator': {'kind': 'line', 'start': 2},
+                                                     'quote': 'Jane Example suggested facial recognition.'}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, url, json.dumps(candidate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertNotIn('Jane Example', output.read_text())
+                self.assertEqual(report['records'][0]['people_context'], [])
             finally:
                 db.close()
 

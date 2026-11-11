@@ -90,6 +90,12 @@ def root_store(path):
         jurisdiction_ref TEXT PRIMARY KEY, attempted_at TEXT NOT NULL,
         state TEXT NOT NULL, error TEXT
       );
+      CREATE TABLE IF NOT EXISTS civic_history_checks (
+        jurisdiction_ref TEXT NOT NULL, host TEXT NOT NULL, category INTEGER NOT NULL,
+        year INTEGER NOT NULL, selector_json TEXT NOT NULL, attempted_at TEXT NOT NULL,
+        state TEXT NOT NULL, error TEXT, receipt_json TEXT,
+        PRIMARY KEY(jurisdiction_ref,host,category,year)
+      );
       CREATE TABLE IF NOT EXISTS portals (
         jurisdiction_ref TEXT NOT NULL, client TEXT NOT NULL, proof_json TEXT NOT NULL,
         PRIMARY KEY(jurisdiction_ref,client)
@@ -1031,6 +1037,9 @@ def extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr):
     if (result.get('state') not in ('matched', 'no_match')
             or result.get('document_sha256') != receipt['sha256']):
         raise ValueError('screening output does not match the archived PDF')
+    if (result.get('extraction_status') == 'complete_with_ocr'
+            and (result.get('ocr_page_set_validated') is not True or result.get('ocr_page_text_mapping_version') != 2)):
+        raise ValueError('OCR worker has not validated per-page text mapping')
     result['receipt'] = receipt
     result['candidate'] = candidate
     return result
@@ -1093,7 +1102,10 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     if retry_errors:
         condition, parameters = "state='error' AND (last_attempt_at IS NULL OR last_attempt_at<=?)", (day_ago,)
     elif refresh_existing:
-        condition, parameters = "state IN ('matched','no_match') AND updated_at<=? AND (last_attempt_at IS NULL OR last_attempt_at<=?)", (week_ago, day_ago)
+        condition, parameters = ("state IN ('matched','no_match') AND updated_at<=? AND (last_attempt_at IS NULL OR last_attempt_at<=?) "
+                                 "AND NOT (COALESCE(json_extract(result_json,'$.extraction_status'),'')='complete_with_ocr' "
+                                 "AND (COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1 "
+                                 "OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2))"), (week_ago, day_ago)
     else:
         condition, parameters = "state='pending'", ()
     rows = db.execute(f'''
@@ -1113,6 +1125,12 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     print(f'Screening up to {len(rows)} official agenda/minutes documents across '
           f'{len({ref for ref, _, _ in rows})} jurisdictions', flush=True)
     started = time.monotonic()
+    completed = errors = deferred = 0
+
+    def progress(finished, total):
+        print(f'Document jobs {finished}/{total}; completed screens {completed}; '
+              f'errors {errors}; deferred {deferred}; elapsed {int(time.monotonic()-started)}s', flush=True)
+
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = {pool.submit(screen_one, data_dir, ref, json.loads(raw), binary,
                             locks[urlsplit(json.loads(raw)['url']).hostname], budget, ocr, robots_cache): (ref, json.loads(raw), state)
@@ -1123,7 +1141,14 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
             if observations:
                 archive(data_dir, observations)
             if result['state'] == 'deferred':
+                deferred += 1
+                if count == len(jobs):
+                    progress(count, len(jobs))
                 continue
+            if result['state'] in ('matched', 'no_match'):
+                completed += 1
+            else:
+                errors += 1
             with db:
                 if old_state == 'matched' and result['state'] in ('matched', 'no_match'):
                     previous = db.execute('SELECT candidate_json,result_json,updated_at FROM document_candidates WHERE jurisdiction_ref=? AND url=?',
@@ -1144,9 +1169,152 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
                                (result['state'], result['state'], json.dumps(result), utcnow(), utcnow(),
                                 result.get('error'), ref, candidate['url']))
             if count % 10 == 0 or count == len(jobs):
-                matched = db.execute("SELECT count(*) FROM document_candidates WHERE state='matched'").fetchone()[0]
-                print(f'Documents screened {count}/{len(jobs)}; matched {matched}; '
-                      f'elapsed {int(time.monotonic()-started)}s', flush=True)
+                progress(count, len(jobs))
+
+
+def civic_year_selectors(body, current_year):
+    """Read bounded year/category values without evaluating portal JavaScript."""
+    pattern = re.compile(r'''javascript:changeYear\(\s*(\d{4})\s*,\s*(\d{1,6})\s*,\s*['"]a\d+['"]\s*\);?''', re.I)
+    found = {}
+    for ordinal, (href, _label) in enumerate(parse_links(body)):
+        match = pattern.fullmatch(href.strip()) if isinstance(href, str) else None
+        if not match:
+            continue
+        year, category = map(int, match.groups())
+        if 2000 <= year < current_year and 0 < category <= 999999:
+            found.setdefault((year, category), ordinal)
+    return [(year, category, ordinal) for (year, category), ordinal in found.items()]
+
+
+def civic_history(data_dir, db, limit, per_place, workers, only=None, pending_cap=1000):
+    """Discover older CivicPlus records from captured, official year selectors."""
+    pending = db.execute("SELECT count(*) FROM document_candidates WHERE state='pending'").fetchone()[0]
+    if pending >= pending_cap:
+        print(f'Historical discovery deferred: document queue has {pending} pending', flush=True)
+        return
+    receipts = observation_keys(data_dir)
+    attempts = {(ref, host, category, year): (at, state) for ref, host, category, year, at, state in
+                db.execute('SELECT jurisdiction_ref,host,category,year,attempted_at,state FROM civic_history_checks')}
+    now = datetime.now(timezone.utc)
+    choices = {}
+    for ref, directory, raw in db.execute('SELECT jurisdiction_ref,source_url,result_json FROM discovery'):
+        if only and ref != only:
+            continue
+        try:
+            entry = json.loads(raw)
+            if entry.get('state') != 'directory_site_checked':
+                continue
+            directory_host = urlsplit(normalized_home(directory)).hostname.removeprefix('www.')
+            indexes = {}
+            for document in entry.get('documents', []):
+                page, digest = document['index_url'], document['index_sha256']
+                parsed = urlsplit(page)
+                if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+                        or parsed.port not in (None, 443) or parsed.query or parsed.fragment
+                        or parsed.path.rstrip('/').lower() != '/agendacenter'
+                        or parsed.hostname.removeprefix('www.') != directory_host or (page, digest) not in receipts):
+                    continue
+                indexes[(page, digest)] = parsed.hostname
+            for (page, digest), host in indexes.items():
+                for year, category, ordinal in civic_year_selectors(source_blob(data_dir, digest), now.year):
+                    key = (ref, host, category, year)
+                    at, state = attempts.get(key, ('', ''))
+                    cutoff = now - (timedelta(days=1) if state == 'error' else timedelta(days=7))
+                    if at and datetime.fromisoformat(at) > cutoff:
+                        continue
+                    choices.setdefault(key, {'jurisdiction_ref': ref, 'host': host, 'year': year, 'category': category,
+                                             'selector_url': page, 'selector_sha256': digest, 'selector_anchor': ordinal,
+                                             'last_attempt': at})
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            continue
+    by_place = {}
+    for item in choices.values():
+        by_place.setdefault(item['jurisdiction_ref'], []).append(item)
+    for items in by_place.values():
+        items.sort(key=lambda item: (item['last_attempt'], -item['year'], item['category'], item['host']))
+    selected = []
+    latest_by_place = dict(db.execute('SELECT jurisdiction_ref,max(attempted_at) FROM civic_history_checks GROUP BY jurisdiction_ref'))
+    place_order = sorted(by_place, key=lambda ref: (latest_by_place.get(ref, ''), ref))
+    for turn in range(per_place):
+        for ref in place_order:
+            if turn < len(by_place[ref]) and len(selected) < limit:
+                selected.append(by_place[ref][turn])
+    print(f'Checking {len(selected)} older CivicPlus indexes across {len({x["jurisdiction_ref"] for x in selected})} jurisdictions', flush=True)
+    budget = DownloadBudget(150 * 1024 * 1024)
+    locks = {item['host']: threading.Lock() for item in selected}
+    robots_cache = {}
+    checked = errors = deferred = 0
+
+    def progress(finished, total):
+        pending = db.execute("SELECT count(*) FROM document_candidates WHERE state='pending'").fetchone()[0]
+        print(f'Historical index jobs {finished}/{total}; checked {checked}; errors {errors}; '
+              f'deferred {deferred}; pending documents {pending}', flush=True)
+
+    def fetch(item):
+        observations = []
+        try:
+            host = item['host']
+            query = urlencode({'year': item['year'], 'catID': item['category'], 'startDate': '',
+                               'endDate': '', 'term': '', 'prevVersionScreen': 'false'})
+            url = f'https://{host}/AgendaCenter/UpdateCategoryList?{query}'
+            with locks[host]:
+                if host not in robots_cache:
+                    rules, robots = get_robots(host, budget=budget)
+                    robots_cache[host] = rules
+                    observations.extend(robots)
+                rules = robots_cache[host]
+                body, rows = html_page(url, host, rules, budget)
+                observations.extend(rows)
+            meta = rows[-1][0]
+            documents = []
+            for ordinal, (href, label) in enumerate(parse_links(body)):
+                try:
+                    target = urljoin(url, href)
+                    shape = candidate_kind(target, url, label)
+                    if shape and shape[1] and not shape[1].startswith(f"{item['year']}-"):
+                        continue
+                    if shape and len(documents) < 500:
+                        documents.append({'url': target, 'index_url': url, 'index_sha256': sha(body),
+                                          'anchor_index': ordinal, 'kind': shape[0], 'meeting_date': shape[1],
+                                          'label': ' '.join(label.split())[:160]})
+                except (TypeError, ValueError):
+                    continue
+            return {'state': 'ok', 'receipt': meta, 'documents': documents}, observations
+        except BudgetExhausted:
+            return {'state': 'deferred'}, observations
+        except RobotsDenied as error:
+            observations.extend(error.observations)
+            return {'state': 'error', 'error': str(error)[:180]}, observations
+        except (OSError, UnicodeError, ValueError, RuntimeError) as error:
+            return {'state': 'error', 'error': str(error)[:180]}, observations
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        jobs = {pool.submit(fetch, item): item for item in selected}
+        for count, job in enumerate(as_completed(jobs), 1):
+            item = jobs[job]
+            result, observations = job.result()
+            if observations:
+                archive(data_dir, observations)
+            if result['state'] == 'deferred':
+                deferred += 1
+                if count == len(jobs):
+                    progress(count, len(jobs))
+                continue
+            if result['state'] == 'ok':
+                checked += 1
+            else:
+                errors += 1
+            ref = item['jurisdiction_ref']
+            selector = {key: item[key] for key in ('selector_url', 'selector_sha256', 'selector_anchor')}
+            with db:
+                db.execute('INSERT OR REPLACE INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
+                           (ref, item['host'], item['category'], item['year'], json.dumps(selector), utcnow(),
+                            result['state'], result.get('error'), json.dumps(result['receipt']) if result.get('receipt') else None))
+                for document in result.get('documents', []):
+                    db.execute('''INSERT OR IGNORE INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                  VALUES (?,?,?,'pending',?)''', (ref, document['url'], json.dumps(document), utcnow()))
+            if count % 10 == 0 or count == len(jobs):
+                progress(count, len(jobs))
 
 
 def saved_receipts(data_dir, wanted):
@@ -1183,7 +1351,8 @@ def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=
         raise ValueError('pnull binary must be an absolute path to an existing file')
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     condition = ("d.state IN ('matched','no_match') AND json_extract(d.result_json,'$.extraction_status')='complete_with_ocr' "
-                 "AND COALESCE(json_extract(d.result_json,'$.ocr_page_set_validated'),0)!=1") if revalidate else (
+                 "AND (COALESCE(json_extract(d.result_json,'$.ocr_page_set_validated'),0)!=1 "
+                 "OR COALESCE(json_extract(d.result_json,'$.ocr_page_text_mapping_version'),0)!=2)") if revalidate else (
                  "d.state='error' AND d.result_json LIKE '%scanned_pdf_ocr_disabled%' "
                  "AND (o.attempted_at IS NULL OR o.attempted_at<=? "
                  "OR (? AND (lower(o.status) LIKE '%could not initialize tesseract%' OR lower(o.status) LIKE '%sandbox_output%')) "
@@ -1398,10 +1567,23 @@ def public_text(value, limit=400):
     return ' '.join(value.split())[:limit]
 
 
-def reference_title(value, labels):
-    if re.search(r'\b(?:Mr|Mrs|Ms)\.|\b(?:resident|citizen|complainant|victim|juvenile|applicant|petitioner)\b|^\s*\d+\.\s+[A-Z][a-z]+\s+[A-Z][a-z]+\s*[-–—]', value, re.I):
+def reference_title(value, labels, private_context=False):
+    if private_context or re.search(r'\b(?:Mr|Mrs|Ms|v|vs)\.|\b(?:resident|citizen|complainant|victim|juvenile|applicant|petitioner)\b|^\s*\d+\.\s+[A-Z][a-z]+\s+[A-Z][a-z]+\s*[-–—]', value, re.I):
         return 'Possible ' + ', '.join(labels) + ' reference in a public record.'
     return public_text(value)
+
+
+def public_comment_context(lines, number):
+    """Avoid repeating speaker names from a nearby public-comment section."""
+    for line in reversed(lines[max(0, number - 16):number]):
+        heading = re.sub(r'^\s*(?:\d+[.)]|[A-Za-z][.)])\s*', '', line).strip()
+        if len(heading) > 120:
+            continue
+        if re.match(r'^(?:public|citizen|resident|community|audience)(?:s|\u2019s|\'s)?\s+(?:[a-z]+\s+){0,3}comments?\b', heading, re.I):
+            return True
+        if re.match(r'^(?:approval of|adjournment|new business|old business|consent agenda|ordinances|resolutions|staff reports)\b', heading, re.I):
+            return False
+    return False
 
 
 def jurisdiction_name(item):
@@ -1567,6 +1749,10 @@ def collect_portraits(data_dir, db, limit):
     for ref, raw in db.execute("SELECT jurisdiction_ref,result_json FROM document_candidates WHERE state='matched'"):
         try:
             result = json.loads(raw)
+            # OCR currently flattens an entire page into one line; it cannot
+            # establish that a named official is near a particular reference.
+            if result.get('extraction_status') == 'complete_with_ocr':
+                continue
             digest = result['extracted_sha256']
             if not re.fullmatch(r'[0-9a-f]{64}', digest):
                 continue
@@ -2040,7 +2226,8 @@ def export_report(data_dir, db, output, assets_dir=None):
             if ref not in geography:
                 raise ValueError('unknown geography')
             result = json.loads(result_raw)
-            if result.get('extraction_status') == 'complete_with_ocr' and result.get('ocr_page_set_validated') is not True:
+            if (result.get('extraction_status') == 'complete_with_ocr' and
+                    (result.get('ocr_page_set_validated') is not True or result.get('ocr_page_text_mapping_version') != 2)):
                 raise ValueError('OCR page set has not been validated')
             if result.get('document_format') == 'docx' and result.get('docx_deleted_text_excluded') is not True:
                 raise ValueError('Word document deleted text has not been excluded')
@@ -2092,8 +2279,10 @@ def export_report(data_dir, db, output, assets_dir=None):
             seen_documents.add(key)
             quote = citation['quote']
             # A public comment can contain a private person's name or address.
-            title = reference_title(quote, labels)
-            people = officials_near_reference(lines, number)
+            private_context = public_comment_context(lines, number)
+            ocr_page = result.get('extraction_status') == 'complete_with_ocr'
+            title = reference_title(quote, labels, private_context or ocr_page)
+            people = [] if private_context or ocr_page else officials_near_reference(lines, number)
             for person in people:
                 try:
                     portrait = checked_portrait(data_dir, db, receipts, ref, person['name'], assets_dir)
@@ -2134,7 +2323,8 @@ def export_report(data_dir, db, output, assets_dir=None):
     records.sort(key=lambda item: (item['jurisdiction'], item['id']))
     reported_state = """CASE WHEN state IN ('matched','no_match') AND (
         (json_extract(result_json,'$.extraction_status')='complete_with_ocr'
-         AND COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1)
+         AND (COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1
+              OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2))
         OR (json_extract(result_json,'$.document_format')='docx'
          AND COALESCE(json_extract(result_json,'$.docx_deleted_text_excluded'),0)!=1))
         THEN 'error' ELSE state END"""
@@ -2142,10 +2332,18 @@ def export_report(data_dir, db, output, assets_dir=None):
     document_counts = {}
     for ref, state, count in db.execute(f'SELECT jurisdiction_ref,{reported_state} AS reported,count(*) FROM document_candidates GROUP BY jurisdiction_ref,reported'):
         document_counts.setdefault(ref, {})[state] = count
+    ocr_rechecks = dict(db.execute('''SELECT jurisdiction_ref,count(*) FROM document_candidates
+        WHERE state IN ('matched','no_match') AND json_extract(result_json,'$.extraction_status')='complete_with_ocr'
+        AND (COALESCE(json_extract(result_json,'$.ocr_page_set_validated'),0)!=1
+             OR COALESCE(json_extract(result_json,'$.ocr_page_text_mapping_version'),0)!=2)
+        GROUP BY jurisdiction_ref'''))
     portal_counts = Counter()
     for client, count in db.execute('SELECT client,count(*) FROM scans GROUP BY client'):
         if client in clients:
             portal_counts[clients[client]] += count
+    history_counts = {}
+    for ref, state, count in db.execute('SELECT jurisdiction_ref,state,count(*) FROM civic_history_checks GROUP BY jurisdiction_ref,state'):
+        history_counts.setdefault(ref, {})[state] = count
     suite_screened = db.execute("SELECT count(*) FROM suite_meetings WHERE state IN ('matched','no_match')").fetchone()[0]
     attempts = []
     for ref, checked, raw, attempted, attempt_state in db.execute('''SELECT d.jurisdiction_ref,d.checked_at,
@@ -2164,7 +2362,10 @@ def export_report(data_dir, db, output, assets_dir=None):
                              'website_check': 'site_checked' if (attempt_state or entry['state']) == 'directory_site_checked' else 'unavailable',
                              'documents_screened': counts.get('matched', 0) + counts.get('no_match', 0),
                              'documents_failed': counts.get('error', 0), 'documents_queued': counts.get('pending', 0),
+                             'ocr_revalidation_pending': ocr_rechecks.get(ref, 0),
                              'portal_pages_checked': portal_counts[ref],
+                             'historical_index_pages_checked': history_counts.get(ref, {}).get('ok', 0),
+                             'historical_index_errors': history_counts.get(ref, {}).get('error', 0),
                              'agenda_meeting_pages_screened': suite_screened if ref == SUITE_REF else 0,
                              'lookback_period': None})
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
@@ -2180,6 +2381,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                            'recorded_actions': sum(len(x.get('actions', [])) for x in records),
                            'recorded_vote_entries': sum(len(motion['votes']) for x in records for motion in x.get('actions', [])),
                            'document_screening': status,
+                           'ocr_revalidation_pending': sum(ocr_rechecks.values()),
                            'refresh_failures_preserving_prior_results': db.execute("SELECT count(*) FROM document_candidates WHERE state IN ('matched','no_match') AND last_error IS NOT NULL").fetchone()[0],
                            'non_surveillance_mentions_withheld': non_surveillance_withheld,
                            'omitted_failed_provenance': omitted}, 'records': records}
@@ -2219,6 +2421,12 @@ def main():
     d.add_argument('--refresh', action='store_true')
     d.add_argument('--only-usable', action='store_true', help='revisit sites with a prior accessible index')
     d.add_argument('--only-failed', action='store_true', help='retry sites that previously failed')
+    history = subs.add_parser('civic-history')
+    history.add_argument('--limit', type=int, default=100)
+    history.add_argument('--per-place', type=int, default=4)
+    history.add_argument('--workers', type=int, default=8)
+    history.add_argument('--pending-cap', type=int, default=1000, help='pause discovery when the document queue reaches this size')
+    history.add_argument('--jurisdiction', help='one previously discovered Colorado jurisdiction')
     s = subs.add_parser('scan')
     s.add_argument('--max-clients', type=int, default=100)
     s.add_argument('--pages', type=int, default=10)
@@ -2256,6 +2464,10 @@ def main():
     args = parser.parse_args()
     if args.command == 'discover' and not (1 <= args.limit <= 500 and 1 <= args.workers <= 12):
         parser.error('discovery bounds exceeded')
+    if args.command == 'civic-history' and not (1 <= args.limit <= 200 and 1 <= args.per_place <= 20 and 1 <= args.workers <= 8
+            and 100 <= args.pending_cap <= 10000
+            and (args.jurisdiction is None or re.fullmatch(r'us-co-(?:place|county)-[0-9]{5,7}', args.jurisdiction))):
+        parser.error('historical index bounds exceeded')
     if args.command == 'scan' and not (1 <= args.max_clients <= 500 and 1 <= args.pages <= 100 and 1 <= args.page_size <= 100):
         parser.error('scan bounds exceeded')
     if args.command == 'actions' and not 1 <= args.limit <= 200:
@@ -2266,7 +2478,7 @@ def main():
         parser.error('document screening bounds exceeded')
     if args.command == 'screen-documents' and args.retry_errors and args.refresh_existing:
         parser.error('choose either error retries or existing-document refreshes')
-    if args.command == 'ocr-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 4):
+    if args.command == 'ocr-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 8):
         parser.error('saved OCR bounds exceeded')
     if args.command == 'ocr-saved' and args.revalidate_ocr and (args.retry_unavailable or args.retry_previous_limit):
         parser.error('choose OCR revalidation or a retry mode')
@@ -2281,6 +2493,8 @@ def main():
             require_storage_headroom(args.data_dir)
         if args.command == 'discover':
             discover(args.data_dir, db, args.limit, args.workers, args.refresh, args.only_usable, args.only_failed)
+        elif args.command == 'civic-history':
+            civic_history(args.data_dir, db, args.limit, args.per_place, args.workers, args.jurisdiction, args.pending_cap)
         elif args.command == 'scan':
             scan(args.data_dir, db, args.max_clients, args.pages, args.page_size, args.client)
         elif args.command == 'actions':

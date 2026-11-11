@@ -16,6 +16,12 @@ no relevant decision exists.
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
    Document links may contain encoded spaces; other encoded path sequences are
    left out of the queue to avoid ambiguous separators, traversal, and controls.
+   For captured CivicPlus agenda indexes, the collector also reads published
+   year/category selectors without executing their JavaScript and requests a
+   bounded number of older official indexes. It rotates between jurisdictions,
+   retains the selector and index receipts, and queues linked meeting documents.
+   It pauses new historical discovery when 1,000 documents are already queued;
+   one in-flight index batch may add more before the next check.
 2. Prefer linked government documents. For linked Legistar installations, use
    its public API as an additional matter-title index. Query a bounded number of
    pages for configured vendor and technology terms. A title match is a lead,
@@ -34,7 +40,9 @@ no relevant decision exists.
    rules. Failures remain errors; they are never counted as no-match results.
    OCR retries render one page at a time, cover at most 20 pages per document,
    and are marked as OCR when exported. Every expected page must render and
-   complete extraction; a partial scan cannot become a no-match result. DOCX files are
+   complete extraction; a partial scan cannot become a no-match result. Because
+   OCR text is currently flattened by page, its public reference uses a generic
+   title and does not attach nearby names as if they were tied to the item. DOCX files are
    parsed in a separate network-isolated sandbox with ZIP, XML, memory, CPU,
    and output limits; embedded links and files are never followed.
    A bare “Flock” mention is labeled as an unresolved identity unless the
@@ -97,6 +105,7 @@ with Poppler and bubblewrap available on its runtime path. For example:
 
 ```console
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research discover --limit 320 --workers 8
+python3 scripts/colorado-research.py --data-dir /private/panopticon-research civic-history --limit 100 --per-place 4 --workers 8
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research scan --max-clients 100 --pages 10
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research actions --limit 100
 python3 scripts/colorado-research.py --data-dir /private/panopticon-research agendasuite --limit 60 --pages 3
@@ -117,9 +126,11 @@ Only that validated read-only directory is passed into the sandbox.
 Use `--retry-previous-limit` to reconsider documents rejected by the former
 five-page OCR limit. The scheduled research job uses this option; documents
 over the current 20-page cap remain errors, not no-match conclusions.
-The `--revalidate-ocr` mode rechecks earlier OCR results that lack a validated
-complete page set; until then, they count as errors rather than completed
-screens. `docx-saved --revalidate-docx` similarly rechecks older Word
+The `--revalidate-ocr` mode rechecks earlier OCR results that lack the current
+per-page text-mapping version. Earlier workers could render every page but
+discard words after the first page, so even their old page-set flag is not
+sufficient. Until rechecked, these results count as errors rather than completed
+screens and cannot create a public match. `docx-saved --revalidate-docx` similarly rechecks older Word
 extractions that did not establish that deleted text was excluded. The earlier
 result remains in private history.
 Do not run collectors concurrently against the same hosts:

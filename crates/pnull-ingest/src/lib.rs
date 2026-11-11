@@ -21,7 +21,7 @@ use pnull_core::{
 };
 use pnull_geometry::{
     COORDINATE_SYSTEM, PageSpec, build_page_citation, find_occurrences, normalized_range,
-    parse_ocr_tsv, validate_text_map,
+    parse_single_image_ocr_tsv, validate_text_map,
 };
 use pnull_http::{
     FetchConfig, FetchRequest, PriorEvidence, Resolver, Transport, provenance_fetch_detailed,
@@ -949,7 +949,7 @@ fn ocr_pdf(
             "",
             "",
         );
-        let map = parse_ocr_tsv(&tsv_content, &spec, image_dims.0, image_dims.1)
+        let map = parse_single_image_ocr_tsv(&tsv_content, &spec, image_dims.0, image_dims.1)
             .map_err(|e| ("ocr_geometry", e.to_string()))?;
         let page_text = map
             .words
