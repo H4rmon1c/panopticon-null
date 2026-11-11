@@ -217,6 +217,8 @@ impl Sandbox for BubblewrapSandbox {
             .arg("/dev")
             .arg("--proc")
             .arg("/proc")
+            .arg("--size")
+            .arg(self.config.max_file_size_bytes.to_string())
             .arg("--tmpfs")
             .arg("/tmp")
             .arg("--unshare-net")
@@ -381,11 +383,29 @@ impl Sandbox for FakeSandbox {
 }
 
 fn bind_readonly_runtime(command: &mut Command) {
-    for directory in ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/nix"] {
-        if Path::new(directory).exists() {
-            command.arg("--ro-bind").arg(directory).arg(directory);
+    command.arg("--tmpfs").arg("/etc");
+    for path in readonly_runtime_paths() {
+        if Path::new(path).exists() {
+            command.arg("--ro-bind").arg(path).arg(path);
         }
     }
+    command.arg("--remount-ro").arg("/etc");
+}
+
+fn readonly_runtime_paths() -> &'static [&'static str] {
+    // Read-only is not a confidentiality boundary: mounting all of /etc
+    // exposes any service-readable credentials to a compromised extractor.
+    // Font configuration and the dynamic linker cache are the only required
+    // /etc inputs. Likewise expose immutable Nix packages, not its state.
+    &[
+        "/usr",
+        "/bin",
+        "/lib",
+        "/lib64",
+        "/etc/fonts",
+        "/etc/ld.so.cache",
+        "/nix/store",
+    ]
 }
 
 /// Rewrites sandboxed argument paths: staged inputs become `/work-ro/<name>`
@@ -421,8 +441,7 @@ fn read_limited(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SandboxError> {
 }
 
 /// Sanitizes captured stderr for operator display: bounds it to `max_bytes`
-/// (by character, not byte, to stay within the limit after UTF-8 lossy
-/// decoding), trims surrounding whitespace, and strips control characters so
+/// after UTF-8 lossy decoding, trims surrounding whitespace, and strips control characters so
 /// terminal escape sequences and other non-printable bytes never reach a
 /// terminal or log.
 fn sanitize_stderr(bytes: &[u8], max_bytes: u64) -> String {
@@ -430,10 +449,13 @@ fn sanitize_stderr(bytes: &[u8], max_bytes: u64) -> String {
     let mut cleaned: String = String::new();
     for ch in lossy.chars() {
         if ch == '\n' || ch == '\t' || !ch.is_control() {
+            // len() is constant-time and counts UTF-8 bytes. Counting chars
+            // on each iteration made attacker-controlled stderr quadratic
+            // work in the host process after sandbox CPU limits had ended.
+            if cleaned.len() as u64 + ch.len_utf8() as u64 > max_bytes {
+                break;
+            }
             cleaned.push(ch);
-        }
-        if cleaned.chars().count() as u64 >= max_bytes {
-            break;
         }
     }
     cleaned.trim().to_owned()
@@ -478,6 +500,30 @@ mod tests {
 
     fn fake() -> FakeSandbox {
         FakeSandbox::new(SandboxConfig::defaults()).expect("fake sandbox")
+    }
+
+    #[test]
+    fn stderr_sanitization_is_byte_bounded_after_lossy_decode() {
+        assert_eq!(sanitize_stderr(b"abc", 0), "");
+        assert_eq!(sanitize_stderr(b"abcdef", 3), "abc");
+        assert_eq!(sanitize_stderr("éé".as_bytes(), 3), "é");
+        assert_eq!(sanitize_stderr(&[0xff; 10], 5), "\u{fffd}");
+        assert_eq!(sanitize_stderr(b"\x1b\x00 warning\r\n", 100), "warning");
+        let noisy = vec![b'x'; 5 * 1024 * 1024];
+        assert_eq!(sanitize_stderr(&noisy, 1024).len(), 1024);
+    }
+
+    #[test]
+    fn runtime_mounts_exclude_system_secrets_and_nix_state() {
+        let paths = readonly_runtime_paths();
+        assert!(!paths.contains(&"/etc"));
+        assert!(!paths.contains(&"/nix"));
+        assert!(
+            paths
+                .iter()
+                .filter(|path| path.starts_with("/etc/"))
+                .all(|path| { matches!(*path, "/etc/fonts" | "/etc/ld.so.cache") })
+        );
     }
 
     #[test]
@@ -642,6 +688,25 @@ mod tests {
             Duration::from_secs(10),
         );
         assert!(result.is_err(), "unrelated file must be unreachable");
+    }
+
+    #[test]
+    fn sandboxed_tool_cannot_read_host_etc_configuration() {
+        let Some(sandbox) = real_sandbox_available() else {
+            eprintln!("SKIP: bubblewrap unavailable");
+            return;
+        };
+        if !host_shell_available(&sandbox) {
+            eprintln!("SKIP: no host /bin/sh to bind");
+            return;
+        }
+        assert!(Path::new("/etc/passwd").exists(), "host fixture exists");
+        shell(
+            &sandbox,
+            "test ! -e /etc/passwd && test ! -e /etc/panopticon && test ! -e /nix/var",
+            Duration::from_secs(10),
+        )
+        .expect("host configuration must not be mounted");
     }
 
     #[test]

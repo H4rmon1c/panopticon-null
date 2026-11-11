@@ -16,6 +16,8 @@ export class PanopticonClient {
     this.preview = preview;
     this.mode = "connecting";
     this.snapshot = null;
+    this.loading = null;
+    this.updateCheck = null;
   }
 
   async bootstrap() {
@@ -67,17 +69,56 @@ export class PanopticonClient {
 
   async #loadSnapshot() {
     if (this.snapshot) return this.snapshot;
+    if (!this.loading) this.loading = this.#fetchSnapshot();
+    try {
+      this.snapshot = await this.loading;
+      return this.snapshot;
+    } finally { this.loading = null; }
+  }
+
+  async checkForUpdates() {
+    const current = await this.#loadSnapshot();
+    if (!this.updateCheck) this.updateCheck = this.#fetchSnapshot();
+    try {
+      const next = await this.updateCheck;
+      // Keep hydrated UI records and their evidence on one immutable version.
+      // The page reloads atomically when its release changes.
+      return snapshotRevision(current) !== snapshotRevision(next);
+    } finally { this.updateCheck = null; }
+  }
+
+  async #fetchSnapshot() {
     const response = await fetch(this.demo ? this.demoUrl : this.preview ? this.previewUrl : this.publicUrl, {
       headers: { Accept: "application/json" },
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`Unable to load ${this.demo ? "demo" : this.preview ? "private preview" : "released public"} snapshot (${response.status})`);
 
     const snapshot = await response.json();
     validateSnapshot(snapshot, { demo: this.demo, preview: this.preview });
-    this.snapshot = snapshot;
     return snapshot;
   }
+}
+
+function snapshotRevision(snapshot) {
+  return JSON.stringify([snapshot.release_review, snapshot.case_releases, snapshot.withdrawals,
+    snapshot.entities, snapshot.sources, snapshot.evidence]);
+}
+
+export function startSnapshotRefresh(client, { onChanged = () => location.reload(), onError = () => {} } = {}) {
+  if (client.demo || client.preview || new URLSearchParams(location.search).has("ci")) return () => {};
+  let checking = false;
+  const check = async () => {
+    if (checking || document.visibilityState === "hidden") return;
+    checking = true;
+    try { if (await client.checkForUpdates()) onChanged(); }
+    catch (error) { onError(error); }
+    finally { checking = false; }
+  };
+  const timer = setInterval(check, 60_000);
+  document.addEventListener("visibilitychange", check);
+  return () => { clearInterval(timer); document.removeEventListener("visibilitychange", check); };
 }
 
 function normalizeStatus(status = {}, snapshot = {}) {
@@ -257,6 +298,13 @@ export function validateSnapshot(snapshot, { demo = false, preview = false } = {
       if (!evidence.has(vote.evidence_id) || (!demo &&
           (!voter || voter.type !== "RECORDED_VOTER" || voter.name !== vote.name))) {
         throw new Error(`Entity ${entity.id} has a vote without evidence or a matching voter`);
+      }
+      if (!demo) {
+        const proof = evidence.get(vote.evidence_id);
+        const scalar = /^\$\[\d+\]\.VoteValueName$/.test(proof.locator) && proof.claim === vote.vote;
+        const composite = /^\$\[(\d+)\]\.VotePersonName; \$\[\1\]\.VoteValueName$/.test(proof.locator) &&
+          typeof proof.claim === "string" && proof.claim.startsWith(`${vote.name} recorded ${vote.vote} on `);
+        if (!scalar && !composite) throw new Error(`Entity ${entity.id} has a direct vote inconsistent with its cited value`);
       }
       if (!demo && vote.review_state !== (preview ? "PENDING_RELEASE" : "SOURCE_VERIFIED")) throw new Error(`Entity ${entity.id} has an invalid vote verification state`);
     }

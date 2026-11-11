@@ -1,9 +1,20 @@
 panopticon.fail {
     encode zstd gzip
 
-    # A private editorial preview must never be served from the public site.
-    handle /preview-snapshot.json {
+    @write_method not method GET HEAD
+    respond @write_method 405
+
+    @private path /preview-snapshot.json /.git/* /.env /pnull.db /evidence/* /records/* /fixtures/*
+    handle @private {
         respond 404
+    }
+
+    # This sanitized operational status stays writable even when publication fails.
+    handle /api/v1/health.json {
+        root * /srv/panopticon/status
+        rewrite * /health.json
+        header Cache-Control "no-store"
+        file_server
     }
 
     # Copy the validated static site and gated public snapshot together.
@@ -13,12 +24,16 @@ panopticon.fail {
     }
 
     header {
+        Strict-Transport-Security "max-age=31536000"
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
         Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
     }
 
-    @public_snapshot path /public/public-snapshot.json
+    @api path /api/v1/*
+    header @api Access-Control-Allow-Origin "*"
+
+    @public_snapshot path /public/public-snapshot.json /api/v1/alerts.json /api/v1/feed.json /api/v1/coverage.json
     header @public_snapshot Cache-Control "public, max-age=60, must-revalidate"
 }

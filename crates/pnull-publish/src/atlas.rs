@@ -2286,6 +2286,8 @@ mod tests {
                 .expect("checked-in release"),
         )
         .expect("release JSON");
+        let previous_case_count = base["case_releases"].as_array().expect("releases").len();
+        let previous_entity_count = base["entities"].as_array().expect("entities").len();
         let case_id = "co-record-test-proposal";
         let extra = json!({
             "schema_version":"pnull-public-snapshot-v1","demo":false,"preview":false,
@@ -2299,8 +2301,14 @@ mod tests {
             "evidence":[],"sources":[]
         });
         append_verified_proposal_snapshot(&mut base, &extra).expect("append");
-        assert_eq!(base["case_releases"].as_array().expect("releases").len(), 5);
-        assert_eq!(base["status"]["counts"]["entities"], 45);
+        assert_eq!(
+            base["case_releases"].as_array().expect("releases").len(),
+            previous_case_count + 1
+        );
+        assert_eq!(
+            base["status"]["counts"]["entities"],
+            previous_entity_count + 1
+        );
         assert!(
             base["entities"]
                 .as_array()

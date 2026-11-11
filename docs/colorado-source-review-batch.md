@@ -1,5 +1,12 @@
 # Colorado source review batch
 
+This packet is the historical November 10 attestation. The subsequent Castle
+Rock source-registry revision deliberately prevents replaying it against the
+current repository. Restore the already recorded, unexpired source reviews
+with the private release store; do not rewrite the original packet or its
+attestation to authorize changed bytes. Offline tests replay the historical
+context and separately verify that the revised registry is rejected.
+
 `deploy/selfhost/record-source-review-batch.py` records one approved source-policy
 decision across the 12 exact release-cited URLs in
 `docs/colorado-source-review-packet.json`. It does not fetch case endpoints,

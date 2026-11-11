@@ -1,5 +1,8 @@
 # Four-case Colorado static release
 
+Historical release record. The [current production release](colorado-production-release.md)
+adds Castle Rock after its preserved source revision was reconciled.
+
 The checked-in public snapshot contains Colorado Springs Ordinance 25-93,
 Commerce City Ordinances 2755 and 2756, and Denver Resolution 25-0413. Denver's
 motion **failed**; its 12 Nay and one Absent positions are not contract

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "source_id": "co-castle-rock-2025-detail",
+  "url": "https://castlerock-co.legistar.com/LegislationDetail.aspx?From=RSS&GUID=A667BD32-8DA2-4183-B796-C466D44BB3B3&ID=7420429",
+  "prior": {
+    "fixture": "fixtures/co-castlerock/res-2025-071-detail.html",
+    "sha256": "7ab7e31f16a7355cf45b15c881ca1d4680bec50f249b5d579ca7e6c5fb9f16f1"
+  },
+  "captured": {
+    "fixture": "fixtures/co-castlerock/res-2025-071-detail-captured-2026-11-10.html",
+    "sha256": "9b03f0ac93d31b109bd311c8afe5907ec18759e43cd6e3a45edaa0e10c608604",
+    "retrieved_at": "2026-11-10T22:31:51.820801281Z",
+    "fetch_receipt_id": "fetch:c10df1296e118d3d123988a8eb38ae00c70490d674020f3c91127ca1d805543e"
+  },
+  "reason": "Only ASP.NET hidden state values and WebResource cache timestamps changed. The document outside those values is byte-identical. Both original byte streams are retained.",
+  "release_dependency": "Historical supporting context only; every released claim is proved independently by the preserved event, matter and complete item roll-call JSON. Volatile HTML is excluded from required release citations."
+}

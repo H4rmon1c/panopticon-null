@@ -8,7 +8,7 @@ pub mod budget;
 pub mod sandbox;
 
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -44,6 +44,8 @@ pub const DEFAULT_MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_PDF_PAGES: u32 = 100;
 const MAX_OCR_PAGES: u32 = 5;
 const MAX_EXTRACTED_BYTES: usize = 5 * 1024 * 1024;
+const MAX_SANDBOX_TEXT_BYTES: usize = 20 * 1024 * 1024;
+const MAX_OCR_IMAGE_DIMENSION: u32 = 4000;
 const EXTRACT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug)]
@@ -974,14 +976,45 @@ fn ocr_pdf(
 fn image_dimensions(path: &Path) -> Result<(u32, u32), (&'static str, String)> {
     sandbox::require_regular_file_without_symlinks(path)
         .map_err(|error| ("sandbox_output", error.to_string()))?;
-    let image = image::open(path).map_err(|e| ("ocr_image", e.to_string()))?;
-    Ok((image.width(), image.height()))
+    // The extractor's output remains untrusted. Read only image metadata;
+    // decoding pixels here would move a decompression bomb outside the
+    // extractor's address-space and CPU limits.
+    let (width, height) =
+        image::image_dimensions(path).map_err(|e| ("ocr_image", e.to_string()))?;
+    if width == 0
+        || height == 0
+        || width > MAX_OCR_IMAGE_DIMENSION
+        || height > MAX_OCR_IMAGE_DIMENSION
+    {
+        return Err((
+            "ocr_image_limit",
+            "OCR image exceeds the renderer dimension limit".to_owned(),
+        ));
+    }
+    Ok((width, height))
 }
 
 fn read_sandbox_text_output(path: &Path) -> Result<String, (&'static str, String)> {
     sandbox::require_regular_file_without_symlinks(path)
         .map_err(|error| ("sandbox_output", error.to_string()))?;
-    fs::read_to_string(path).map_err(external_io)
+    let file = fs::File::open(path).map_err(external_io)?;
+    if file.metadata().map_err(external_io)?.len() > MAX_SANDBOX_TEXT_BYTES as u64 {
+        return Err((
+            "sandbox_output_limit",
+            "Extractor text output exceeds its byte limit".to_owned(),
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_SANDBOX_TEXT_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(external_io)?;
+    if bytes.len() > MAX_SANDBOX_TEXT_BYTES {
+        return Err((
+            "sandbox_output_limit",
+            "Extractor text output exceeds its byte limit".to_owned(),
+        ));
+    }
+    String::from_utf8(bytes).map_err(external_io)
 }
 
 fn require_sandbox_output_directory(path: &Path) -> Result<(), (&'static str, String)> {
@@ -1777,6 +1810,39 @@ mod tests {
     fn parser_limits_reject_excessive_pdf_metadata() {
         assert_eq!(parse_page_count("Pages: 101\nEncrypted: no"), Some(101));
         assert_eq!(parse_page_count("Pages: not-a-number"), None);
+    }
+
+    #[test]
+    fn extractor_text_is_bounded_before_host_parsing() {
+        let dir = tempdir().expect("output directory");
+        let path = dir.path().join("bbox.xml");
+        fs::write(&path, "normal text").expect("text");
+        assert_eq!(read_sandbox_text_output(&path).unwrap(), "normal text");
+        fs::File::create(&path)
+            .unwrap()
+            .set_len(MAX_SANDBOX_TEXT_BYTES as u64 + 1)
+            .unwrap();
+        assert_eq!(
+            read_sandbox_text_output(&path).unwrap_err().0,
+            "sandbox_output_limit"
+        );
+    }
+
+    #[test]
+    fn extractor_image_dimensions_are_checked_without_pixel_decoding() {
+        let dir = tempdir().expect("output directory");
+        let path = dir.path().join("page.png");
+        image::RgbImage::new(MAX_OCR_IMAGE_DIMENSION, 1)
+            .save(&path)
+            .unwrap();
+        assert_eq!(
+            image_dimensions(&path).unwrap(),
+            (MAX_OCR_IMAGE_DIMENSION, 1)
+        );
+        image::RgbImage::new(MAX_OCR_IMAGE_DIMENSION + 1, 1)
+            .save(&path)
+            .unwrap();
+        assert_eq!(image_dimensions(&path).unwrap_err().0, "ocr_image_limit");
     }
 
     #[test]

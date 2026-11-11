@@ -2989,7 +2989,10 @@ mod tests {
                 _ => unreachable!(),
             }
         }
-        assert_eq!(cited.len(), 12, "unexpected release source set");
+        // Castle Rock's volatile HTML is retained as reconciled historical
+        // context. Its event, matter and votes independently prove every fact.
+        assert_eq!(cited.len(), 11, "unexpected release source set");
+        assert!(!cited.contains("co-castle-rock-2025-detail"));
     }
 
     #[test]

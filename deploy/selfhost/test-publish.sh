@@ -26,6 +26,7 @@ cat > "$scratch/fake-pnull" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${PNUL_TEST_FAIL:-0}" != 1 ]] || exit 23
+if [[ -n "${PNUL_TEST_CALLS:-}" ]]; then printf '%s\n' "$*" >> "$PNUL_TEST_CALLS"; fi
 while (($#)); do
     if [[ "$1" == --output ]]; then
         shift
@@ -64,12 +65,12 @@ done
 [[ -f "$PNUL_CURRENT_LINK/decisions/co-commerce-city-ord-2756-2026-04-06.html" ]]
 grep -Fq 'This proposed amendment failed' "$PNUL_CURRENT_LINK/decisions/co-denver-25-0413-2025-05-05.html"
 for portrait in jason-gray ryan-hollingshead kevin-bracken mark-davis max-brooks tim-dietz laura-cavey; do
-    [[ ! -e "$PNUL_CURRENT_LINK/portraits/$portrait-original.jpg" ]]
+    [[ -f "$PNUL_CURRENT_LINK/portraits/$portrait-original.jpg" ]]
 done
 [[ -f "$PNUL_CURRENT_LINK/portraits/portraits.js" ]]
 [[ -f "$PNUL_CURRENT_LINK/portraits/lookup.js" ]]
 grep -q 'recorded_voter_co_commerce_city' "$PNUL_CURRENT_LINK/portraits/portraits.js"
-! grep -q 'recorded_voter_co_castle_rock' "$PNUL_CURRENT_LINK/portraits/portraits.js"
+grep -q 'recorded_voter_co_castle_rock' "$PNUL_CURRENT_LINK/portraits/portraits.js"
 [[ ! -e "$PNUL_CURRENT_LINK/fixtures" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/preview-snapshot.json" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/pnull.db" ]]
@@ -78,6 +79,28 @@ grep -q 'recorded_voter_co_commerce_city' "$PNUL_CURRENT_LINK/portraits/portrait
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/test-client.mjs" ]]
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/build-decision-pages.mjs" ]]
 first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
+[[ -f "$PNUL_CURRENT_LINK/api/v1/alerts.json" && -f "$PNUL_CURRENT_LINK/api/v1/feed.json" && -f "$PNUL_CURRENT_LINK/api/v1/coverage.json" ]]
+[[ ! -e "$PNUL_CURRENT_LINK/scripts/build-alert-api.mjs" ]]
+
+# Withdrawn rows are checked after the active set exists, and retain their CLI args.
+export PNUL_TEST_CALLS="$scratch/publish-calls"
+withdrawn_fixture=fixtures/atlas/preview-cases/arapahoe-county-24-633-2024-11-26.v2.json
+PNUL_WITHDRAWN_MANIFESTS="$withdrawn_fixture" "$script_dir/publish.sh"
+grep -Fq -- "--withdrawn-manifest $withdrawn_fixture" "$PNUL_TEST_CALLS"
+first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
+if PNUL_WITHDRAWN_MANIFESTS=fixtures/atlas/colorado-springs-25-93.v1.json "$script_dir/publish.sh"; then
+    echo "active and withdrawn manifest collision was accepted" >&2; exit 1
+fi
+[[ "$(readlink -f "$PNUL_CURRENT_LINK")" == "$first_release" ]]
+if PNUL_WITHDRAWN_MANIFESTS="$withdrawn_fixture $withdrawn_fixture" "$script_dir/publish.sh"; then
+    echo "duplicate withdrawal was accepted" >&2; exit 1
+fi
+[[ "$(readlink -f "$PNUL_CURRENT_LINK")" == "$first_release" ]]
+(
+    flock -n 7 || exit 1
+    if "$script_dir/publish.sh"; then echo "publication ran during collection" >&2; exit 1; fi
+) 7>"$PNUL_DATA_DIR/.collect.lock"
+[[ "$(readlink -f "$PNUL_CURRENT_LINK")" == "$first_release" ]]
 
 printf '%s\n' 'PRIVATE TOKEN' > "$scratch/source/web/panopticon-terminal/scripts/.env"
 printf '%s\n' 'PRIVATE DATABASE' > "$scratch/source/web/panopticon-terminal/public/pnull.db"
@@ -125,6 +148,37 @@ if "$script_dir/publish.sh"; then
 fi
 [[ "$(readlink -f "$PNUL_CURRENT_LINK")" == "$first_release" ]]
 mv -- "$scratch/castlerock-jason-gray-dom.json" "$scratch/source/fixtures/atlas/portrait-sources/castlerock-jason-gray-dom.json"
+
+# A real staged withdrawal must survive validators, API history, and another publish.
+node --input-type=module - "$PNUL_TEST_SNAPSHOT" "$scratch/withdrawal.json" "$scratch/silent.json" <<'JS'
+import {readFileSync, writeFileSync} from 'node:fs';
+const [source, withdrawn, silent] = process.argv.slice(2);
+const snapshot = JSON.parse(readFileSync(source));
+const caseId = 'co-castle-rock-res-2025-071-2025-06-03';
+const release = snapshot.case_releases.find(item => item.case_id === caseId);
+if (!release) throw new Error('withdrawal fixture is missing');
+snapshot.entities = snapshot.entities.filter(item => item.slug !== caseId);
+snapshot.case_releases = snapshot.case_releases.filter(item => item.case_id !== caseId);
+writeFileSync(silent, JSON.stringify(snapshot));
+snapshot.withdrawals = [{case_id:caseId,state:'withdrawn',bound_digest:release.release.bound_digest,review_id:'review:offline-shell-fixture',decided_at:new Date().toISOString()}];
+writeFileSync(withdrawn, JSON.stringify(snapshot));
+JS
+if PNUL_TEST_SNAPSHOT="$scratch/silent.json" "$script_dir/publish.sh"; then
+    echo "silent case disappearance unexpectedly published" >&2; exit 1
+fi
+[[ "$(readlink -f "$PNUL_CURRENT_LINK")" == "$first_release" ]]
+PNUL_TEST_SNAPSHOT="$scratch/withdrawal.json" "$script_dir/publish.sh"
+withdrawal_page="$PNUL_CURRENT_LINK/decisions/co-castle-rock-res-2025-071-2025-06-03.html"
+grep -Fq 'Record withdrawn pending correction' "$withdrawal_page"
+grep -Fq 'noindex' "$withdrawal_page"
+PNUL_TEST_SNAPSHOT="$scratch/silent.json" "$script_dir/publish.sh"
+grep -Fq 'Record withdrawn pending correction' "$withdrawal_page"
+node --input-type=module - "$PNUL_CURRENT_LINK/api/v1/alerts.json" <<'JS'
+import {readFileSync} from 'node:fs';
+const api=JSON.parse(readFileSync(process.argv[2]));
+if(api.records.find(item=>item.case_id==='co-castle-rock-res-2025-071-2025-06-03')?.state!=='withdrawn')throw new Error('withdrawal tombstone lost');
+JS
+first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 
 export PNUL_TEST_FAIL=1
 if "$script_dir/publish.sh"; then

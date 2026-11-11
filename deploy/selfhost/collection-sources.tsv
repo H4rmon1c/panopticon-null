@@ -1,7 +1,8 @@
 # Config path<TAB>source ID<TAB>adapter. Add a reviewed source per jurisdiction.
 # Official HTML calendars discover private meeting/document candidates. API
 # event feeds run only through the separate review-gated fallback matrix on failure.
-# Direct-document archive rows can be enabled after endpoint reviews are recorded.
+# Exact release endpoints below still require a current stored source review.
+# Calendar/procurement rows without reviews are skipped and reported degraded.
 configs/states/co.toml	colorado-springs-calendar	discover-calendar
 configs/states/co.toml	colorado-springs-contract-awards	procurement
 configs/states/co.toml	colorado-springs-solicitation-mirror	procurement
@@ -11,3 +12,17 @@ configs/states/co-castle-rock.toml	castle-rock-calendar	discover-calendar
 configs/states/co-arapahoe-county.toml	arapahoe-county-calendar	discover-calendar
 configs/states/co-douglas-county.toml	douglas-county-calendar	discover-calendar
 configs/states/co-littleton.toml	littleton-calendar	discover-calendar
+
+# Reviewed exact archive endpoints; no disallowed attachment URLs.
+configs/states/co-castle-rock-archive.toml	castle-rock-res2025-071-detail	archive
+configs/states/co-castle-rock-archive.toml	castle-rock-res2025-071-event-json	archive
+configs/states/co-castle-rock-archive.toml	castle-rock-res2025-071-matter-json	archive
+configs/states/co-castle-rock-archive.toml	castle-rock-res2025-071-votes-json	archive
+configs/states/co-commerce-archive.toml	commerce-ord2755-event-json	archive
+configs/states/co-commerce-archive.toml	commerce-ord2755-minutes	archive
+configs/states/co-commerce-archive.toml	commerce-ord2755-votes-json	archive
+configs/states/co-commerce-archive.toml	commerce-ord2756-votes-json	archive
+configs/states/co-denver-archive.toml	denver-25-0413-event-json	archive
+configs/states/co-denver-archive.toml	denver-25-0413-matter-json	archive
+configs/states/co-denver-archive.toml	denver-25-0413-minutes	archive
+configs/states/co-denver-archive.toml	denver-25-0413-votes-json	archive
