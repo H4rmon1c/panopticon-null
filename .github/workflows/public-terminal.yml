@@ -48,6 +48,7 @@ jobs:
           python3 scripts/test-colorado-district-tenants.py
           python3 scripts/test-colorado-tenant-followup.py
           python3 scripts/test-colorado-shared-districts.py
+          python3 scripts/test-colorado-shared-followup.py
           python3 scripts/test-colorado-eff-private-leads.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs

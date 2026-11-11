@@ -44,6 +44,87 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_springs_download_without_filename_keyword_requires_complete_original_source_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                origin = 'https://coloradosprings.gov/sites/default/files/parks_board_october_2022.draft_.pdf'
+                page = 'https://coloradosprings.gov/document/parksboardoctober2022.draft.pdf'
+                pdf = 'https://coloradosprings.gov/system/files/parks_board_october_2022.draft_.pdf'
+                index = 'https://coloradosprings.gov/parksboard'
+                source = f'<a href="{origin}">October 13, 2022 minutes</a>'.encode()
+                html = f'<a href="{pdf}">Download PDF</a>'.encode()
+                redirect = receipt(origin, b''); redirect.update(status=301, redirect_target=page)
+                module.archive(root, [(receipt(index, source), source), (receipt(page, html), html), (redirect, b'')])
+                candidate = {'url': origin, 'index_url': index, 'index_sha256': module.sha(source),
+                             'anchor_index': 0, 'kind': 'minutes', 'label': 'October 13, 2022 minutes'}
+                alternate = module.springs_page_candidate(candidate, page, html, redirect)
+                self.assertEqual(alternate['url'], pdf)
+                self.assertEqual(alternate['kind'], 'minutes')
+                self.assertEqual(alternate['springs_source']['index_sha256'], module.sha(source))
+                module.checked_document_candidate(root, pdf, alternate)
+                # The public record exposes the same verified original index,
+                # redirect receipt and landing-page evidence as the private chain.
+                doc, text = b'%PDF-test', b'Flock cameras were discussed.\n'
+                doc_receipt = receipt(pdf, doc)
+                module.archive(root, [(doc_receipt, doc)])
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                result = {'state': 'matched', 'receipt': doc_receipt, 'candidate': alternate,
+                          'document_sha256': module.sha(doc), 'extracted_sha256': module.sha(text),
+                          'evidence_id': 'evidence:test', 'finding': {'evidence_id': 'evidence:test',
+                          'matched_rule_ids': ['vendor.flock-safety'], 'citations': [{'evidence_id': 'evidence:test',
+                          'locator': {'kind': 'line', 'start': 1}, 'quote': 'Flock cameras were discussed.'}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', ('us-co-place-0816000',
+                               'https://coloradosprings.gov/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', ('us-co-place-0816000', pdf, json.dumps(alternate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                public = json.loads(output.read_text())['records'][0]['springs_source_chain']
+                self.assertEqual(public['original_index_url'], index)
+                self.assertEqual(public['original_index_sha256'], module.sha(source))
+                self.assertEqual(public['original_document_url'], origin)
+                self.assertEqual(public['landing_url'], page)
+                self.assertEqual(public['landing_sha256'], module.sha(html))
+                self.assertEqual(public['redirect_status'], 301)
+                self.assertEqual(public['redirect_receipt_sha256'], module.sha((json.dumps(redirect, sort_keys=True, separators=(',', ':')) + '\n').encode()))
+                # An unsafe current source must not suppress a separately
+                # verifiable historical source for the same PDF digest.
+                unsafe_index = index + '?token=private'
+                module.archive(root, [(receipt(unsafe_index, source), source)])
+                unsafe = {**alternate, 'springs_source': {**alternate['springs_source'], 'index_url': unsafe_index}}
+                unsafe_result = {**result, 'candidate': unsafe}
+                with db:
+                    db.execute('UPDATE document_candidates SET candidate_json=?, result_json=? WHERE url=?',
+                               (json.dumps(unsafe), json.dumps(unsafe_result), pdf))
+                    db.execute('INSERT INTO document_history VALUES (?,?,?,?,?,?,?)',
+                               ('us-co-place-0816000', pdf, module.sha(doc), json.dumps(alternate),
+                                json.dumps(result), module.utcnow(), module.utcnow()))
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertEqual(report['records'][0]['springs_source_chain']['original_index_url'], index)
+                self.assertTrue(report['records'][0]['historical'])
+                changes = [
+                    {'springs_source': {**alternate['springs_source'], 'url': origin.replace('october', 'january')}},
+                    {'springs_source': {**alternate['springs_source'], 'anchor_index': 99}},
+                    {'springs_source': {**alternate['springs_source'], 'index_sha256': '0' * 64}},
+                    {'springs_source': {**alternate['springs_source'], 'index_url': 'https://user@coloradosprings.gov/parksboard'}},
+                    {'springs_source': {**alternate['springs_source'], 'index_url': 'https://coloradosprings.gov:8443/parksboard'}},
+                    {'springs_source': {**alternate['springs_source'], 'redirect_receipt': {**redirect, 'status': 200}}},
+                    {'kind': 'agenda'},
+                    {'label': 'Unrelated claims'},
+                ]
+                for change in changes:
+                    with self.subTest(change=change), self.assertRaises((ValueError, OSError)):
+                        module.checked_document_candidate(root, pdf, {**alternate, **change})
+                result, _ = module.screen_one(root, 'us-co-place-0816495', alternate, '/bin/false',
+                                               __import__('threading').Lock(), module.DownloadBudget(50_000_000), False, {})
+                self.assertIn('outside the city', result['error'])
+            finally:
+                db.close()
     def test_explicit_immediate_redirect_retry_is_scoped_and_keeps_other_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); db = module.root_store(root)

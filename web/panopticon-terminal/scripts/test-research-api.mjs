@@ -6,6 +6,42 @@ import { matchesResearchQuery, readBoundedResearchResponse, validateResearch, va
 const original = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(original);
 
+test('Colorado Springs original index, redirect receipt, and landing chain remain source scoped', () => {
+  const report = copy();
+  const record = report.records.find((r) => r.kind === 'meeting_document');
+  assert.ok(record);
+  record.jurisdiction_ref = 'us-co-place-0816000';
+  record.source_url = 'https://coloradosprings.gov/system/files/parks_board_october_2022.draft_.pdf';
+  record.document_format = 'pdf';
+  delete record.capture_adjustment; delete record.indexed_source_url; delete record.source_index_url;
+  record.springs_source_chain = {
+    original_index_url: 'https://coloradosprings.gov/parksboard', original_index_sha256: 'a'.repeat(64),
+    original_anchor_index: 3,
+    original_document_url: 'https://coloradosprings.gov/sites/default/files/parks_board_october_2022.draft_.pdf',
+    redirect_status: 301, redirect_captured_at: '2026-11-11T12:00:00Z', redirect_receipt_sha256: 'b'.repeat(64),
+    landing_url: 'https://coloradosprings.gov/document/parksboardoctober2022.draft.pdf', landing_sha256: 'c'.repeat(64),
+    landing_anchor_index: 1,
+  };
+  report.coverage.jurisdictions_with_mentions = new Set(report.records.map((item) => item.jurisdiction_ref)).size;
+  assert.doesNotThrow(() => validateResearch(report));
+  for (const change of [
+    (r) => { r.jurisdiction_ref = 'us-co-place-0816495'; },
+    (r) => { r.springs_source_chain.original_index_url = 'https://other.example/parks'; },
+    (r) => { r.springs_source_chain.original_index_url += '?token=secret'; },
+    (r) => { r.springs_source_chain.original_document_url = 'https://coloradosprings.gov/sites/default/files/other.pdf'; },
+    (r) => { r.springs_source_chain.landing_url = 'https://coloradosprings.gov/document/other.pdf'; },
+    (r) => { r.springs_source_chain.redirect_receipt_sha256 = 'no'; },
+    (r) => { r.springs_source_chain.redirect_status = 200; },
+    (r) => { r.springs_source_chain.original_anchor_index = -1; },
+    (r) => { r.source_url = 'https://coloradosprings.gov/system/files/other.pdf'; },
+  ]) {
+    const changed = structuredClone(report);
+    const row = changed.records.find((r) => r.id === record.id);
+    change(row);
+    assert.throws(() => validateResearch(changed));
+  }
+});
+
 test('cross-agency portrait requires the exact authority, person and pinned source chain', () => {
   const report = copy();
   const record = report.records.find((r) => r.actions?.some((a) => a.votes.some((v) => v.person_id === 637 && v.name === 'Craig Machuga')));

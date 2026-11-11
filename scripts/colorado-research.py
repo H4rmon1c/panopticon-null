@@ -642,7 +642,7 @@ def springs_document_page(origin, target):
         return False
 
 
-def springs_page_candidate(candidate, landing_url, body):
+def springs_page_candidate(candidate, landing_url, body, redirect_receipt=None):
     """Rebind to the landing page's exact download anchor, not an inferred URL."""
     origin = candidate['url']
     if not springs_document_page(origin, landing_url):
@@ -655,10 +655,21 @@ def springs_page_candidate(candidate, landing_url, body):
         try:
             url = resolve_page_link(landing_url, base, href)
             kind = candidate_kind(url, landing_url, label) if url else None
-            if url == expected and ' '.join(label.split()) == 'Download PDF' and kind:
-                matches.append({'url': url, 'index_url': landing_url, 'index_sha256': sha(body),
-                                'anchor_index': ordinal, 'kind': kind[0],
-                                'meeting_date': candidate.get('meeting_date'), 'label': 'Download PDF'})
+            if url == expected and ' '.join(label.split()) == 'Download PDF':
+                if kind:
+                    matches.append({'url': url, 'index_url': landing_url, 'index_sha256': sha(body),
+                                    'anchor_index': ordinal, 'kind': kind[0],
+                                    'meeting_date': candidate.get('meeting_date'), 'label': 'Download PDF'})
+                elif redirect_receipt is not None:
+                    # The original index supplies the document category when
+                    # the city's filename and landing label do not contain it.
+                    matches.append({'url': url, 'index_url': landing_url, 'index_sha256': sha(body),
+                                    'anchor_index': ordinal, 'kind': candidate['kind'],
+                                    'meeting_date': candidate.get('meeting_date'), 'label': candidate.get('label', ''),
+                                    'springs_source': {'url': origin, 'index_url': candidate['index_url'],
+                                                       'index_sha256': candidate['index_sha256'],
+                                                       'anchor_index': candidate['anchor_index'],
+                                                       'redirect_receipt': redirect_receipt}})
         except ValueError:
             continue
     return matches[0] if len(matches) == 1 else None
@@ -1560,6 +1571,27 @@ def checked_document_candidate(data_dir, url, candidate):
     if candidate['url'] != url or type(anchor) is not int or not 0 <= anchor < len(links):
         raise ValueError('document is not bound to its preserved source index')
     linked = resolve_page_link(index_url, base, links[anchor][0])
+    source = candidate.get('springs_source')
+    if source is not None:
+        original_index = urlsplit(source['index_url']) if isinstance(source, dict) and 'index_url' in source else None
+        if (not isinstance(source, dict) or set(source) != {'url', 'index_url', 'index_sha256', 'anchor_index', 'redirect_receipt'}
+                or original_index.scheme != 'https' or original_index.hostname != 'coloradosprings.gov'
+                or original_index.port not in (None, 443) or original_index.username or original_index.password or original_index.fragment
+                or not springs_document_page(source['url'], index_url)
+                or not verified_redirect_receipt(data_dir, source['redirect_receipt'], source['url'], index_url)
+                or url != 'https://coloradosprings.gov/system' + urlsplit(source['url']).path.removeprefix('/sites/default')
+                or linked != url or ' '.join(links[anchor][1].split()) != 'Download PDF'):
+            raise ValueError('invalid Colorado Springs document source chain')
+        original, original_base = page_links(source_blob(data_dir, source['index_sha256']), source['index_url'])
+        old_anchor = source['anchor_index']
+        if type(old_anchor) is not int or not 0 <= old_anchor < len(original):
+            raise ValueError('invalid Colorado Springs source anchor')
+        old_link = resolve_page_link(source['index_url'], original_base, original[old_anchor][0])
+        old_kind = candidate_kind(old_link, source['index_url'], original[old_anchor][1]) if old_link else None
+        if (old_link != source['url'] or not old_kind or candidate.get('kind') != old_kind[0]
+                or candidate.get('label') != ' '.join(original[old_anchor][1].split())[:160]):
+            raise ValueError('Colorado Springs original index does not establish document kind')
+        return
     if not linked or not candidate_kind(linked, index_url, links[anchor][1]):
         raise ValueError('document is not bound to its preserved source index')
     if 'redirect_receipt' not in candidate:
@@ -1636,6 +1668,8 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
     try:
         url = candidate['url']
         checked_document_candidate(data_dir, url, candidate)
+        if candidate.get('springs_source') is not None and ref != 'us-co-place-0816000':
+            raise ValueError('Colorado Springs source chain is outside the city')
         parsed = urlsplit(url)
         host = parsed.hostname
         # Serialize calls for the same host, including its robots check.
@@ -1676,7 +1710,7 @@ def screen_one(data_dir, ref, candidate, binary, host_lock, budget, ocr, robots_
                     page_receipt, page = pages[-1]
                     budget.release_unused(reserved - len(page))
                     if page_receipt['status'] == 200 and 'html' in page_receipt.get('content_type', '').lower():
-                        alternate = springs_page_candidate(candidate, landing, page)
+                        alternate = springs_page_candidate(candidate, landing, page, receipt)
                         if alternate:
                             return {'state': 'error', 'error': 'source redirected; alternate document queued',
                                     'alternate_candidate': alternate}, observations
@@ -3672,6 +3706,10 @@ def export_report(data_dir, db, output, assets_dir=None):
                 raise ValueError('document receipt mismatch')
             if (candidate['index_url'], candidate['index_sha256']) not in receipts:
                 raise ValueError('missing captured index receipt')
+            springs_source = candidate.get('springs_source')
+            if springs_source is not None and (ref != 'us-co-place-0816000' or
+                    (springs_source['index_url'], springs_source['index_sha256']) not in receipts):
+                raise ValueError('missing Colorado Springs original index receipt')
             checked_document_candidate(data_dir, url, candidate)
             if urlsplit(candidate['index_url']).hostname.removeprefix('www.') not in discovery_hosts(data_dir, db, ref):
                 raise ValueError('document is not attached to its directory website lead')
@@ -3702,7 +3740,6 @@ def export_report(data_dir, db, output, assets_dir=None):
             key = (ref, doc_digest)
             if key in seen_documents:
                 continue
-            seen_documents.add(key)
             quote = citation['quote']
             # A public comment can contain a private person's name or address.
             school = geography[ref]['kind'] == 'school_district'
@@ -3734,11 +3771,25 @@ def export_report(data_dir, db, output, assets_dir=None):
             if 'redirect_receipt' in candidate:
                 record.update(capture_adjustment=candidate['capture_adjustment'],
                               indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
+            if springs_source is not None:
+                original_index = urlsplit(springs_source['index_url'])
+                if original_index.query and not re.fullmatch(r'page=[0-9]{1,5}', original_index.query):
+                    raise ValueError('Colorado Springs source index query is not public-safe')
+                redirect = springs_source['redirect_receipt']
+                receipt_bytes = (json.dumps(redirect, sort_keys=True, separators=(',', ':')) + '\n').encode()
+                record['springs_source_chain'] = {
+                    'original_index_url': springs_source['index_url'], 'original_index_sha256': springs_source['index_sha256'],
+                    'original_anchor_index': springs_source['anchor_index'], 'original_document_url': springs_source['url'],
+                    'redirect_status': redirect['status'], 'redirect_captured_at': redirect['retrieved_at'],
+                    'redirect_receipt_sha256': sha(receipt_bytes), 'landing_url': candidate['index_url'],
+                    'landing_sha256': candidate['index_sha256'], 'landing_anchor_index': candidate['anchor_index'],
+                }
             if not ocr_page and not school and not special:
                 highlights = document_highlights(lines, number, finding['matched_rule_ids'])
                 if highlights:
                     record['document_highlights'] = highlights
             records.append(record)
+            seen_documents.add(key)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             omitted += 1
             omission_reasons[str(error)[:100]] += 1
