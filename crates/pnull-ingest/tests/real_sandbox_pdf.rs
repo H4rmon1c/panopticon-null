@@ -10,6 +10,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use pnull_core::{ExtractionStatus, SourceType};
 use pnull_ingest::{
@@ -82,9 +83,21 @@ fn real_pdf_fixture_is_extracted_by_poppler_in_sandbox() {
 #[ignore = "requires real Bubblewrap, Poppler, and English Tesseract data outside the Nix derivation"]
 fn scanned_pdf_is_ocr_extracted_in_the_real_sandbox() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let bytes = fs::read(workspace.join("fixtures/pdf/scanned-surveillance-text.pdf"))
-        .expect("scanned PDF fixture");
     let dir = tempdir().expect("temporary directory");
+    let original = workspace.join("fixtures/pdf/scanned-surveillance-text.pdf");
+    let combined = dir.path().join("six-scanned-pages.pdf");
+    let mut builder = Command::new("pdfunite");
+    for _ in 0..6 {
+        builder.arg(&original);
+    }
+    assert!(
+        builder
+            .arg(&combined)
+            .status()
+            .expect("pdfunite fixture")
+            .success()
+    );
+    let bytes = fs::read(&combined).expect("six-page scanned PDF fixture");
     let store = pnull_core::Store::open(dir.path()).expect("store");
     let request = IngestRequest {
         jurisdiction: "Colorado".to_owned(),
@@ -118,6 +131,11 @@ fn scanned_pdf_is_ocr_extracted_in_the_real_sandbox() {
         outcome.record.extraction_error
     );
     assert!(outcome.extracted_text.trim().len() > 10);
-    assert!(!outcome.text_maps.is_empty());
+    assert_eq!(
+        outcome.text_maps.len(),
+        6,
+        "all pages must be rendered and checked"
+    );
+    assert_eq!(outcome.text_maps.last().unwrap().page_number, 6);
     store.verify(&outcome.record.id).expect("stored digest");
 }

@@ -388,6 +388,33 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_previous_ocr_limit_is_retried_once_without_hot_looping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                pdf = b'%PDF-a-saved-scan'
+                module.archive(root, [(receipt(index, page), page), (receipt(url, pdf), pdf)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at)
+                              VALUES (?,?,?,?,?,?,?)''', (ref, url, json.dumps(candidate), 'error', 1,
+                              json.dumps({'error': 'scanned_pdf_ocr_disabled'}), module.utcnow()))
+                db.execute('INSERT INTO ocr_attempts VALUES (?,?,?,?)',
+                           (ref, url, module.utcnow(), '(ocr_page_limit): OCR is limited to 5 pages'))
+                db.commit()
+                with patch.object(module, 'get', side_effect=AssertionError('network should not be used')), \
+                     patch.object(module, 'extract_captured_pdf', side_effect=ValueError('(ocr_page_limit): OCR is limited to 20 pages')) as extract:
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, retry_previous_limit=True)
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, retry_previous_limit=True)
+                self.assertEqual(extract.call_count, 1)
+                self.assertEqual(db.execute('SELECT state FROM document_candidates').fetchone()[0], 'error')
+                self.assertIn('20 pages', db.execute('SELECT status FROM ocr_attempts').fetchone()[0])
+            finally:
+                db.close()
+
     def test_older_ocr_no_match_is_not_counted_until_page_set_is_revalidated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1010,7 +1010,7 @@ def extract_captured_pdf(data_dir, ref, candidate, binary, receipt, ocr):
     if os.environ.get('PNUL_TESSDATA_DIR'):
         environment['PNUL_TESSDATA_DIR'] = os.environ['PNUL_TESSDATA_DIR']
     execution = subprocess.run(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               timeout=90, check=False, env=environment)
+                               timeout=180 if ocr else 90, check=False, env=environment)
     if execution.returncode or len(execution.stdout) > 2_000_000:
         detail = execution.stderr.decode('utf8', 'replace').strip().splitlines()
         clean = ' '.join((detail[-1] if detail else 'extractor failed').split())[:160]
@@ -1164,7 +1164,8 @@ def saved_receipts(data_dir, wanted):
     return latest, available
 
 
-def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=False, revalidate=False):
+def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=False, revalidate=False,
+                        retry_previous_limit=False):
     """Retry already archived scanned PDFs without making another network request."""
     if not Path(binary).is_absolute() or not Path(binary).is_file():
         raise ValueError('pnull binary must be an absolute path to an existing file')
@@ -1173,8 +1174,9 @@ def ocr_saved_documents(data_dir, db, binary, limit, workers, retry_unavailable=
                  "AND COALESCE(json_extract(d.result_json,'$.ocr_page_set_validated'),0)!=1") if revalidate else (
                  "d.state='error' AND d.result_json LIKE '%scanned_pdf_ocr_disabled%' "
                  "AND (o.attempted_at IS NULL OR o.attempted_at<=? "
-                 "OR (? AND (lower(o.status) LIKE '%could not initialize tesseract%' OR lower(o.status) LIKE '%sandbox_output%')))" )
-    parameters = (limit,) if revalidate else (cutoff, retry_unavailable, limit)
+                 "OR (? AND (lower(o.status) LIKE '%could not initialize tesseract%' OR lower(o.status) LIKE '%sandbox_output%')) "
+                 "OR (? AND o.status LIKE '%(ocr_page_limit): OCR is limited to 5 pages%'))" )
+    parameters = (limit,) if revalidate else (cutoff, retry_unavailable, retry_previous_limit, limit)
     rows = db.execute(f'''SELECT jurisdiction_ref,url,candidate_json,old_result,old_state FROM (
         SELECT d.jurisdiction_ref,d.url,d.candidate_json,d.state AS old_state,
           d.result_json AS old_result,o.attempted_at AS last_attempt,
@@ -2078,12 +2080,13 @@ def main():
     p.add_argument('--workers', type=int, default=4)
     p.add_argument('--retry-errors', action='store_true')
     p.add_argument('--refresh-existing', action='store_true', help='recheck documents not successfully refreshed in seven days')
-    p.add_argument('--ocr', action='store_true', help='enable bounded OCR for scanned PDFs of at most five pages')
+    p.add_argument('--ocr', action='store_true', help='enable bounded OCR for scanned PDFs of at most 20 pages')
     ocr = subs.add_parser('ocr-saved')
     ocr.add_argument('--pnull-bin', default=os.environ.get('PNUL_BIN', str(ROOT / 'target/debug/pnull')))
     ocr.add_argument('--limit', type=int, default=30)
     ocr.add_argument('--workers', type=int, default=2)
     ocr.add_argument('--retry-unavailable', action='store_true', help='retry immediately after repairing OCR data or sandbox output')
+    ocr.add_argument('--retry-previous-limit', action='store_true', help='retry documents rejected by the former five-page limit')
     ocr.add_argument('--revalidate-ocr', action='store_true', help='recheck older OCR results without validated page sets')
     docx = subs.add_parser('docx-saved')
     docx.add_argument('--limit', type=int, default=50)
@@ -2109,8 +2112,8 @@ def main():
         parser.error('choose either error retries or existing-document refreshes')
     if args.command == 'ocr-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 4):
         parser.error('saved OCR bounds exceeded')
-    if args.command == 'ocr-saved' and args.retry_unavailable and args.revalidate_ocr:
-        parser.error('choose either OCR revalidation or retrying unavailable data')
+    if args.command == 'ocr-saved' and args.revalidate_ocr and (args.retry_unavailable or args.retry_previous_limit):
+        parser.error('choose OCR revalidation or a retry mode')
     if args.command == 'docx-saved' and not (1 <= args.limit <= 100 and 1 <= args.workers <= 4):
         parser.error('saved Word-document bounds exceeded')
     if args.command == 'portraits' and not 1 <= args.limit <= 100:
@@ -2132,7 +2135,8 @@ def main():
             screen_documents(args.data_dir, db, args.pnull_bin, args.limit, args.per_place, args.workers,
                              args.retry_errors, args.ocr, args.refresh_existing)
         elif args.command == 'ocr-saved':
-            ocr_saved_documents(args.data_dir, db, args.pnull_bin, args.limit, args.workers, args.retry_unavailable, args.revalidate_ocr)
+            ocr_saved_documents(args.data_dir, db, args.pnull_bin, args.limit, args.workers,
+                                args.retry_unavailable, args.revalidate_ocr, args.retry_previous_limit)
         elif args.command == 'docx-saved':
             docx_saved_documents(args.data_dir, db, args.limit, args.workers, args.revalidate_docx)
         elif args.command == 'portraits':

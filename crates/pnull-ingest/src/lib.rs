@@ -42,7 +42,7 @@ pub use sandbox::{
 
 pub const DEFAULT_MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_PDF_PAGES: u32 = 100;
-const MAX_OCR_PAGES: u32 = 5;
+const MAX_OCR_PAGES: u32 = 20;
 const MAX_EXTRACTED_BYTES: usize = 5 * 1024 * 1024;
 const MAX_SANDBOX_TEXT_BYTES: usize = 20 * 1024 * 1024;
 const MAX_OCR_IMAGE_DIMENSION: u32 = 4000;
@@ -884,37 +884,41 @@ fn ocr_pdf(
         .map_err(|error| budget_err(&error))?;
     let ocr_dir = output_dir.join("ocr");
     fs::create_dir(&ocr_dir).map_err(external_io)?;
-    let prefix = ocr_dir.join("page");
-    let last_page = pages.to_string();
-    budgets
-        .add_child_process()
-        .map_err(|error| budget_err(&error))?;
-    let _ = run_sandboxed(
-        sandbox,
-        budgets,
-        "pdftoppm",
-        &[
-            std::ffi::OsStr::new("-png"),
-            std::ffi::OsStr::new("-r"),
-            std::ffi::OsStr::new("200"),
-            std::ffi::OsStr::new("-f"),
-            std::ffi::OsStr::new("1"),
-            std::ffi::OsStr::new("-l"),
-            std::ffi::OsStr::new(&last_page),
-            std::ffi::OsStr::new("-scale-to"),
-            std::ffi::OsStr::new("4000"),
-            input.as_os_str(),
-            prefix.as_os_str(),
-        ],
-        &[input],
-    )?;
     require_sandbox_output_directory(&ocr_dir)?;
-    let images = ocr_page_images(&ocr_dir, pages)?;
     let mut text = String::new();
     let mut maps = Vec::new();
-    for (index, image) in images.iter().enumerate() {
-        let page_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-        let tsv_base = ocr_dir.join(format!("page-{index}"));
+    for page_number in 1..=pages {
+        // Render one page at a time so a long scanned packet cannot fill the
+        // bounded temporary filesystem with every rendered image at once.
+        let prefix = ocr_dir.join(format!("page-{page_number}"));
+        let image = prefix.with_extension("png");
+        let page_argument = page_number.to_string();
+        budgets
+            .add_child_process()
+            .map_err(|error| budget_err(&error))?;
+        let _ = run_sandboxed(
+            sandbox,
+            budgets,
+            "pdftoppm",
+            &[
+                std::ffi::OsStr::new("-png"),
+                std::ffi::OsStr::new("-singlefile"),
+                std::ffi::OsStr::new("-r"),
+                std::ffi::OsStr::new("200"),
+                std::ffi::OsStr::new("-f"),
+                std::ffi::OsStr::new(&page_argument),
+                std::ffi::OsStr::new("-l"),
+                std::ffi::OsStr::new(&page_argument),
+                std::ffi::OsStr::new("-scale-to"),
+                std::ffi::OsStr::new("4000"),
+                input.as_os_str(),
+                prefix.as_os_str(),
+            ],
+            &[input],
+        )?;
+        // Missing or unsafe outputs are an error, never a completed screen.
+        let image_dims = image_dimensions(&image)?;
+        let tsv_base = ocr_dir.join(format!("text-{page_number}"));
         budgets
             .add_child_process()
             .map_err(|error| budget_err(&error))?;
@@ -932,11 +936,10 @@ fn ocr_pdf(
                 std::ffi::OsStr::new("-c"),
                 std::ffi::OsStr::new("tessedit_create_tsv=1"),
             ],
-            &[image],
+            &[&image],
         )?;
         let tsv_path = PathBuf::from(format!("{}.tsv", tsv_base.display()));
         let tsv_content = read_sandbox_text_output(&tsv_path)?;
-        let image_dims = image_dimensions(image)?;
         let spec = PageSpec::new(
             "",
             page_number,
@@ -957,6 +960,8 @@ fn ocr_pdf(
         maps.push(map);
         text.push_str(&page_text);
         text.push('\n');
+        fs::remove_file(&image).map_err(external_io)?;
+        fs::remove_file(&tsv_path).map_err(external_io)?;
     }
     if text.trim().is_empty() {
         Err(("ocr_empty", "OCR produced no text".to_owned()))
@@ -968,29 +973,6 @@ fn ocr_pdf(
             maps,
         ))
     }
-}
-
-fn ocr_page_images(directory: &Path, pages: u32) -> Result<Vec<PathBuf>, (&'static str, String)> {
-    let mut images: Vec<PathBuf> = fs::read_dir(directory)
-        .map_err(external_io)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<std::io::Result<Vec<_>>>()
-        .map_err(external_io)?
-        .into_iter()
-        .filter(|path| path.extension().is_some_and(|extension| extension == "png"))
-        .collect();
-    images.sort();
-    if images.len() != usize::try_from(pages).unwrap_or(usize::MAX)
-        || images.iter().enumerate().any(|(index, path)| {
-            path.file_name() != Some(std::ffi::OsStr::new(&format!("page-{}.png", index + 1)))
-        })
-    {
-        return Err((
-            "ocr_page_count",
-            "Rendered OCR page count does not match the PDF".to_owned(),
-        ));
-    }
-    Ok(images)
 }
 
 fn image_dimensions(path: &Path) -> Result<(u32, u32), (&'static str, String)> {
@@ -1866,24 +1848,12 @@ mod tests {
     }
 
     #[test]
-    fn ocr_rejects_an_incomplete_rendered_page_set() {
+    fn ocr_rejects_missing_or_unsafe_rendered_pages() {
         let directory = tempdir().expect("temporary directory");
-        fs::write(directory.path().join("page-1.png"), b"fixture").expect("page fixture");
-        assert_eq!(
-            ocr_page_images(directory.path(), 2).unwrap_err().0,
-            "ocr_page_count"
-        );
-        assert_eq!(
-            ocr_page_images(directory.path(), 1)
-                .expect("one page")
-                .len(),
-            1
-        );
-        fs::write(directory.path().join("page-3.png"), b"fixture").expect("wrong page");
-        assert_eq!(
-            ocr_page_images(directory.path(), 2).unwrap_err().0,
-            "ocr_page_count"
-        );
+        let page = directory.path().join("page-1.png");
+        assert_eq!(image_dimensions(&page).unwrap_err().0, "sandbox_output");
+        std::os::unix::fs::symlink("/etc/passwd", &page).expect("symlink fixture");
+        assert_eq!(image_dimensions(&page).unwrap_err().0, "sandbox_output");
     }
 
     #[test]
