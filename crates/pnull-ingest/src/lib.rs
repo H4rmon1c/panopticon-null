@@ -864,6 +864,78 @@ fn word_text(reader: &mut quick_xml::Reader<&[u8]>) -> Result<String, (&'static 
     Ok(text.trim().to_owned())
 }
 
+/// Private research proof-of-concept: extract native text and force OCR for
+/// exactly one page of the original PDF. This never establishes exhaustive
+/// semantic coverage or produces publication-grade page geometry.
+pub fn private_research_page(
+    sandbox: &dyn Sandbox,
+    budgets: &mut JobBudgetTracker,
+    bytes: &[u8],
+    page_number: u32,
+) -> Result<(u32, String, String), String> {
+    if bytes.len() > DEFAULT_MAX_BYTES || !bytes.starts_with(b"%PDF-") {
+        return Err("invalid or oversized PDF".to_owned());
+    }
+    let input_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let input = input_dir.path().join("input.pdf");
+    fs::write(&input, bytes).map_err(|e| e.to_string())?;
+    let output_dir = tempfile::tempdir_in(sandbox.working_dir()).map_err(|e| e.to_string())?;
+    budgets.add_child_process().map_err(|e| e.to_string())?;
+    let info = run_sandboxed(sandbox, budgets, "pdfinfo", &[input.as_os_str()], &[&input])
+        .map_err(|(code, detail)| format!("{code}: {detail}"))?;
+    let pages = parse_page_count(&info).ok_or("missing page count")?;
+    if pages == 0 || pages > 300 || page_number == 0 || page_number > pages {
+        return Err("page outside bounded 1–300-page PDF".to_owned());
+    }
+    budgets.add_pdf_pages(1).map_err(|e| e.to_string())?;
+    let arg = page_number.to_string();
+    budgets.add_child_process().map_err(|e| e.to_string())?;
+    let native = run_sandboxed(
+        sandbox,
+        budgets,
+        "pdftotext",
+        &[
+            std::ffi::OsStr::new("-layout"),
+            std::ffi::OsStr::new("-f"),
+            std::ffi::OsStr::new(&arg),
+            std::ffi::OsStr::new("-l"),
+            std::ffi::OsStr::new(&arg),
+            input.as_os_str(),
+            std::ffi::OsStr::new("-"),
+        ],
+        &[&input],
+    )
+    .map_err(|(code, detail)| format!("{code}: {detail}"))?;
+    if !native.ends_with('\x0c') || native.matches('\x0c').count() != 1 {
+        return Err("native text page mapping incomplete".to_owned());
+    }
+    let (width, height) = parse_page_dimensions(&info).unwrap_or((612.0, 792.0));
+    let dims = PageDims {
+        width,
+        height,
+        rotation: parse_page_rotation(&info).unwrap_or(0),
+    };
+    let (ocr, _, _, maps) = ocr_pdf_range(
+        sandbox,
+        budgets,
+        &input,
+        output_dir.path(),
+        page_number,
+        page_number,
+        &dims,
+        "eng",
+    )
+    .map_err(|(code, detail)| format!("{code}: {detail}"))?;
+    if maps.len() != 1
+        || maps[0].page_number != page_number
+        || maps[0].words.is_empty()
+        || ocr.trim().is_empty()
+    {
+        return Err("OCR page missing or empty".to_owned());
+    }
+    Ok((pages, native, ocr))
+}
+
 fn ocr_pdf(
     sandbox: &dyn Sandbox,
     budgets: &mut JobBudgetTracker,
@@ -873,7 +945,34 @@ fn ocr_pdf(
     dims: &PageDims,
     ocr_language: &str,
 ) -> ExtractionResult {
-    if pages > MAX_OCR_PAGES {
+    ocr_pdf_range(
+        sandbox,
+        budgets,
+        input,
+        output_dir,
+        1,
+        pages,
+        dims,
+        ocr_language,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ocr_pdf_range(
+    sandbox: &dyn Sandbox,
+    budgets: &mut JobBudgetTracker,
+    input: &Path,
+    output_dir: &Path,
+    first: u32,
+    last: u32,
+    dims: &PageDims,
+    ocr_language: &str,
+) -> ExtractionResult {
+    let pages = last
+        .checked_sub(first)
+        .and_then(|n| n.checked_add(1))
+        .ok_or(("ocr_page_limit", "invalid page range".to_owned()))?;
+    if first == 0 || pages > MAX_OCR_PAGES {
         return Err((
             "ocr_page_limit",
             format!("OCR is limited to {MAX_OCR_PAGES} pages"),
@@ -887,7 +986,7 @@ fn ocr_pdf(
     require_sandbox_output_directory(&ocr_dir)?;
     let mut text = String::new();
     let mut maps = Vec::new();
-    for page_number in 1..=pages {
+    for page_number in first..=last {
         // Render one page at a time so a long scanned packet cannot fill the
         // bounded temporary filesystem with every rendered image at once.
         let prefix = ocr_dir.join(format!("page-{page_number}"));

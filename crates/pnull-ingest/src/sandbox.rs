@@ -98,6 +98,8 @@ pub struct SandboxConfig {
     pub max_cpu_seconds: u64,
     pub max_file_size_bytes: u64,
     pub max_output_bytes: u64,
+    /// Strict page-only mode binds only a single known output file writable.
+    pub page_mode: bool,
 }
 
 impl SandboxConfig {
@@ -107,6 +109,7 @@ impl SandboxConfig {
             max_cpu_seconds: 12,
             max_file_size_bytes: 52_428_800,
             max_output_bytes: 5 * 1024 * 1024,
+            page_mode: false,
         }
     }
 }
@@ -199,22 +202,21 @@ impl Sandbox for BubblewrapSandbox {
         command
             .arg(format!("--as={}", self.config.max_address_bytes))
             .arg(format!("--cpu={}", self.config.max_cpu_seconds))
-            .arg(format!("--fsize={}", self.config.max_file_size_bytes))
-            .arg("--");
+            .arg(format!("--fsize={}", self.config.max_file_size_bytes));
+        if self.config.page_mode {
+            command.arg("--nofile=64");
+        }
+        command.arg("--");
         command.arg(&bwrap);
         bind_readonly_runtime(&mut command);
+        bind_workdir(&mut command, self.config.page_mode, program, args, workdir)?;
         command
-            // The workdir is the only writable host location, mounted at a
-            // dedicated `/work` path so it is never masked by `/tmp`.
-            .arg("--bind")
-            .arg(workdir)
-            .arg("/work")
             // Staged inputs are exposed read-only at `/work-ro`.
             .arg("--ro-bind")
             .arg(ro_dir.path())
-            .arg("/work-ro")
-            .arg("--dev")
-            .arg("/dev")
+            .arg("/work-ro");
+        bind_devices(&mut command, self.config.page_mode);
+        command
             .arg("--proc")
             .arg("/proc")
             .arg("--size")
@@ -226,6 +228,7 @@ impl Sandbox for BubblewrapSandbox {
             .arg("--unshare-ipc")
             .arg("--unshare-uts")
             .arg("--new-session")
+            .arg("--die-with-parent")
             .arg("--clearenv")
             .arg("--setenv")
             .arg("LANG")
@@ -236,6 +239,12 @@ impl Sandbox for BubblewrapSandbox {
             .arg("--setenv")
             .arg("OMP_THREAD_LIMIT")
             .arg("1");
+        if self.config.page_mode {
+            // Prevent a compromised extractor from creating a fresh user/mount
+            // namespace and remounting paths that were made read-only above.
+            command.arg("--unshare-user").arg("--disable-userns");
+            protect_page_mounts(&mut command);
+        }
         // Only a directory already exposed by the read-only runtime mounts
         // may be passed through; no other host environment is inherited.
         if program == "tesseract"
@@ -283,6 +292,125 @@ impl Sandbox for BubblewrapSandbox {
             success,
         })
     }
+}
+
+fn bind_devices(command: &mut Command, page_mode: bool) {
+    if page_mode {
+        // Do not expose ptmx/devpts: even a read-only dev mount would allow
+        // allocation of host pseudo-terminal resources.
+        command
+            .arg("--size")
+            .arg("1048576")
+            .arg("--tmpfs")
+            .arg("/dev");
+        command.arg("--dev-bind").arg("/dev/null").arg("/dev/null");
+        for device in ["/dev/zero", "/dev/random", "/dev/urandom"] {
+            command.arg("--ro-bind").arg(device).arg(device);
+        }
+    } else {
+        command.arg("--dev").arg("/dev");
+    }
+}
+
+fn protect_page_mounts(command: &mut Command) {
+    // No arbitrary writable directories; /dev/null remains usable.
+    for path in ["/tmp", "/dev", "/"] {
+        command.arg("--remount-ro").arg(path);
+    }
+}
+
+fn bind_workdir(
+    command: &mut Command,
+    page_mode: bool,
+    program: &str,
+    args: &[&OsStr],
+    workdir: &Path,
+) -> Result<(), SandboxError> {
+    let output = if page_mode {
+        page_output_file(program, args, workdir)?
+    } else {
+        None
+    };
+    command
+        .arg(if page_mode { "--ro-bind" } else { "--bind" })
+        .arg(workdir)
+        .arg("/work");
+    if let Some(output) = output.as_ref() {
+        let relative = output
+            .strip_prefix(workdir)
+            .map_err(|_| SandboxError::Unavailable("output escapes workdir".to_owned()))?;
+        command
+            .arg("--bind")
+            .arg(output)
+            .arg(Path::new("/work").join(relative));
+    }
+    Ok(())
+}
+
+fn page_output_file(
+    program: &str,
+    args: &[&OsStr],
+    workdir: &Path,
+) -> Result<Option<PathBuf>, SandboxError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let output = match program {
+        "pdfinfo" => None,
+        "pdftotext" if args.last().is_some_and(|arg| *arg == OsStr::new("-")) => None,
+        "pdftoppm" if args.iter().any(|arg| *arg == OsStr::new("-singlefile")) => {
+            let prefix = args
+                .last()
+                .ok_or_else(|| SandboxError::Unavailable("missing render output".to_owned()))?;
+            Some(Path::new(prefix).with_extension("png"))
+        }
+        "tesseract"
+            if args
+                .iter()
+                .any(|arg| *arg == OsStr::new("tessedit_create_tsv=1")) =>
+        {
+            let base = args
+                .get(1)
+                .ok_or_else(|| SandboxError::Unavailable("missing OCR output".to_owned()))?;
+            let mut name = base.to_os_string();
+            name.push(".tsv");
+            Some(PathBuf::from(name))
+        }
+        #[cfg(test)]
+        "sh" | "/bin/sh" => None,
+        _ => {
+            return Err(SandboxError::Unavailable(
+                "extractor is not allowed in page mode".to_owned(),
+            ));
+        }
+    };
+    if let Some(path) = output.as_ref() {
+        let relative = path
+            .strip_prefix(workdir)
+            .map_err(|_| SandboxError::Unavailable("output outside workdir".to_owned()))?;
+        if relative.as_os_str().is_empty()
+            || !relative
+                .components()
+                .all(|part| matches!(part, std::path::Component::Normal(_)))
+        {
+            return Err(SandboxError::Unavailable(
+                "output outside workdir".to_owned(),
+            ));
+        }
+        let parent = path
+            .parent()
+            .ok_or_else(|| SandboxError::Unavailable("missing output directory".to_owned()))?;
+        for component in parent.ancestors().take_while(|p| *p != workdir) {
+            let meta = fs::symlink_metadata(component)?;
+            if !meta.is_dir() || meta.file_type().is_symlink() {
+                return Err(SandboxError::Unavailable("unsafe output parent".to_owned()));
+            }
+        }
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)?;
+    }
+    Ok(output)
 }
 
 fn stage_inputs(inputs: &[&Path]) -> Result<(TempDir, HashMap<PathBuf, PathBuf>), SandboxError> {
@@ -653,6 +781,22 @@ mod tests {
         BubblewrapSandbox::new(SandboxConfig::defaults()).ok()
     }
 
+    fn page_sandbox_available() -> bool {
+        if resolve_executable("unshare").is_none() {
+            return false;
+        }
+        let Some(bwrap) = resolve_executable("bwrap") else {
+            return false;
+        };
+        let Ok(help) = Command::new(bwrap).arg("--help").output() else {
+            return false;
+        };
+        if !String::from_utf8_lossy(&help.stdout).contains("--disable-userns") {
+            return false;
+        }
+        real_sandbox_available().is_some_and(|sandbox| host_shell_available(&sandbox))
+    }
+
     // The sandbox tests bind a host `/bin/sh` into the isolated namespace. In
     // restricted build environments (for example the Nix derivation sandbox)
     // the host shell cannot be bound into the nested namespace, so the probe
@@ -743,6 +887,116 @@ mod tests {
             Duration::from_secs(10),
         )
         .expect("host configuration must not be mounted");
+    }
+
+    #[test]
+    fn page_mode_blocks_new_files_in_all_visible_directories() {
+        if !page_sandbox_available() {
+            return;
+        }
+        let mut config = SandboxConfig::defaults();
+        config.page_mode = true;
+        let sandbox = BubblewrapSandbox::new(config).expect("page sandbox");
+        let script = "for p in /work/new /work-ro/new /tmp/new /dev/new /dev/pts/new /proc/new /etc/new /new; do if touch $p 2>/dev/null; then exit 1; fi; done; printf ok";
+        let result = shell(&sandbox, script, Duration::from_secs(10)).expect("restricted sandbox");
+        assert_eq!(result.stdout, b"ok");
+        let no_pty = shell(
+            &sandbox,
+            r#"test ! -e /dev/ptmx && test ! -e /dev/pts/ptmx && test $(ulimit -n) -le 64 && command -v unshare >/dev/null && printf ok >/dev/null || exit 1; output=$(unshare --user --map-root-user --mount --fork true 2>&1); status=$?; test $status -ne 0 && printf '%s' "$output" | grep -Eq 'Operation not permitted|No space left on device|Too many users'"#,
+            Duration::from_secs(10),
+        )
+        .expect("no pseudo-terminal allocator and bounded file descriptors");
+        assert!(no_pty.success);
+        assert!(!sandbox.working_dir().join("new").exists());
+    }
+
+    #[test]
+    #[ignore = "subprocess helper, invoked by parent-death test"]
+    fn page_mode_parent_death_worker() {
+        if std::env::var_os("PNUL_PAGE_DEATH_WORKER").is_none() {
+            return;
+        }
+        let mut config = SandboxConfig::defaults();
+        config.page_mode = true;
+        let sandbox = BubblewrapSandbox::new(config).expect("page sandbox");
+        let _ = shell(&sandbox, "exec sleep 30", Duration::from_secs(35));
+    }
+
+    #[test]
+    fn page_mode_tears_down_when_parent_dies() {
+        if !page_sandbox_available() {
+            return;
+        }
+        let mut parent = Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "sandbox::tests::page_mode_parent_death_worker",
+                "--ignored",
+            ])
+            .env("PNUL_PAGE_DEATH_WORKER", "1")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("worker");
+        let parent_pid = parent.id();
+        let mut sandbox_pid = None;
+        for _ in 0..100 {
+            let tasks = PathBuf::from(format!("/proc/{parent_pid}/task"));
+            if let Ok(entries) = fs::read_dir(tasks) {
+                for entry in entries.flatten() {
+                    if let Ok(children) = fs::read_to_string(entry.path().join("children")) {
+                        for candidate in children.split_whitespace() {
+                            let name = fs::read_to_string(format!("/proc/{candidate}/comm"))
+                                .unwrap_or_default();
+                            if name.trim() == "bwrap" {
+                                sandbox_pid = candidate.parse::<u32>().ok();
+                            }
+                        }
+                    }
+                }
+            }
+            if sandbox_pid.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let sandbox_pid = sandbox_pid.expect("worker started bubblewrap");
+        parent.kill().expect("kill worker");
+        parent.wait().expect("reap worker");
+        for _ in 0..100 {
+            match fs::read_to_string(format!("/proc/{sandbox_pid}/stat")) {
+                Err(_) => return,
+                Ok(status) if status.contains(") Z ") => return,
+                _ => std::thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        panic!("bubblewrap survived its parent");
+    }
+
+    #[test]
+    fn page_output_rejects_path_escape_and_existing_file() {
+        let dir = TempDir::new().expect("workdir");
+        let outside = dir.path().join("..").join("escape");
+        let outside_arg = outside.as_os_str();
+        assert!(
+            page_output_file(
+                "pdftoppm",
+                &[OsStr::new("-singlefile"), outside_arg],
+                dir.path()
+            )
+            .is_err()
+        );
+        let prefix = dir.path().join("page");
+        fs::write(prefix.with_extension("png"), b"existing").expect("fixture");
+        assert!(
+            page_output_file(
+                "pdftoppm",
+                &[OsStr::new("-singlefile"), prefix.as_os_str()],
+                dir.path()
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(prefix.with_extension("png")).unwrap(), b"existing");
     }
 
     #[test]
