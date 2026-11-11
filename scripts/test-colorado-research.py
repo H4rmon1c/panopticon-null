@@ -276,6 +276,12 @@ class ResearchTests(unittest.TestCase):
                     for number, state in enumerate(['no_match', 'no_match', 'error', 'pending']):
                         db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
                                       VALUES (?,?,?,?,?)''', (ref, f'https://example.org/{number}.pdf', '{}', state, '2026-11-11T00:00:00+00:00'))
+                    redirected = {'error': 'source redirected; alternate document queued',
+                                  'alternate_candidate': {'url': 'https://example.org/alternate.pdf'}}
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'error',?,?)''', (ref, 'https://example.org/redirect.pdf', '{}', json.dumps(redirected), module.utcnow()))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                                  VALUES (?,?,?,'pending',?)''', (ref, redirected['alternate_candidate']['url'], '{}', module.utcnow()))
                     db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
                                (ref, 'example.org', 1, 2025, '{}', module.utcnow(), 'ok', None, '{}'))
                     db.execute('INSERT INTO civic_history_checks VALUES (?,?,?,?,?,?,?,?,?)',
@@ -283,7 +289,8 @@ class ResearchTests(unittest.TestCase):
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
-                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 1))
+                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 2))
+                self.assertEqual(attempt['documents_redirected'], 1)
                 self.assertEqual(attempt['historical_index_pages_checked'], 1)
                 self.assertEqual(attempt['historical_index_errors'], 1)
                 self.assertIsNone(attempt['lookback_period'])
@@ -619,6 +626,92 @@ class ResearchTests(unittest.TestCase):
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
         self.assertEqual(module.candidate_kind('https://city.example.org/uploads/agenda.pdf?t=202611110000000', index, '')[0], 'agenda')
+
+    def test_towncloud_requires_official_link_exact_tenant_and_public_pdf_shape(self):
+        index = 'https://town.example.org/agendas'
+        origin = 'https://towncloud.io/go/walden-co/agendas/293/PDF/get_agenda_document_link'
+        target = 'https://towncloud-core-prod.s3.us-west-2.amazonaws.com/uploads/walden-co/meetings/agenda_packet/pdf/289/meeting.pdf'
+        self.assertEqual(module.candidate_kind(origin, index, 'Agenda PDF'), ('agenda', None))
+        self.assertIsNone(module.candidate_kind(origin, index, 'Unrelated'))
+        self.assertTrue(module.towncloud_file_redirect(origin, target))
+        for bad in [target.replace('/walden-co/', '/other-town/'),
+                    target.replace('towncloud-core-prod.s3.us-west-2.amazonaws.com', 'attacker.example'),
+                    target + '?token=1', target.replace('/289/', '/%2e%2e/'),
+                    target.replace('.pdf', '.html')]:
+            self.assertFalse(module.towncloud_file_redirect(origin, bad))
+        for bad in [origin + '?other=1', origin.replace('towncloud.io', 'towncloud.io.attacker.example'),
+                    origin.replace('/293/', '/0/'), origin.replace('PDF/get_agenda_document_link', 'other')]:
+            self.assertIsNone(module.candidate_kind(bad, index, 'Agenda PDF'))
+
+    def test_towncloud_override_requires_setting_and_preserved_redirect_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index = 'https://town.example.org/agendas'
+                origin = 'https://towncloud.io/go/walden-co/agendas/293/PDF/get_agenda_document_link'
+                target = 'https://towncloud-core-prod.s3.us-west-2.amazonaws.com/uploads/walden-co/meetings/agenda_packet/pdf/289/meeting.pdf'
+                body = f'<a href="{origin}">Agenda PDF</a>'.encode()
+                redirect = receipt(origin, b'')
+                redirect.update(status=302, redirect_target=target)
+                module.archive(root, [(receipt(index, body), body), (redirect, b'')])
+                original = {'url': origin, 'index_url': index, 'index_sha256': module.sha(body), 'anchor_index': 0}
+                alternate = {**original, 'url': target, 'linked_url': origin, 'origin_url': origin,
+                             'capture_adjustment': 'direct_redirect', 'redirect_receipt': redirect}
+                module.checked_document_candidate(root, target, alternate)
+                with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '0'}):
+                    self.assertFalse(module.towncloud_override(original, origin))
+                    self.assertFalse(module.towncloud_override(alternate, target))
+                with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '1'}):
+                    self.assertTrue(module.towncloud_override(original, origin))
+                    self.assertTrue(module.towncloud_override(alternate, target))
+                    self.assertFalse(module.towncloud_override(alternate, target.replace('/walden-co/', '/other/')))
+                broken = {**alternate, 'redirect_receipt': {**redirect, 'redirect_target': target + '?changed=1'}}
+                with self.assertRaises(ValueError):
+                    module.checked_document_candidate(root, target, broken)
+            finally:
+                db.close()
+
+    def test_towncloud_override_only_fetches_source_bound_documents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index = 'https://town.example.org/agendas'
+                origin = 'https://towncloud.io/go/walden-co/agendas/293/PDF/get_agenda_document_link'
+                target = 'https://towncloud-core-prod.s3.us-west-2.amazonaws.com/uploads/walden-co/meetings/agenda_packet/pdf/289/meeting.pdf'
+                body = f'<a href="{origin}">Agenda PDF</a>'.encode()
+                redirect = receipt(origin, b''); redirect.update(status=302, redirect_target=target)
+                module.archive(root, [(receipt(index, body), body), (redirect, b'')])
+                original = {'url': origin, 'index_url': index, 'index_sha256': module.sha(body), 'anchor_index': 0}
+                denied = SimpleNamespace(can_fetch=lambda *_: False)
+                with patch.object(module, 'cached_robots', return_value=(denied, [])), \
+                     patch.object(module, 'get', return_value=[(redirect, b'')]) as fetch:
+                    with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '0'}):
+                        result, _ = module.screen_one(root, 'ref', original, '/bin/true', threading.Lock(),
+                                                      module.DownloadBudget(30_000_000), False, {})
+                    self.assertEqual(result['state'], 'error');fetch.assert_not_called()
+                    with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '1'}):
+                        result, _ = module.screen_one(root, 'ref', original, '/bin/true', threading.Lock(),
+                                                      module.DownloadBudget(30_000_000), False, {})
+                    alternate = result['alternate_candidate']
+                    self.assertEqual(alternate['url'], target)
+                robots = receipt('https://towncloud-core-prod.s3.us-west-2.amazonaws.com/robots.txt', b'')
+                robots['status'] = 403
+                pdf = b'%PDF-fixture'
+                with patch.object(module, 'cached_robots', side_effect=module.RobotsDenied(403, [(robots, b'')])), \
+                     patch.object(module, 'get', return_value=[(receipt(target, pdf), pdf)]) as fetch, \
+                     patch.object(module, 'extract_captured_pdf', return_value={'state': 'no_match'}):
+                    with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '0'}):
+                        result, _ = module.screen_one(root, 'ref', alternate, '/bin/true', threading.Lock(),
+                                                      module.DownloadBudget(30_000_000), False, {})
+                    self.assertEqual(result['state'], 'error');fetch.assert_not_called()
+                    with patch.dict(module.os.environ, {'PNUL_ALLOW_TOWNCLOUD_PUBLIC': '1'}):
+                        result, _ = module.screen_one(root, 'ref', alternate, '/bin/true', threading.Lock(),
+                                                      module.DownloadBudget(30_000_000), False, {})
+                    self.assertEqual(result['state'], 'no_match');fetch.assert_called_once()
+            finally:
+                db.close()
 
     def test_same_site_html_base_and_timestamp_remain_bound_to_the_original_anchor(self):
         with tempfile.TemporaryDirectory() as tmp:

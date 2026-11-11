@@ -11,6 +11,7 @@ fi
 python3 "$script_dir/locked-run.py" --verify "$PNUL_DATA_DIR/.collect.lock"
 cd "$PNUL_REPO_DIR"
 data="$PNUL_DATA_DIR/research"
+export PNUL_ALLOW_TOWNCLOUD_PUBLIC="${PNUL_ALLOW_TOWNCLOUD_PUBLIC:-1}"
 [[ ! -L "$data" ]] || { echo 'research directory cannot be a symlink' >&2; exit 1; }
 binary="${PNUL_BIN:-/usr/local/bin/pnull}"
 [[ "$binary" == /* && -x "$binary" && ! -L "$binary" ]] || { echo 'pnull binary missing or unsafe' >&2; exit 1; }

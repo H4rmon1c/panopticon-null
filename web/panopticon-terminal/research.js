@@ -144,6 +144,9 @@ function render(report) {
       ? 'Recorded votes are shown with their scope above. A specific contract approval or deployment is not yet established.'
       : 'Not yet verified as a specific approval, individual vote, signed contract, or deployment.'));
     if (item.kind === 'agenda_portal_reference') card.append(node('p', 'meta', 'This county-linked portal includes other public bodies; the responsible body for this reference is not established.'));
+    if (item.kind === 'meeting_document' && new URL(item.indexed_source_url ?? item.source_url).hostname === 'towncloud.io') {
+      card.append(node('p', 'meta', 'The government website links this meeting document; the responsible public body is not established.'));
+    }
     const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
       item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
     card.append(external(item.source_url, sourceLabel));
@@ -181,7 +184,7 @@ try {
     scope.hidden = false;
     scope.textContent = attempt ?
       `Website discovery ${attempt.website_check === 'site_checked' ? 'reached the site' : 'was unavailable'} on ${attempt.checked_at.slice(0, 10)}. ` +
-        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued · ` +
+        `${attempt.documents_screened} documents screened · ${attempt.documents_failed} incomplete${attempt.ocr_revalidation_pending === undefined ? '' : ` (${attempt.ocr_revalidation_pending} awaiting OCR recheck)`} · ${attempt.documents_queued} queued${attempt.documents_redirected === undefined ? '' : ` · ${attempt.documents_redirected} source redirects`} · ` +
         `${attempt.portal_pages_checked} portal query pages checked · ` +
         `${attempt.historical_index_pages_checked === undefined ? 'historical index checks not recorded' : `${attempt.historical_index_pages_checked} historical index pages checked`} · ` +
         `${attempt.historical_index_errors === undefined ? 'historical index failures not recorded' : `${attempt.historical_index_errors} historical index checks failed`} · ` +

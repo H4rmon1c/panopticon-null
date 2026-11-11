@@ -160,7 +160,7 @@ export function validateResearch(report) {
         'document_references', 'agenda_portal_references', 'agenda_portal_screening', 'search_attempts', 'recorded_actions', 'recorded_vote_entries', 'document_screening',
         'refresh_failures_preserving_prior_results', 'non_surveillance_mentions_withheld', 'omitted_failed_provenance', 'ocr_revalidation_pending']) ||
       report.coverage.lookback_period !== null ||
-      !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match']) ||
+      !onlyKeys(report.coverage.document_screening, ['pending', 'error', 'matched', 'no_match', 'redirected']) ||
       !Object.values(report.coverage.document_screening).every(nonnegative) ||
       (report.coverage.ocr_revalidation_pending !== undefined &&
         (!nonnegative(report.coverage.ocr_revalidation_pending) || report.coverage.ocr_revalidation_pending > (report.coverage.document_screening.error ?? 0))) ||
@@ -183,13 +183,14 @@ export function validateResearch(report) {
     const places = new Set();
     for (const attempt of report.coverage.search_attempts) {
       if (!onlyKeys(attempt, ['jurisdiction_ref', 'checked_at', 'website_check', 'documents_screened', 'documents_failed',
-        'documents_queued', 'ocr_revalidation_pending', 'portal_pages_checked', 'historical_index_pages_checked', 'historical_index_errors', 'agenda_meeting_pages_screened', 'lookback_period']) ||
+        'documents_queued', 'documents_redirected', 'ocr_revalidation_pending', 'portal_pages_checked', 'historical_index_pages_checked', 'historical_index_errors', 'agenda_meeting_pages_screened', 'lookback_period']) ||
           !/^us-co-[a-z0-9-]{1,100}$/.test(attempt.jurisdiction_ref) || places.has(attempt.jurisdiction_ref) ||
           typeof attempt.checked_at !== 'string' || !Number.isFinite(Date.parse(attempt.checked_at)) ||
           !['site_checked', 'unavailable'].includes(attempt.website_check) || attempt.lookback_period !== null ||
           ![attempt.documents_screened, attempt.documents_failed, attempt.documents_queued, attempt.portal_pages_checked,
             attempt.agenda_meeting_pages_screened].every(nonnegative) ||
           (attempt.historical_index_pages_checked !== undefined && !nonnegative(attempt.historical_index_pages_checked)) ||
+          (attempt.documents_redirected !== undefined && !nonnegative(attempt.documents_redirected)) ||
           (attempt.historical_index_errors !== undefined && !nonnegative(attempt.historical_index_errors)) ||
           (attempt.ocr_revalidation_pending !== undefined && (!nonnegative(attempt.ocr_revalidation_pending) ||
             attempt.ocr_revalidation_pending > attempt.documents_failed))) throw new Error('Invalid research attempt');
@@ -268,10 +269,16 @@ export function validateResearch(report) {
       const index = publicResearchUrl(record.source_index_url);
       const capture = parsedUrls[0];
       const prefix = capture.pathname.endsWith(linked.pathname) ? capture.pathname.slice(0, -linked.pathname.length) : '';
-      if (linked.hostname !== index.hostname || capture.search ||
-          !/^(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com$/i.test(capture.hostname) ||
-          !/^\/(?:revize\/)?[a-z0-9_-]{1,80}$/i.test(prefix) ||
-          (record.capture_adjustment === 'timestamp_omitted' ? !/^\?t=[0-9]{1,20}$/.test(linked.search) : Boolean(linked.search))) {
+      const revize = linked.hostname === index.hostname && !capture.search &&
+        /^(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com$/i.test(capture.hostname) &&
+        /^\/(?:revize\/)?[a-z0-9_-]{1,80}$/i.test(prefix) &&
+        (record.capture_adjustment === 'timestamp_omitted' ? /^\?t=[0-9]{1,20}$/.test(linked.search) : !linked.search);
+      const tenant = /^\/go\/([a-z0-9][a-z0-9-]{0,79})\/agendas\/[1-9][0-9]{0,11}\/PDF\/get_agenda_document_link$/.exec(linked.pathname)?.[1];
+      const towncloud = record.capture_adjustment === 'direct_redirect' && tenant &&
+        linked.hostname === 'towncloud.io' && index.hostname !== linked.hostname && !linked.search &&
+        capture.hostname === 'towncloud-core-prod.s3.us-west-2.amazonaws.com' && !capture.search &&
+        new RegExp(`^/uploads/${tenant}/meetings/agenda_packet/pdf/[1-9][0-9]{0,11}/[A-Za-z0-9._~-]{1,180}\\.pdf$`).test(capture.pathname);
+      if (!revize && !towncloud) {
         throw new Error('Alternate document does not match its indexed source');
       }
     }
