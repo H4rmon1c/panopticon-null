@@ -30,7 +30,9 @@ no relevant decision exists.
    The Rust worker verifies their SHA-256 digests, extracts text with the
    existing sandboxed Poppler path, and applies the repository's detection
    rules. Failures remain errors; they are never counted as no-match results.
-   OCR retries are bounded and marked as OCR when exported. DOCX files are
+   OCR retries render one page at a time, cover at most 20 pages per document,
+   and are marked as OCR when exported. Every expected page must render and
+   complete extraction; a partial scan cannot become a no-match result. DOCX files are
    parsed in a separate network-isolated sandbox with ZIP, XML, memory, CPU,
    and output limits; embedded links and files are never followed.
 4. For matched Legistar matters, capture the matter history, corresponding
@@ -44,6 +46,10 @@ no relevant decision exists.
    nickname is required; a missing portrait stays missing. The interface can
    also reuse an existing sourced portrait when the portal, jurisdiction,
    person ID, and name all match. Portrait dates are not inferred.
+   Five Arapahoe County research voters also reuse the original JPEG streams
+   from the labeled 2022 board page of the county's recommended budget. The
+   archived PDF digest, page, image indexes, aliases, and extracted-page fixture
+   are pinned in `fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json`.
 6. Export a strict, sanitized static JSON snapshot. Every entry is labeled
    `unconfirmed_source_reference`; source links, digests, timestamps, exact
    locators, and any uncertain vote scope remain visible. The website and
@@ -97,6 +103,9 @@ after repairing unavailable OCR data, `--retry-unavailable` retries those
 specific failures immediately. Install English Tesseract data at the system
 default or set `PNUL_TESSDATA_DIR` to a directory under `/usr` or `/nix/store`.
 Only that validated read-only directory is passed into the sandbox.
+Use `--retry-previous-limit` to reconsider documents rejected by the former
+five-page OCR limit. The scheduled research job uses this option; documents
+over the current 20-page cap remain errors, not no-match conclusions.
 The `--revalidate-ocr` mode rechecks earlier OCR results that lack a validated
 complete page set; until then, they count as errors rather than completed
 screens. `docx-saved --revalidate-docx` similarly rechecks older Word

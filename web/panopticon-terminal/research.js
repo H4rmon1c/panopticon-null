@@ -69,7 +69,16 @@ function render(report) {
           detail.append(node('strong', '', vote.name));
           detail.append(node('p', 'meta', `Recorded: ${vote.value}`));
           if (portrait) {
-            detail.append(external(portrait.source_url, 'Portrait source ↗'));
+            const portraitSource = portrait.source_kind === 'embedded_pdf'
+              ? `${portrait.source_url}#page=${portrait.source_page}` : portrait.source_url;
+            detail.append(external(portraitSource, 'Portrait source ↗'));
+            if (portrait.source_kind === 'embedded_pdf') {
+              const portraitProof = node('details', 'proof');
+              portraitProof.append(node('summary', '', 'Portrait capture details'));
+              portraitProof.append(node('p', 'meta', `Original portrait embedded on source page ${portrait.source_page}.`));
+              portraitProof.append(node('p', 'meta digest', `Source SHA-256 ${portrait.source_document_sha256}`));
+              detail.append(portraitProof);
+            }
             detail.append(node('p', 'meta', 'Portrait date not established.'));
             if (portrait.source_conflict?.public_note) detail.append(node('p', 'meta', portrait.source_conflict.public_note));
           } else detail.append(node('p', 'meta', 'Portrait not yet established.'));

@@ -16,19 +16,47 @@ export function matchesResearchQuery(item, value) {
   return `${item.jurisdiction} ${item.file} ${item.title} ${item.signals.join(' ')} ${people.join(' ')}`.toLocaleLowerCase().includes(query);
 }
 
-function validatePortrait(portrait) {
-  if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date']) ||
+function validatePortrait(portrait, context = null) {
+  if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date',
+      'source_kind', 'source_document_sha256', 'source_page', 'embedded_image_index']) ||
       !digest(portrait.sha256) ||
       !new RegExp(`^\\./research-portraits/${portrait.sha256}\\.(?:jpg|png|webp)$`).test(portrait.src) ||
       portrait.portrait_date !== 'not_established' || !safeText(portrait.caption, 250)) throw new Error('Invalid research portrait');
-  let page, image;
-  try { page = new URL(portrait.source_url); image = new URL(portrait.image_url); }
+  let page;
+  try { page = new URL(portrait.source_url); }
   catch { throw new Error('Invalid portrait source URL'); }
-  if (page.protocol !== 'https:' || image.protocol !== 'https:' || page.hostname !== image.hostname ||
+  if (page.protocol !== 'https:' ||
       !page.hostname.includes('.') || /^(?:localhost|\[|[0-9.]+$)/i.test(page.hostname) ||
       /\.(?:localhost|local|internal)$/i.test(page.hostname) ||
-      page.username || page.password || image.username || image.password || page.port || image.port || page.hash || image.hash) {
+      page.username || page.password || page.port || page.hash) {
     throw new Error('Unsafe portrait source URL');
+  }
+  if (portrait.source_kind === 'embedded_pdf') {
+    const identities = new Map([
+      [513, ['Carrie Warren-Gully', 6, '84202caa2919b815df89984e12ad15f4de4289a35b74f048f54f0e68f0954174', 'Carrie Warren Gully']],
+      [225, ['Nancy Sharpe', 7, '6555e2248f94d78cd16f6f4688f61c69da5029755f3da2ed9a982f6639588a8e', 'Nancy N. Sharpe']],
+      [226, ['Jeff Baker', 8, '62aa905c15672fba1f48abd5a356e03dda7f2492077dab2a77e4543ae9063314', 'Jeff Baker']],
+      [227, ['Nancy Jackson', 9, '50405246a18ce227b0671befb2a0e5148e83d3e54acdec20d3e3d1cf0c2122da', 'Nancy Jackson']],
+      [228, ['Bill Holen', 10, '6023e0418ecc3a5f92ee2523482d6941de9156fd567cf46f3e9c6dd25370516e', 'Bill L. Holen']],
+    ]);
+    const expected = identities.get(context?.personId);
+    if (!expected || context.client !== 'arapahoe' || context.jurisdiction !== 'us-co-county-08005' ||
+        context.name !== expected[0] || portrait.embedded_image_index !== expected[1] || portrait.sha256 !== expected[2] ||
+        portrait.caption !== `2022 county board; source labels this portrait ${expected[3]}.` ||
+        portrait.image_url !== undefined || portrait.source_page !== 7 ||
+        portrait.source_document_sha256 !== 'dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43' ||
+        portrait.source_url !== 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf') {
+      throw new Error('Embedded portrait does not match the recorded voter and source');
+    }
+    return;
+  }
+  if (portrait.source_kind !== undefined || portrait.source_document_sha256 !== undefined ||
+      portrait.source_page !== undefined || portrait.embedded_image_index !== undefined) throw new Error('Unknown portrait source kind');
+  let image;
+  try { image = new URL(portrait.image_url); }
+  catch { throw new Error('Invalid portrait image URL'); }
+  if (image.protocol !== 'https:' || page.hostname !== image.hostname || image.username || image.password || image.port || image.hash) {
+    throw new Error('Unsafe portrait image URL');
   }
 }
 
@@ -158,7 +186,8 @@ export function validateResearch(report) {
               !locator(vote.locator) || !Number.isSafeInteger(vote.person_id) || vote.person_id <= 0 ||
               !Number.isSafeInteger(vote.vote_id) || vote.vote_id <= 0 || people.has(vote.person_id)) throw new Error('Invalid recorded vote');
           people.add(vote.person_id);
-          if (vote.portrait) validatePortrait(vote.portrait);
+          if (vote.portrait) validatePortrait(vote.portrait, { client: matter[1], jurisdiction: record.jurisdiction_ref,
+            personId: vote.person_id, name: vote.name });
         }
       }
     }

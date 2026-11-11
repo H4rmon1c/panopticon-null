@@ -388,6 +388,33 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_previous_ocr_limit_is_retried_once_without_hot_looping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                url = 'https://example.org/AgendaCenter/ViewFile/Minutes/_09152026-1206'
+                page = b'<a href="/AgendaCenter/ViewFile/Minutes/_09152026-1206">Minutes</a>'
+                pdf = b'%PDF-a-saved-scan'
+                module.archive(root, [(receipt(index, page), page), (receipt(url, pdf), pdf)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,attempts,result_json,updated_at)
+                              VALUES (?,?,?,?,?,?,?)''', (ref, url, json.dumps(candidate), 'error', 1,
+                              json.dumps({'error': 'scanned_pdf_ocr_disabled'}), module.utcnow()))
+                db.execute('INSERT INTO ocr_attempts VALUES (?,?,?,?)',
+                           (ref, url, module.utcnow(), '(ocr_page_limit): OCR is limited to 5 pages'))
+                db.commit()
+                with patch.object(module, 'get', side_effect=AssertionError('network should not be used')), \
+                     patch.object(module, 'extract_captured_pdf', side_effect=ValueError('(ocr_page_limit): OCR is limited to 20 pages')) as extract:
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, retry_previous_limit=True)
+                    module.ocr_saved_documents(root, db, '/bin/true', 1, 1, retry_previous_limit=True)
+                self.assertEqual(extract.call_count, 1)
+                self.assertEqual(db.execute('SELECT state FROM document_candidates').fetchone()[0], 'error')
+                self.assertIn('20 pages', db.execute('SELECT status FROM ocr_attempts').fetchone()[0])
+            finally:
+                db.close()
+
     def test_older_ocr_no_match_is_not_counted_until_page_set_is_revalidated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -445,6 +472,22 @@ class ResearchTests(unittest.TestCase):
         self.assertFalse(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Smith'))
         self.assertTrue(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Smith', 'Elizabeth (Liz) Smith, Commissioner'))
         self.assertFalse(module.portrait_name_matches('Elizabeth Smith', 'Profile picture of Liz Jones', 'Elizabeth (Liz) Smith, Commissioner'))
+
+    def test_budget_portrait_requires_source_receipt_and_exact_portal_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json').read_text())
+            receipt_key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Carrie Warren-Gully', 'person_id': 513}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                portrait = module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'arapahoe', vote, root / 'assets')
+                self.assertEqual(portrait['source_kind'], 'embedded_pdf')
+                self.assertEqual(portrait['source_document_sha256'], proof['source_sha256'])
+                self.assertEqual(portrait['embedded_image_index'], 6)
+                self.assertIsNone(module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'wrong', vote, root / 'assets'))
+                self.assertIsNone(module.arapahoe_budget_portrait(root, {receipt_key}, 'us-co-county-08005', 'arapahoe', {**vote, 'person_id': 999}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.arapahoe_budget_portrait(root, set(), 'us-co-county-08005', 'arapahoe', vote, root / 'assets')
 
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'

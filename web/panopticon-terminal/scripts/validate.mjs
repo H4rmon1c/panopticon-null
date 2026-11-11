@@ -47,6 +47,29 @@ try {
     ...(item.actions ?? []).flatMap((motion) => motion.votes),
   ]);
   const portraits = new Map(people.filter((person) => person.portrait).map((person) => [person.portrait.src, person.portrait]));
+  const proof = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json"), "utf8"));
+  const expectedUrl = "https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf";
+  if (proof.source_url !== expectedUrl || proof.source_page !== 7 ||
+      proof.source_sha256 !== "dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43" ||
+      proof.page_fixture !== "fixtures/atlas/portrait-sources/arapahoe-2022-budget-page.pdf" ||
+      proof.page_fixture_sha256 !== "23fc3217eaa1024751d62fde024dcf73f9f0ba6560fb4f86d7df1534f9fc6777" ||
+      !Array.isArray(proof.portraits) || proof.portraits.length !== 5) {
+    throw new Error("invalid Arapahoe portrait source proof");
+  }
+  const page = join(repositoryRoot, proof.page_fixture);
+  const pageMeta = await lstat(page);
+  if (!pageMeta.isFile() || pageMeta.isSymbolicLink() || pageMeta.size > 2_000_000 ||
+      createHash("sha256").update(await readFile(page)).digest("hex") !== proof.page_fixture_sha256) {
+    throw new Error("Arapahoe source page digest mismatch");
+  }
+  for (const record of research.records) for (const motion of record.actions ?? []) for (const vote of motion.votes) {
+    if (vote.portrait?.source_kind !== "embedded_pdf") continue;
+    const source = proof.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
+    if (!source || record.jurisdiction_ref !== "us-co-county-08005" ||
+        vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||
+        vote.portrait.source_url !== proof.source_url || vote.portrait.source_document_sha256 !== proof.source_sha256 ||
+        vote.portrait.source_page !== 7) throw new Error("Arapahoe portrait identity does not match its source proof");
+  }
   for (const [path, portrait] of portraits) {
     const meta = await lstat(join(root, path));
     if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 2_000_000) throw new Error("research portrait is not a bounded regular file");

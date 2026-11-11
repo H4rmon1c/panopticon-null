@@ -1,0 +1,15 @@
+{
+  "source_url": "https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2023%20Recommended%20Budget.pdf",
+  "source_sha256": "dd6476e64941674e310110b375d90dcf9f81ef904f0866183337b2b0fb867c43",
+  "source_page": 7,
+  "page_fixture": "fixtures/atlas/portrait-sources/arapahoe-2022-budget-page.pdf",
+  "page_fixture_sha256": "23fc3217eaa1024751d62fde024dcf73f9f0ba6560fb4f86d7df1534f9fc6777",
+  "page_fixture_note": "A one-page derivative made from source page 7. The private archive retains the original complete PDF and its network receipt.",
+  "portraits": [
+    {"name":"Carrie Warren-Gully","source_label":"Carrie Warren Gully","person_id":513,"image_index":6,"sha256":"84202caa2919b815df89984e12ad15f4de4289a35b74f048f54f0e68f0954174"},
+    {"name":"Nancy Sharpe","source_label":"Nancy N. Sharpe","person_id":225,"image_index":7,"sha256":"6555e2248f94d78cd16f6f4688f61c69da5029755f3da2ed9a982f6639588a8e"},
+    {"name":"Jeff Baker","source_label":"Jeff Baker","person_id":226,"image_index":8,"sha256":"62aa905c15672fba1f48abd5a356e03dda7f2492077dab2a77e4543ae9063314"},
+    {"name":"Nancy Jackson","source_label":"Nancy Jackson","person_id":227,"image_index":9,"sha256":"50405246a18ce227b0671befb2a0e5148e83d3e54acdec20d3e3d1cf0c2122da"},
+    {"name":"Bill Holen","source_label":"Bill L. Holen","person_id":228,"image_index":10,"sha256":"6023e0418ecc3a5f92ee2523482d6941de9156fd567cf46f3e9c6dd25370516e"}
+  ]
+}

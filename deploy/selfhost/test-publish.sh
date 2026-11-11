@@ -84,6 +84,7 @@ grep -q 'recorded_voter_co_castle_rock' "$PNUL_CURRENT_LINK/portraits/portraits.
 first_release="$(readlink -f "$PNUL_CURRENT_LINK")"
 [[ -f "$PNUL_CURRENT_LINK/api/v1/alerts.json" && -f "$PNUL_CURRENT_LINK/api/v1/feed.json" && -f "$PNUL_CURRENT_LINK/api/v1/coverage.json" ]]
 [[ -f "$PNUL_CURRENT_LINK/research.html" && -f "$PNUL_CURRENT_LINK/api/v1/research.json" ]]
+[[ -f "$PNUL_CURRENT_LINK/research-portraits/84202caa2919b815df89984e12ad15f4de4289a35b74f048f54f0e68f0954174.jpg" ]]
 cmp -s "$PNUL_CURRENT_LINK/public/research-signals.json" "$PNUL_CURRENT_LINK/api/v1/research.json"
 [[ ! -e "$PNUL_CURRENT_LINK/scripts/build-alert-api.mjs" ]]
 
