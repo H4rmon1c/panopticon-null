@@ -10,9 +10,11 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILES = (
-    ("Silver Plume town", "us-co-place-0870360", "silver-plume", "https://silverplumetown.com/agendas-and-minutes/", "/wp-content/uploads/"),
-    ("Moffat town", "us-co-place-0851250", "moffat", "https://www.townofmoffatco.gov/documents", "/uploads/"),
-    ("Simla town", "us-co-place-0870635", "simla", "https://townofsimla.com/documents", "/uploads/"),
+    ("Silver Plume town", "us-co-place-0870360", "silver-plume", "https://silverplumetown.com/agendas-and-minutes/", "/wp-content/uploads/", True),
+    ("Moffat town", "us-co-place-0851250", "moffat", "https://www.townofmoffatco.gov/documents", "/uploads/", True),
+    ("Simla town", "us-co-place-0870635", "simla", "https://townofsimla.com/documents", "/uploads/", True),
+    ("Del Norte town", "us-co-place-0819795", "del-norte", "https://www.delnortecolorado.com/minutes-agendas/", "/wp-content/uploads/", False),
+    ("Saguache town", "us-co-place-0867005", "saguache", "https://www.townofsaguache.org/documents", "/uploads/", False),
 )
 
 
@@ -34,7 +36,7 @@ scheduled = {
 }
 snapshot = read_json(ROOT / "web/panopticon-terminal/public/public-snapshot.json")
 
-for name, ref, slug, index_url, pdf_prefix in PROFILES:
+for name, ref, slug, index_url, pdf_prefix, has_excerpt in PROFILES:
     assert by_ref[ref]["name"] == name and by_ref[ref]["kind"] == "municipality"
     index_id, pdf_id = f"{slug}-document-index", f"{slug}-pdf-documents"
     assert mapped[index_id] == {
@@ -59,13 +61,16 @@ for name, ref, slug, index_url, pdf_prefix in PROFILES:
     assert index_id not in scheduled and pdf_id not in scheduled
 
     excerpt = ROOT / f"fixtures/co-{slug}/index-excerpt.html"
-    manifest = read_json(ROOT / f"fixtures/co-{slug}/index-excerpt.json")
-    assert manifest["source_url"] == index_url
-    assert hashlib.sha256(excerpt.read_bytes()).hexdigest() == manifest["excerpt_sha256"]
-    assert len(manifest["full_page_sha256"]) == 64
+    manifest_path = ROOT / f"fixtures/co-{slug}/index-excerpt.json"
+    assert excerpt.exists() == has_excerpt and manifest_path.exists() == has_excerpt
+    if has_excerpt:
+        manifest = read_json(manifest_path)
+        assert manifest["source_url"] == index_url
+        assert hashlib.sha256(excerpt.read_bytes()).hexdigest() == manifest["excerpt_sha256"]
+        assert len(manifest["full_page_sha256"]) == 64
     assert ref not in json.dumps(snapshot)
     for directory in (ROOT / "fixtures/atlas/cases", ROOT / "fixtures/atlas/preview-cases"):
         for path in directory.glob("*.v2.json"):
             assert read_json(path)["jurisdiction"]["jurisdiction_ref"] != ref
 
-print("Three towns map to unscheduled, bounded PDF document indexes and no public case")
+print(f"{len(PROFILES)} towns map to unscheduled, bounded PDF document indexes and no public case")
