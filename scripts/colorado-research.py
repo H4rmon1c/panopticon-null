@@ -2460,6 +2460,98 @@ def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
 
 
 DOUGLAS_GALLERY = 'https://www.douglasco.gov/board-county-commissioners/current-and-former-commissioners/'
+ARAPAHOE_FIELDS_PROFILE = 'https://files.arapahoeco.gov/your_county/board_of_county_commissioners/commissioner_rhonda_fields.php'
+
+
+class FieldsProfile(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.current = None
+        self.text = ''
+        self.values = {'heading': [], 'name': [], 'title': []}
+        self.card_depth = 0
+        self.card_count = 0
+        self.images = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = (attrs.get('class') or '').split()
+        if tag == 'div':
+            if self.card_depth:
+                self.card_depth += 1
+            elif 'freeform-contact-us' in classes:
+                self.card_depth = 1
+                self.card_count += 1
+        if tag == 'img' and self.card_depth and attrs.get('src'):
+            self.images.append(attrs['src'])
+        key = ('heading' if tag == 'h1' else 'name' if tag == 'div' and 'freeform-contact-name' in classes
+               else 'title' if tag == 'div' and 'freeform-contact-title' in classes else None)
+        if key in ('name', 'title') and not self.card_depth:
+            key = None
+        if key and self.current is None:
+            self.current, self.text = (tag, key), ''
+
+    def handle_endtag(self, tag):
+        if self.current and self.current[0] == tag:
+            self.values[self.current[1]].append(' '.join(self.text.split()))
+            self.current = None
+        if tag == 'div' and self.card_depth:
+            self.card_depth -= 1
+
+    def handle_data(self, data):
+        if self.current:
+            self.text += data[:500]
+
+
+def arapahoe_fields_image(body):
+    parser = FieldsProfile()
+    parser.feed(body.decode('utf8', 'replace'))
+    if (parser.card_count != 1 or parser.values['heading'] != ['Commissioner Rhonda Fields']
+            or parser.values['name'] != ['Rhonda Fields']
+            or parser.values['title'] != ['Commissioner, District 5']):
+        return None
+    _, base = page_links(body, ARAPAHOE_FIELDS_PROFILE)
+    images = []
+    for src in parser.images:
+        target = resolve_page_link(ARAPAHOE_FIELDS_PROFILE, base, src)
+        if target and re.fullmatch(r'https://files\.arapahoeco\.gov/Board%20of%20County%20Commissioners/Rhonda%20Fields\.png\?t=[0-9]{1,20}', target):
+            images.append(target)
+    if len(images) != 1:
+        return None
+    return images[0], 'Rhonda Fields — Arapahoe County Commissioner, District 5'
+
+
+def collect_arapahoe_fields(data_dir, db, people, budget):
+    if 'Rhonda Fields' not in people:
+        return 0
+    host = 'files.arapahoeco.gov'
+    rules, observations = get_robots(host, budget=budget)
+    archive(data_dir, observations)
+    override = os.environ.get('PNUL_ALLOW_ARAPAHOE_PROFILE') == '1'
+    if not override and not allowed(rules, ARAPAHOE_FIELDS_PROFILE):
+        return 0
+    observations = get(ARAPAHOE_FIELDS_PROFILE, {host}, maximum=MAX_PAGE_BYTES, redirects=0, budget=budget)
+    archive(data_dir, observations)
+    page_receipt, page = observations[-1]
+    if page_receipt['status'] != 200 or 'html' not in page_receipt.get('content_type', '').lower():
+        return 0
+    match = arapahoe_fields_image(page)
+    if not match or (not override and not allowed(rules, match[0])):
+        return 0
+    image_url, caption = match
+    observations = get(image_url, {host}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
+    archive(data_dir, observations)
+    image_receipt, image = observations[-1]
+    if image_receipt['status'] != 200 or not image.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 0
+    info = {'kind': 'arapahoe_fields_profile', 'source_url': ARAPAHOE_FIELDS_PROFILE,
+            'source_sha256': sha(page), 'image_url': image_url, 'image_sha256': sha(image),
+            'caption': caption, 'extension': 'png', 'image_receipt': image_receipt}
+    with db:
+        db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)',
+                   ('us-co-county-08005', 'Rhonda Fields', json.dumps(info)))
+    people.discard('Rhonda Fields')
+    return 1
 
 
 class DouglasGallery(HTMLParser):
@@ -2596,6 +2688,13 @@ def collect_portraits(data_dir, db, limit):
             canonical_host = urlsplit(canonical).hostname if canonical else None
             if canonical_host and canonical_host.removeprefix('www.') in discovery_hosts(data_dir, db, ref):
                 host = canonical_host
+            if ref == 'us-co-county-08005':
+                try:
+                    stored += collect_arapahoe_fields(data_dir, db, people, budget)
+                except BudgetExhausted:
+                    raise
+                except (OSError, UnicodeError, ValueError, RuntimeError):
+                    pass
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
@@ -2678,6 +2777,10 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
         if (ref != 'us-co-county-08035' or page_url != DOUGLAS_GALLERY
                 or douglas_gallery_image(page, name) != (image_url, info['caption'])):
             raise ValueError('commissioner gallery does not bind the person and image')
+    elif info.get('kind') == 'arapahoe_fields_profile':
+        if (ref != 'us-co-county-08005' or name != 'Rhonda Fields' or page_url != ARAPAHOE_FIELDS_PROFILE
+                or arapahoe_fields_image(page) != (image_url, info['caption'])):
+            raise ValueError('county profile does not bind the person and image')
     else:
         _, base = page_links(page, page_url)
         if not any(resolve_page_link(page_url, base, src) == image_url and alt == info['caption']
@@ -2693,7 +2796,10 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
         if not portrait_name_matches(name, info['caption'], alias_text):
             raise ValueError('portrait caption does not identify the named person')
     host = urlsplit(page_url).hostname
-    if (host.removeprefix('www.') not in discovery_hosts(data_dir, db, ref)
+    known_hosts = discovery_hosts(data_dir, db, ref)
+    fields_host = (info.get('kind') == 'arapahoe_fields_profile' and host == 'files.arapahoeco.gov'
+                   and 'arapahoeco.gov' in known_hosts)
+    if ((host.removeprefix('www.') not in known_hosts and not fields_host)
             or urlsplit(image_url).hostname != host):
         raise ValueError('portrait source is outside the jurisdiction website')
     image = source_blob(data_dir, image_digest, 2_000_000)

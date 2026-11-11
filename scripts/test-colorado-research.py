@@ -1832,6 +1832,44 @@ class ResearchTests(unittest.TestCase):
         self.assertIsNone(module.douglas_gallery_image(card + card, 'Lora Thomas'))
         self.assertIsNone(module.douglas_gallery_image(card.replace(b'Commissioner Lora Thomas', b'Commissioner Lora Thomas Junior'), 'Lora Thomas'))
 
+    def test_arapahoe_fields_portrait_requires_exact_profile_and_explicit_policy(self):
+        image_url = 'https://files.arapahoeco.gov/Board%20of%20County%20Commissioners/Rhonda%20Fields.png?t=202603181434200'
+        body = (b'<base href="https://files.arapahoeco.gov/">'
+                b'<h1>Commissioner Rhonda Fields</h1><div class="freeform-contact-us"><div class="freeform-contact-name">Rhonda Fields</div>'
+                b'<div class="freeform-contact-title">Commissioner, District 5</div>'
+                b'<img alt="image" src="Board%20of%20County%20Commissioners/Rhonda%20Fields.png?t=202603181434200"></div>')
+        image = b'\x89PNG\r\n\x1a\nfixture'
+        self.assertEqual(module.arapahoe_fields_image(body)[0], image_url)
+        self.assertIsNone(module.arapahoe_fields_image(body.replace(b'Commissioner, District 5', b'Commissioner, District 4')))
+        self.assertIsNone(module.arapahoe_fields_image(body.replace(b'Rhonda%20Fields.png', b'Other.png')))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            denied = SimpleNamespace(can_fetch=lambda *_: False)
+            def fetch(url, _hosts, **_kwargs):
+                content = body if url == module.ARAPAHOE_FIELDS_PROFILE else image
+                obs = receipt(url, content)
+                obs['content_type'] = 'text/html' if url == module.ARAPAHOE_FIELDS_PROFILE else 'image/png'
+                return [(obs, content)]
+            try:
+                with db:
+                    db.execute('insert into discovery values (?,?,?,?)',
+                               ('us-co-county-08005', 'https://www.arapahoeco.gov/', module.utcnow(), '{}'))
+                with patch.object(module, 'get_robots', return_value=(denied, [])), \
+                     patch.object(module, 'get', side_effect=fetch) as request, \
+                     patch.dict(module.os.environ, {'PNUL_ALLOW_ARAPAHOE_PROFILE': '0'}):
+                    self.assertEqual(module.collect_arapahoe_fields(root, db, {'Rhonda Fields'}, module.DownloadBudget(10_000_000)), 0)
+                    request.assert_not_called()
+                with patch.object(module, 'get_robots', return_value=(denied, [])), \
+                     patch.object(module, 'get', side_effect=fetch), \
+                     patch.dict(module.os.environ, {'PNUL_ALLOW_ARAPAHOE_PROFILE': '1'}):
+                    self.assertEqual(module.collect_arapahoe_fields(root, db, {'Rhonda Fields'}, module.DownloadBudget(10_000_000)), 1)
+                portrait = module.checked_portrait(root, db, module.observation_keys(root), 'us-co-county-08005', 'Rhonda Fields', root / 'assets')
+                self.assertEqual(portrait['sha256'], module.sha(image))
+                self.assertIsNone(module.checked_portrait(root, db, module.observation_keys(root), 'us-co-county-08005', 'Other Name', root / 'assets'))
+            finally:
+                db.close()
+
     def test_douglas_gallery_portrait_rechecks_source_card_and_original_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
