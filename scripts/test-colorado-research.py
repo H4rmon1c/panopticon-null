@@ -479,6 +479,31 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_legacy_substring_false_positive_is_filtered_without_provenance_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                client, ref = 'denver', 'us-co-place-0820000'
+                url = module.query_url(client, 0, 100, module.LEGACY_TERM_VERSION)
+                source = [{'MatterId': 123, 'MatterTitle': 'Development plan on Faxon Court', 'MatterFile': '24-1'}]
+                body = json.dumps(source).encode()
+                obs = receipt(url, body)
+                module.archive(root, [(obs, body)])
+                with db:
+                    db.execute('insert into scan_history values (?,?,?,?)', (client, 0, obs['sha256'], json.dumps(obs)))
+                    db.execute('insert into leads values (?,?,?,?,?,?,?,?,?)',
+                               ('co-legistar-denver-123', ref, client, 123, 0, 0, obs['sha256'],
+                                json.dumps({'title': source[0]['MatterTitle']}), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(report['records'], [])
+                self.assertEqual(report['coverage']['non_surveillance_mentions_withheld'], 1)
+                self.assertEqual(report['coverage']['omitted_failed_provenance'], 0)
+            finally:
+                db.close()
+
     def test_retry_and_action_queues_prioritize_unattempted_then_oldest(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1413,6 +1438,21 @@ class ResearchTests(unittest.TestCase):
                 self.assertIsNone(module.littleton_report_portrait(root, {key}, 'us-co-place-0845255', 'littletongov', {**vote, 'name': 'Robert Reichardt'}, root / 'assets'))
                 with self.assertRaises(ValueError):
                     module.littleton_report_portrait(root, set(), 'us-co-place-0845255', 'littletongov', vote, root / 'assets')
+
+    def test_commerce_portrait_requires_exact_voter_and_archived_city_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proof = json.loads((ROOT / 'fixtures/atlas/portrait-sources/commerce-city-2022-report-proof.json').read_text())
+            key = (proof['source_url'], proof['source_sha256'])
+            vote = {'name': 'Benjamin Huseman', 'person_id': 402}
+            with patch.object(module, 'source_blob', return_value=b'%PDF-fixture'):
+                result = module.commerce_report_portrait(root, {key}, 'us-co-place-0816495', 'commerce', vote, root / 'assets')
+                self.assertEqual((result['source_page'], result['embedded_image_index']), (2, 0))
+                self.assertEqual(result['source_document_sha256'], proof['source_sha256'])
+                self.assertIsNone(module.commerce_report_portrait(root, {key}, 'us-co-place-0816495', 'wrong', vote, root / 'assets'))
+                self.assertIsNone(module.commerce_report_portrait(root, {key}, 'us-co-place-0816495', 'commerce', {**vote, 'person_id': 403}, root / 'assets'))
+                with self.assertRaises(ValueError):
+                    module.commerce_report_portrait(root, set(), 'us-co-place-0816495', 'commerce', vote, root / 'assets')
 
     def test_commissioner_profile_image_requires_exact_heading_caption_and_official_host(self):
         source = (b'<h1>Commissioner Abe Laydon, District I</h1>'

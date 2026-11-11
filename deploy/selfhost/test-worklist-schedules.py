@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Selecting a schedule must never imply reviewed or executed discovery."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 
@@ -33,4 +34,23 @@ with tempfile.TemporaryDirectory(dir=ROOT/'deploy/selfhost',prefix='.worklist-te
         mixed=module.build_rows(combined);check(mixed)
         assert count(mixed,'scheduled_calendar_ids')==7 and count(mixed,'scheduled_document_index_ids')==5
     finally: module.MATRIX=previous
+with tempfile.TemporaryDirectory(prefix='panopticon-directory-test-') as temporary:
+    directory=Path(temporary)/'municipalities.json'
+    original=json.loads(module.MUNICIPAL_DIRECTORY.read_text())
+    valid={row['id']:row for row in json.loads(module.GEOGRAPHY.read_text())['jurisdictions']}
+    previous=module.MUNICIPAL_DIRECTORY;module.MUNICIPAL_DIRECTORY=directory
+    try:
+        for mutation in ('digest','name','url','page','source'):
+            data=json.loads(json.dumps(original))
+            item=next(row for row in data['municipalities'] if row['listing_name']=='Iliff')
+            if mutation=='digest': data['supplemental_sources']['cml_directory_2026']['sha256']='0'*64
+            if mutation=='name': item['listing_name']='Another Town'
+            if mutation=='url': item['website_url']='https://attacker.example/'
+            if mutation=='page': item['source_locator']='2026 municipal directory, PDF page 165'
+            if mutation=='source': item['website_source']='unknown'
+            directory.write_text(json.dumps(data))
+            try: module.municipal_website_leads(valid)
+            except ValueError: pass
+            else: raise AssertionError(f'accepted altered directory {mutation}')
+    finally: module.MUNICIPAL_DIRECTORY=previous
 print('Worklist distinguishes configured profiles, selected schedule, unknown review state and unmeasured searches.')

@@ -107,14 +107,37 @@ def municipal_website_leads(valid_refs):
             or source.get("url") != "https://www.cml.org/home/networking-events/membership/membership"
             or not re.fullmatch(r"[0-9a-f]{64}", source.get("sha256", ""))):
         raise ValueError("invalid municipal directory provenance")
+    supplemental = directory.get("supplemental_sources", {})
+    if supplemental != {"cml_directory_2026": {
+            "url": "https://www.cml.org/docs/default-source/municipal-directory/2026-municipal-directory.pdf?sfvrsn=ef58ed61_2",
+            "sha256": "78a598cb922f82bb7a40f7d33a89006d37b4b7dd299319d22b0cd55bef365d19",
+            "archived_on": "2026-11-11"}}:
+        raise ValueError("invalid supplemental municipal directory provenance")
+    extra = {
+        "us-co-place-0838590": ("Iliff", "https://www.townofiliff.com/", 164),
+        "us-co-place-0848500": ("Manzanola", "https://townofmanzanola.colorado.gov/", 206),
+        "us-co-place-0850040": ("Merino", "https://townofmerino.colorado.gov/", 211),
+        "us-co-place-0882130": ("Walden", "https://townofwaldenco.com/", 314),
+    }
     entries = directory.get("municipalities", [])
     leads = {}
+    seen_extra = set()
     for item in entries:
         ref = item["jurisdiction_ref"]
         url = item["website_url"]
         name = item["listing_name"]
+        origin = item.get("website_source")
+        if origin is None:
+            valid_locator = item["source_locator"] == f"Links to Colorado cities and towns > {name}"
+        else:
+            expected = extra.get(ref)
+            valid_locator = bool(origin == "cml_directory_2026" and expected and
+                (name, url, item["source_locator"]) ==
+                (expected[0], expected[1], f"2026 municipal directory, PDF page {expected[2]}"))
+            if valid_locator:
+                seen_extra.add(ref)
         if (ref in leads or ref not in valid_refs or valid_refs[ref]["kind"] != "municipality"
-                or not name or item["source_locator"] != f"Links to Colorado cities and towns > {name}"):
+                or not name or not valid_locator):
             raise ValueError(f"invalid municipal directory binding: {item}")
         if url is not None:
             parts = urlsplit(url)
@@ -122,6 +145,8 @@ def municipal_website_leads(valid_refs):
                     or parts.username or parts.password or len(url) > 2_048):
                 raise ValueError(f"invalid municipal website lead: {item}")
         leads[ref] = item
+    if seen_extra != set(extra):
+        raise ValueError("supplemental municipal directory bindings are incomplete")
     counts = directory["counts"]
     municipal_count = sum(row["kind"] == "municipality" for row in valid_refs.values())
     linked = sum(item["website_url"] is not None for item in entries)
