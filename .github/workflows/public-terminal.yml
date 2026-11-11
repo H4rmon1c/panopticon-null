@@ -28,12 +28,15 @@ jobs:
           node --check web/panopticon-terminal/decision.js
           node --check web/panopticon-terminal/scripts/validate.mjs
           node --check web/panopticon-terminal/scripts/build-decision-pages.mjs
+          node --check web/panopticon-terminal/scripts/check-commerce-launch-card.mjs
           node --check web/panopticon-terminal/scripts/24-colorado-coverage.mjs
           for script in web/panopticon-terminal/scripts/[0-9][0-9]-*.js; do
             node --check "$script"
           done
       - name: Validate shell, snapshot, and references
         run: node web/panopticon-terminal/scripts/validate.mjs
+      - name: Verify public launch evidence card
+        run: node web/panopticon-terminal/scripts/check-commerce-launch-card.mjs
       - name: Verify archived Colorado geography rebuild
         shell: bash
         run: |
