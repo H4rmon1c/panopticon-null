@@ -92,9 +92,138 @@ class ResearchTests(unittest.TestCase):
             try:
                 with patch.object(module, 'DIRECTORY', directory), patch.object(module, 'bootstrap_counties', return_value={}), \
                      patch.object(module, 'school_website_leads', return_value=[school]), \
+                     patch.object(module, 'special_district_website_leads', return_value=[]), \
                      patch.object(module, 'discover_one', side_effect=discovered):
                     module.discover(root, db, limit=2, workers=1, refresh=False)
                 self.assertEqual(db.execute('select jurisdiction_ref from discovery').fetchone()[0], school[0])
+            finally:
+                db.close()
+
+    def test_special_district_directory_excludes_shared_hosts_paths_and_changed_names(self):
+        entries = [
+            ('01001', 'One Metropolitan District', 'one.example/', '1.0'),
+            ('01002', 'Two Metropolitan District', 'shared.example/', '1.0'),
+            ('01003', 'Three Metropolitan District', 'shared.example/three', '1.0'),
+            ('01004', 'Four Metropolitan District', 'path.example/four', '1.0'),
+            ('01005', 'Five Metropolitan District', 'city.example/', '1.0'),
+            ('01006', 'Six Metropolitan District', 'six.example/', '2.0'),
+            ('01007', 'Seven Metropolitan District', 'seven.example/', '1.0'),
+        ]
+        geography = [{'id': 'dola-district-' + code, 'code': code, 'kind': 'district_provisional',
+                      'name': name if code != '01007' else 'Different District'}
+                     for code, name, _, _ in entries]
+        source = json.dumps([{'lgid': code, 'name': name, 'url': url, 'lgstatus_i': status}
+                             for code, name, url, status in entries]).encode()
+        leads = module.special_districts.build(source, geography, {'city.example'})
+        self.assertEqual(leads, [('dola-district-01001', 'One Metropolitan District', 'https://one.example/')])
+        with self.assertRaises(ValueError):
+            module.special_districts.build(json.dumps(json.loads(source) * 2).encode(), geography)
+        self.assertIsNone(module.special_districts.website('https://user:password@one.example/'))
+        self.assertIsNone(module.special_districts.website('https://127.0.0.1/'))
+
+    def test_special_district_home_requires_the_whole_name_in_displayed_content(self):
+        name = 'One Metropolitan District'
+        self.assertTrue(module.district_home_matches(b'<h1>One Metropolitan District</h1>', name))
+        self.assertTrue(module.district_home_matches(b'<img alt="One Metropolitan District">', name))
+        self.assertFalse(module.district_home_matches(b'<img alt/>', name))
+        self.assertFalse(module.district_home_matches(b'<script>One Metropolitan District</script>', name))
+        self.assertFalse(module.district_home_matches(b'<h1>Other Metropolitan District</h1>', name))
+        self.assertFalse(module.district_home_matches(b'<h1>One Metropolitan District Two</h1>', 'One Metropolitan District Two Three'))
+
+    def test_special_district_evidence_requires_captured_home_identity_and_exact_directory_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            ref, name, home = 'dola-district-01001', 'One Metropolitan District', 'https://one.example/'
+            body = b'<h1>One Metropolitan District</h1>'
+            proof = receipt(home, body)
+            proof['content_type'] = 'text/html'
+            module.archive(root, [(proof, body)])
+            try:
+                with db:
+                    db.execute('insert into discovery values (?,?,?,?)',
+                               (ref, home, module.utcnow(), json.dumps({'district_identity_receipt': proof})))
+                with patch.object(module, 'special_district_website_leads', return_value=[(ref, name, home)]):
+                    self.assertEqual(module.discovery_hosts(root, db, ref), {'one.example'})
+                    with db:
+                        db.execute('update discovery set source_url=?', ('https://other.example/',))
+                    self.assertEqual(module.discovery_hosts(root, db, ref), set())
+                    with db:
+                        db.execute('update discovery set source_url=?, result_json=?', (home, '{}'))
+                    self.assertEqual(module.discovery_hosts(root, db, ref), set())
+            finally:
+                db.close()
+
+    def test_special_district_does_not_bind_another_agency_portal(self):
+        home = 'https://one.example/'
+        body = (b'<h1>One Metropolitan District</h1>'
+                b'<a href="https://city.legistar.com/Calendar.aspx">City agenda</a>'
+                b'<a href="/agenda.pdf">Agenda</a>')
+        def fetch(url, _hosts, **_kwargs):
+            content = body if url == home else b''
+            meta = receipt(url, content)
+            meta.update(content_type='text/html', status=200 if url == home else 404)
+            return [(meta, content)]
+        robots = receipt(home + 'robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), patch.object(module, 'get', side_effect=fetch):
+            result, _ = module.discover_one('dola-district-01001', 'One Metropolitan District', home, module.DownloadBudget(30_000_000))
+            wrong, _ = module.discover_one('dola-district-01002', 'Two Metropolitan District', home, module.DownloadBudget(30_000_000))
+        self.assertEqual(result['state'], 'directory_site_checked')
+        self.assertEqual(result['portals'], [])
+        self.assertEqual([item['url'] for item in result['documents']], ['https://one.example/agenda.pdf'])
+        self.assertEqual(wrong['state'], 'failed')
+        self.assertEqual(wrong['documents'], [])
+
+    def test_discovery_prioritizes_unseen_then_oldest_sites(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            directory = root / 'cities.json'
+            directory.write_text(json.dumps({'municipalities': []}))
+            leads = [('dola-district-01001', 'Old One', 'https://one.example/'),
+                     ('dola-district-01002', 'Old Two', 'https://two.example/'),
+                     ('dola-district-01003', 'Unseen Three', 'https://three.example/')]
+            checked = []
+            def discovered(ref, name, website, _budget):
+                checked.append(ref)
+                return ({'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
+                         'checked_at': module.utcnow(), 'state': 'directory_site_checked', 'portals': [], 'documents': []}, [])
+            try:
+                with db:
+                    for ref, name, url in leads[:2]:
+                        db.execute('insert into discovery values (?,?,?,?)', (ref, url, '2020-01-01T00:00:00+00:00', '{}'))
+                    db.execute('insert into discovery_attempts values (?,?,?,?)', (leads[0][0], '2021-01-01T00:00:00+00:00', 'failed', None))
+                    db.execute('insert into discovery_attempts values (?,?,?,?)', (leads[1][0], '2019-01-01T00:00:00+00:00', 'failed', None))
+                with patch.object(module, 'DIRECTORY', directory), patch.object(module, 'bootstrap_counties', return_value={}), \
+                     patch.object(module, 'school_website_leads', return_value=[]), \
+                     patch.object(module, 'special_district_website_leads', return_value=leads), \
+                     patch.object(module, 'discover_one', side_effect=discovered):
+                    module.discover(root, db, limit=2, workers=1, refresh=False)
+                self.assertEqual(checked, ['dola-district-01003', 'dola-district-01002'])
+            finally:
+                db.close()
+
+    def test_unexpected_site_failure_does_not_abandon_other_discovery_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            directory = root / 'cities.json'
+            directory.write_text(json.dumps({'municipalities': []}))
+            leads = [('dola-district-01001', 'One District', 'https://one.example/'),
+                     ('dola-district-01002', 'Two District', 'https://two.example/')]
+            def discovered(ref, name, website, _budget):
+                if ref == leads[0][0]:
+                    raise TypeError('malformed source content')
+                return ({'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
+                         'checked_at': module.utcnow(), 'state': 'directory_site_checked', 'portals': [], 'documents': []}, [])
+            try:
+                with patch.object(module, 'DIRECTORY', directory), patch.object(module, 'bootstrap_counties', return_value={}), \
+                     patch.object(module, 'school_website_leads', return_value=[]), \
+                     patch.object(module, 'special_district_website_leads', return_value=leads), \
+                     patch.object(module, 'discover_one', side_effect=discovered):
+                    module.discover(root, db, limit=2, workers=2, refresh=False)
+                rows = dict(db.execute('select jurisdiction_ref,state from discovery_attempts'))
+                self.assertEqual(rows, {leads[0][0]: 'failed', leads[1][0]: 'directory_site_checked'})
             finally:
                 db.close()
 
@@ -1924,6 +2053,46 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(report['records'][0]['people_context'], [])
                 self.assertNotIn('document_highlights', report['records'][0])
                 self.assertEqual(report['records'][0]['file'], 'School district meeting document')
+            finally:
+                db.close()
+
+    def test_special_district_document_uses_generic_public_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            ref, name, home = 'dola-district-01006', 'Crestview Water & Sanitation District', 'https://district.example/'
+            index, url = home + 'agenda', home + 'agenda.pdf'
+            identity = b'<h1>Crestview Water &amp; Sanitation District</h1>'
+            page = b'<a href="/agenda.pdf">Jane Example agenda</a>'
+            pdf = b'%PDF-district'
+            identity_obs, page_obs, pdf_obs = receipt(home, identity), receipt(index, page), receipt(url, pdf)
+            identity_obs['content_type'] = 'text/html'
+            module.archive(root, [(identity_obs, identity), (page_obs, page), (pdf_obs, pdf)])
+            text = b'Jane Example discussed Flock cameras.\n'
+            (root / 'extracted').mkdir()
+            (root / 'extracted' / module.sha(text)).write_bytes(text)
+            candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0,
+                         'label': 'Jane Example agenda'}
+            result = {'state': 'matched', 'receipt': pdf_obs, 'document_sha256': module.sha(pdf),
+                      'extracted_sha256': module.sha(text), 'evidence_id': 'evidence:district',
+                      'finding': {'evidence_id': 'evidence:district', 'matched_rule_ids': ['vendor.flock-safety'],
+                                  'citations': [{'evidence_id': 'evidence:district', 'locator': {'kind': 'line', 'start': 1},
+                                                 'quote': 'Jane Example discussed Flock cameras.'}]}}
+            try:
+                with db:
+                    db.execute('insert into discovery values (?,?,?,?)',
+                               (ref, home, module.utcnow(), json.dumps({'district_identity_receipt': identity_obs})))
+                    db.execute('''insert into document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  values (?,?,?,'matched',?,?)''', (ref, url, json.dumps(candidate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                with patch.object(module, 'special_district_website_leads', return_value=[(ref, name, home)]):
+                    module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertEqual(report['records'][0]['file'], 'Special district meeting document')
+                self.assertEqual(report['records'][0]['people_context'], [])
+                self.assertNotIn('Jane Example', output.read_text())
+                self.assertNotIn('document_highlights', report['records'][0])
             finally:
                 db.close()
 

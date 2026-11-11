@@ -27,6 +27,7 @@ import tomllib
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 
 from public_http import USER_AGENT, BudgetExhausted, get, public_ip
+import colorado_special_districts as special_districts
 from vendor.protego import Protego
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -650,6 +651,56 @@ def geography_names():
     return {item['id']: item['name'] for item in json.loads(GEOGRAPHY.read_text())['jurisdictions']}
 
 
+@lru_cache(maxsize=1)
+def special_district_website_leads():
+    geography = json.loads(GEOGRAPHY.read_text())['jurisdictions']
+    cities = json.loads(DIRECTORY.read_text())['municipalities']
+    existing = [item.get('website_url', '') for item in cities]
+    existing.extend(url for _, _, url in school_website_leads())
+    hosts = set()
+    for url in existing:
+        try:
+            host = urlsplit(url).hostname
+            if host:
+                hosts.add(host)
+        except ValueError:
+            continue
+    return tuple(special_districts.build(special_districts.pinned_source(), geography, hosts))
+
+
+class DistrictIdentity(HTMLParser):
+    """Read displayed page names, including official logo alt text."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.hidden = 0
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in ('script', 'style', 'template'):
+            self.hidden += 1
+        if not self.hidden and tag.lower() == 'img':
+            self.parts.append((dict(attrs).get('alt') or '')[:500])
+
+    def handle_endtag(self, tag):
+        if tag.lower() in ('script', 'style', 'template') and self.hidden:
+            self.hidden -= 1
+
+    def handle_data(self, data):
+        if not self.hidden and len(self.parts) < 20000:
+            self.parts.append(data[:20000])
+
+
+def district_home_matches(body, name):
+    def words(value):
+        return ' '.join(re.findall(r'[^\W_]+', value.casefold().replace('&', ' and ')))
+    wanted = words(name)
+    if len(wanted) < 12 or len(wanted.split()) < 3:
+        return False
+    page = DistrictIdentity()
+    page.feed(body.decode('utf8', 'replace'))
+    return f' {wanted} ' in f" {words(' '.join(page.parts))} "
+
+
 def discovery_hosts(data_dir, db, ref):
     """Revalidate a captured government-domain move before attributing sources."""
     row = db.execute('SELECT source_url,result_json FROM discovery WHERE jurisdiction_ref=?', (ref,)).fetchone()
@@ -658,6 +709,43 @@ def discovery_hosts(data_dir, db, ref):
     home = normalized_home(row[0])
     original = urlsplit(home).hostname.removeprefix('www.')
     hosts = {original}
+    if ref.startswith('dola-district-'):
+        try:
+            leads = {item[0]: item for item in special_district_website_leads()}
+            if ref not in leads or home != normalized_home(leads[ref][2]):
+                return set()
+            entry = json.loads(row[1])
+            proof = entry['district_identity_receipt']
+            proof_url = proof['url']
+            parsed = urlsplit(proof_url)
+            if (parsed.scheme != 'https' or not parsed.hostname
+                    or (parsed.hostname.removeprefix('www.') != original
+                        and proof_url != entry.get('canonical_url'))
+                    or not receipt_valid(proof, proof_url, proof['sha256'])
+                    or 'html' not in proof.get('content_type', '').lower()):
+                return set()
+            if parsed.hostname.removeprefix('www.') != original:
+                redirects = entry.get('canonical_redirects')
+                if (not canonical_gov_host(leads[ref][1], parsed.hostname)
+                        or not isinstance(redirects, list) or not 1 <= len(redirects) <= 2):
+                    return set()
+                current = home
+                for redirect in redirects:
+                    target = redirect['redirect_target']
+                    target_host = urlsplit(target).hostname
+                    if (not target_host or (target_host.removeprefix('www.') != original
+                            and not canonical_gov_host(leads[ref][1], target_host))
+                            or not verified_redirect_receipt(data_dir, redirect, current, target)):
+                        return set()
+                    current = target
+                if current != proof_url:
+                    return set()
+            encoded = (json.dumps(proof, sort_keys=True, separators=(',', ':')) + '\n').encode()
+            if (read_blob(data_dir / 'observations' / (sha(encoded) + '.json'), 65_536) != encoded
+                    or not district_home_matches(source_blob(data_dir, proof['sha256']), leads[ref][1])):
+                return set()
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return set()
     try:
         entry = json.loads(row[1])
         redirects, final = entry.get('canonical_redirects'), entry.get('canonical_receipt')
@@ -758,6 +846,10 @@ def discover_one(ref, name, website, budget):
             return meta['url'], body, rows
 
         final_home, body, home_rows = page_for(home)
+        if ref.startswith('dola-district-'):
+            if not district_home_matches(body, name):
+                raise ValueError('district name not established on website homepage')
+            result['district_identity_receipt'] = home_rows[-1][0]
         if urlsplit(final_home).hostname.removeprefix('www.') != host.removeprefix('www.'):
             if not canonical_gov_host(name, urlsplit(final_home).hostname):
                 raise ValueError('canonical website does not match jurisdiction')
@@ -783,7 +875,7 @@ def discover_one(ref, name, website, budget):
                                                     'label': ' '.join(label.split())[:160]})
                     subdomain = url.hostname or ''
                     client = subdomain.removesuffix('.legistar.com')
-                    if (not ref.startswith('us-co-school-') and url.scheme == 'https' and subdomain.endswith('.legistar.com')
+                    if (not ref.startswith(('us-co-school-', 'dola-district-')) and url.scheme == 'https' and subdomain.endswith('.legistar.com')
                             and re.fullmatch(r'[a-z0-9-]{1,80}', client)
                             and '.' not in client and not url.username and not url.password
                             and url.port in (None, 443)):
@@ -919,6 +1011,10 @@ def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_fail
     leads = [(x['jurisdiction_ref'], x['listing_name'], x['website_url']) for x in cities if x.get('website_url')]
     leads += [(ref, name, url) for ref, (name, url) in county.items()]
     leads.extend(school_website_leads())
+    county_hosts = {urlsplit(url).hostname.removeprefix('www.') for _, url in county.values()
+                    if urlsplit(url).hostname}
+    leads.extend(item for item in special_district_website_leads()
+                 if urlsplit(item[2]).hostname.removeprefix('www.') not in county_hosts)
     if only_usable:
         usable = {ref for ref, raw in db.execute('SELECT jurisdiction_ref,result_json FROM discovery')
                   if json.loads(raw).get('state') == 'directory_site_checked'}
@@ -928,18 +1024,31 @@ def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_fail
                   FROM discovery d LEFT JOIN discovery_attempts a USING(jurisdiction_ref)''')
                   if (attempt or json.loads(raw).get('state')) == 'failed'}
         leads = [item for item in leads if item[0] in failed]
+    attempts = {ref: attempted for ref, attempted in db.execute('''SELECT d.jurisdiction_ref,
+                COALESCE(a.attempted_at,d.checked_at) FROM discovery d
+                LEFT JOIN discovery_attempts a USING(jurisdiction_ref)''')}
+    # A fixed directory order can otherwise starve later districts forever as
+    # the first batch reaches its refresh deadline. Always visit unseen leads
+    # first, then rotate through the least recently attempted sites.
+    leads.sort(key=lambda item: (item[0] in attempts, attempts.get(item[0], '')))
     if not refresh:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        already = {row[0] for row in db.execute('''SELECT d.jurisdiction_ref FROM discovery d
-                   LEFT JOIN discovery_attempts a USING(jurisdiction_ref)
-                   WHERE COALESCE(a.attempted_at,d.checked_at) >= ?''', (cutoff,))}
-        leads = [item for item in leads if item[0] not in already]
+        leads = [item for item in leads if attempts.get(item[0], '') < cutoff]
     leads = leads[:limit]
-    print(f'Checking {len(leads)} county, municipal, or school website leads with {workers} workers', flush=True)
+    print(f'Checking {len(leads)} county, municipal, school, or special-district website leads with {workers} workers', flush=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        jobs = [pool.submit(discover_one, *item, budget) for item in leads]
+        jobs = {pool.submit(discover_one, *item, budget): item for item in leads}
         for count, job in enumerate(as_completed(jobs), 1):
-            result, observations = job.result()
+            try:
+                result, observations = job.result()
+            except Exception as error:
+                # An unexpected parser/network failure for one site's content
+                # must not abandon the rest of the statewide batch.
+                ref, name, website = jobs[job]
+                result = {'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
+                          'checked_at': utcnow(), 'state': 'failed', 'portals': [], 'documents': [],
+                          'error': f'unexpected discovery error: {type(error).__name__}'}
+                observations = []
             archive(data_dir, observations)
             if result['state'] == 'deferred':
                 continue
@@ -2962,7 +3071,8 @@ def export_report(data_dir, db, output, assets_dir=None):
             quote = citation['quote']
             # A public comment can contain a private person's name or address.
             school = geography[ref]['kind'] == 'school_district'
-            private_context = school or public_comment_context(lines, number)
+            special = geography[ref]['kind'] == 'district_provisional'
+            private_context = school or special or public_comment_context(lines, number)
             ocr_page = result.get('extraction_status') == 'complete_with_ocr'
             title = reference_title(quote, labels, private_context or ocr_page)
             people = [] if private_context or ocr_page else officials_near_reference(lines, number)
@@ -2977,7 +3087,8 @@ def export_report(data_dir, db, output, assets_dir=None):
                     continue
             record = {'id': 'co-document-' + sha((ref + '\0' + doc_digest).encode())[:24],
                 'kind': 'meeting_document', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref, 'jurisdiction': jurisdiction_name(geography[ref]),
-                'file': 'School district meeting document' if school else public_text(candidate.get('label'), 120), 'title': title,
+                'file': ('School district meeting document' if school else 'Special district meeting document' if special
+                         else public_text(candidate.get('label'), 120)), 'title': title,
                 'signals': labels, 'source_status': '', 'source_url': url,
                 'source_sha256': doc_digest, 'locator': f'extracted line {number}',
                 'captured_at': receipt['retrieved_at'], 'last_screened_at': updated,
@@ -2988,7 +3099,7 @@ def export_report(data_dir, db, output, assets_dir=None):
             if 'redirect_receipt' in candidate:
                 record.update(capture_adjustment=candidate['capture_adjustment'],
                               indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
-            if not ocr_page and not school:
+            if not ocr_page and not school and not special:
                 highlights = document_highlights(lines, number, finding['matched_rule_ids'])
                 if highlights:
                     record['document_highlights'] = highlights

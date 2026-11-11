@@ -20,6 +20,18 @@ const MAX_PDF: u64 = 20 * 1024 * 1024;
 // Linux O_NOFOLLOW: the document is untrusted and must not redirect reads.
 const NOFOLLOW: i32 = 0o400_000;
 
+fn valid_jurisdiction_ref(value: &str) -> bool {
+    let colorado = value.starts_with("us-co-")
+        && value.len() <= 100
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    let district = value
+        .strip_prefix("dola-district-")
+        .is_some_and(|id| id.len() == 5 && id.bytes().all(|byte| byte.is_ascii_digit()));
+    colorado || district
+}
+
 fn read_input(
     data_dir: &Path,
     digest: &str,
@@ -34,12 +46,7 @@ fn read_input(
     {
         bail!("invalid document digest");
     }
-    if !jurisdiction_ref.starts_with("us-co-")
-        || jurisdiction_ref.len() > 100
-        || !jurisdiction_ref
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
+    if !valid_jurisdiction_ref(jurisdiction_ref) {
         bail!("invalid Colorado jurisdiction reference");
     }
     let url = url::Url::parse(source_url)?;
@@ -75,6 +82,26 @@ fn read_input(
         bail!("PDF bytes do not match the preserved digest");
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_jurisdiction_ref;
+
+    #[test]
+    fn accepts_only_five_digit_dola_district_identifiers() {
+        assert!(valid_jurisdiction_ref("dola-district-01006"));
+        assert!(valid_jurisdiction_ref("us-co-county-08001"));
+        for invalid in [
+            "dola-district-1006",
+            "dola-district-010060",
+            "dola-district-01a06",
+            "dola-district-01006/../other",
+            "DOLA-district-01006",
+        ] {
+            assert!(!valid_jurisdiction_ref(invalid), "{invalid}");
+        }
+    }
 }
 
 pub(super) fn screen_pdf(
