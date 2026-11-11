@@ -70,8 +70,9 @@ no relevant decision exists.
    item, vote IDs, and source locators before showing a vote. Direct item
    votes, consent-block votes, consent-designated items with uncertain vote
    scope, and missing votes stay distinct. A failed motion remains failed.
-5. Look for identity-labeled portraits on government directories and retain
-   the original image bytes. A same-name official source or explicitly sourced
+5. Look for identity-labeled portraits in government directories, homepages,
+   and up to four linked same-host council or commissioner pages, and retain
+   the fetched image bytes. A same-name official source or explicitly sourced
    nickname is required; a missing portrait stays missing. The interface can
    also reuse an existing sourced portrait when the portal, jurisdiction,
    person ID, and name all match. Portrait dates are not inferred.

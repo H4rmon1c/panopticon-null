@@ -2112,7 +2112,8 @@ def officials_near_reference(lines, number):
 
 
 def portrait_name_matches(fullname, caption, alias_text=''):
-    match = re.fullmatch(r'(?:Profile picture of|Portrait of|Headshot of)\s+(.+)', caption, re.I)
+    match = re.fullmatch(r'(?:Profile picture of|Portrait of|Headshot of|Commissioner|'
+                         r'Councilmember|Councilor|Trustee|Mayor)\s+(.+)', caption, re.I)
     if not match:
         return False
     pictured = match.group(1).strip()
@@ -2126,6 +2127,78 @@ def portrait_name_matches(fullname, caption, alias_text=''):
     # spells out the same first name, nickname, and surname together.
     pattern = r'\b' + re.escape(full[0]) + r'\s*\(\s*' + re.escape(short[0]) + r'\s*\)\s*' + re.escape(full[-1]) + r'\b'
     return bool(re.search(pattern, alias_text, re.I))
+
+
+def portrait_navigation(body, page):
+    """Bound portrait discovery to linked leadership pages on the same host."""
+    links, base = page_links(body, page)
+    host = urlsplit(page).hostname
+    targets = []
+    for href, label in links:
+        try:
+            target = resolve_page_link(page, base, href)
+            if not target:
+                continue
+            parsed = urlsplit(target)
+            if (parsed.scheme != 'https' or parsed.hostname != host or parsed.port not in (None, 443)
+                    or parsed.username or parsed.password or parsed.fragment or len(target) > 2000):
+                continue
+            if re.search(r'\b(?:city|town|county)?\s*(?:council|commissioners?|trustees?)\b',
+                         label + ' ' + parsed.path.replace('-', ' '), re.I):
+                targets.append(target)
+        except ValueError:
+            continue
+    return list(dict.fromkeys(targets))[:4]
+
+
+def collect_labeled_portraits(data_dir, db, ref, people, host, rules, budget,
+                              source_url, body, alias_url=None, alias_body=b''):
+    """Store only an unambiguous, identity-labeled image from an official page."""
+    _, base = page_links(body, source_url)
+    images = parse_images(body)
+    alias_text = alias_body.decode('utf8', 'replace')
+    stored = 0
+    for name in sorted(people):
+        candidates = []
+        for src, alt in images:
+            if portrait_name_matches(name, alt, alias_text):
+                target = resolve_page_link(source_url, base, src)
+                if target:
+                    candidates.append((target, alt))
+        if len(candidates) != 1:
+            continue
+        image_url, caption = candidates[0]
+        parsed = urlsplit(image_url)
+        if (parsed.scheme != 'https' or parsed.hostname != host or parsed.port not in (None, 443)
+                or parsed.username or parsed.password or parsed.fragment or not allowed(rules, image_url)):
+            continue
+        try:
+            observations = get(image_url, {host}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
+            archive(data_dir, observations)
+            image_receipt, image = observations[-1]
+            if image_receipt['status'] != 200:
+                continue
+            if image.startswith(b'\xff\xd8\xff'):
+                extension = 'jpg'
+            elif image.startswith(b'\x89PNG\r\n\x1a\n'):
+                extension = 'png'
+            elif image.startswith(b'RIFF') and image[8:12] == b'WEBP':
+                extension = 'webp'
+            else:
+                continue
+            info = {'source_url': source_url, 'source_sha256': sha(body), 'image_url': image_url,
+                    'image_sha256': sha(image), 'caption': caption, 'extension': extension,
+                    'image_receipt': image_receipt, 'alias_url': alias_url,
+                    'alias_sha256': sha(alias_body) if alias_body else None}
+            with db:
+                db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)', (ref, name, json.dumps(info)))
+            stored += 1
+            people.discard(name)
+        except BudgetExhausted:
+            raise
+        except (OSError, ValueError, RuntimeError):
+            continue
+    return stored
 
 
 def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
@@ -2162,6 +2235,9 @@ def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
             with db:
                 db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)', (ref, name, json.dumps(info)))
             stored += 1
+            people.discard(name)
+        except BudgetExhausted:
+            raise
         except (OSError, UnicodeError, ValueError, RuntimeError, json.JSONDecodeError):
             continue
     return stored
@@ -2217,50 +2293,47 @@ def collect_portraits(data_dir, db, limit):
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
-                stored += collect_douglas_profiles(data_dir, db, ref, people, rules, budget)
-                continue
+                try:
+                    stored += collect_douglas_profiles(data_dir, db, ref, people, rules, budget)
+                except BudgetExhausted:
+                    raise
+                except (OSError, UnicodeError, ValueError, RuntimeError):
+                    pass
             directory = f'https://{host}/m/Directory'
-            body, observations = html_page(directory, host, rules, budget)
-            archive(data_dir, observations)
-            images = parse_images(body)
             alias_url = None
             alias_body = b''
             # The county's public commissioners page spells out nicknames;
             # never infer that Liz and Elizabeth are the same person by guess.
             if host.removeprefix('www.') == 'gunnisoncounty.org':
-                alias_url = f'https://{host}/127/County-Commissioners'
-                alias_body, observations = html_page(alias_url, host, rules, budget)
-                archive(data_dir, observations)
-            alias_text = alias_body.decode('utf8', 'replace')
-            for name in sorted(people):
-                candidates = [(urljoin(directory, src), alt) for src, alt in images
-                              if portrait_name_matches(name, alt, alias_text)]
-                if len(candidates) != 1:
+                try:
+                    alias_url = f'https://{host}/127/County-Commissioners'
+                    alias_body, observations = html_page(alias_url, host, rules, budget)
+                    archive(data_dir, observations)
+                except BudgetExhausted:
+                    raise
+                except (OSError, UnicodeError, ValueError, RuntimeError):
+                    alias_url, alias_body = None, b''
+            # A missing CivicPlus directory must not prevent looking at a
+            # council or commissioner page linked from the jurisdiction home.
+            home = canonical if canonical and urlsplit(canonical).hostname == host else f'https://{host}/'
+            pages = [directory, home]
+            visited = set()
+            while pages and len(visited) < 6:
+                page_url = pages.pop(0)
+                if page_url in visited:
                     continue
-                image_url, caption = candidates[0]
-                parsed = urlsplit(image_url)
-                if parsed.scheme != 'https' or parsed.hostname != host or parsed.username or parsed.password or parsed.fragment or not allowed(rules, image_url):
+                visited.add(page_url)
+                try:
+                    body, observations = html_page(page_url, host, rules, budget)
+                    archive(data_dir, observations)
+                    stored += collect_labeled_portraits(data_dir, db, ref, people, host, rules, budget,
+                                                        page_url, body, alias_url, alias_body)
+                    if page_url == home:
+                        pages.extend(portrait_navigation(body, page_url))
+                except BudgetExhausted:
+                    raise
+                except (OSError, UnicodeError, ValueError, RuntimeError):
                     continue
-                observations = get(image_url, {host}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
-                archive(data_dir, observations)
-                image_receipt, image = observations[-1]
-                if image_receipt['status'] != 200:
-                    continue
-                if image.startswith(b'\xff\xd8\xff'):
-                    extension = 'jpg'
-                elif image.startswith(b'\x89PNG\r\n\x1a\n'):
-                    extension = 'png'
-                elif image.startswith(b'RIFF') and image[8:12] == b'WEBP':
-                    extension = 'webp'
-                else:
-                    continue
-                info = {'source_url': directory, 'source_sha256': sha(body), 'image_url': image_url,
-                        'image_sha256': sha(image), 'caption': caption, 'extension': extension,
-                        'image_receipt': image_receipt, 'alias_url': alias_url,
-                        'alias_sha256': sha(alias_body) if alias_body else None}
-                with db:
-                    db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)', (ref, name, json.dumps(info)))
-                stored += 1
         except (OSError, UnicodeError, ValueError, RuntimeError, json.JSONDecodeError) as error:
             print(f'{ref}: official portrait search incomplete ({str(error)[:100]})', flush=True)
         finally:
@@ -2295,7 +2368,9 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
                 or official_profile_image(page, name) != (image_url, info['caption'])):
             raise ValueError('commissioner profile does not bind the person and image')
     else:
-        if not any(urljoin(page_url, src) == image_url and alt == info['caption'] for src, alt in parse_images(page)):
+        _, base = page_links(page, page_url)
+        if not any(resolve_page_link(page_url, base, src) == image_url and alt == info['caption']
+                   for src, alt in parse_images(page)):
             raise ValueError('portrait is not bound to the official directory image')
         alias_text = ''
         if info.get('alias_url'):
