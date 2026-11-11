@@ -147,9 +147,10 @@ function render(report) {
     if (item.kind === 'meeting_document' && new URL(item.indexed_source_url ?? item.source_url).hostname === 'towncloud.io') {
       card.append(node('p', 'meta', 'The government website links this meeting document; the responsible public body is not established.'));
     }
-    const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
-      item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
+    const sourceLabel = item.kind === 'meeting_document' ? `Open live ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
+      item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open live source query ↗';
     card.append(external(item.source_url, sourceLabel));
+    card.append(node('p', 'meta', 'The live source may have changed since capture; the recorded digest is below.'));
     if (item.capture_adjustment) {
       if (item.capture_adjustment === 'timestamp_omitted') {
         card.append(node('p', 'meta', 'The indexed link included a timestamp; the captured document uses the same path without it. The versions may differ.'));
