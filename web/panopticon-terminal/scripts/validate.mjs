@@ -6,6 +6,7 @@ import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
 import { matchesDenverGallery } from "../portraits/lookup.js";
 import { validateResearch } from "../research-api.js";
+import { assertEmbeddedPortraitMatches } from "./validate-embedded-portrait.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(process.env.PNUL_PORTRAIT_PROOF_ROOT ?? join(root, "..", ".."));
@@ -114,21 +115,33 @@ try {
       createHash("sha256").update(await readFile(commercePage)).digest("hex") !== commerce.page_fixture_sha256) {
     throw new Error("Commerce City source page digest mismatch");
   }
+  const denver2019 = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/denver-2019-budget-proof.json"), "utf8"));
+  if (denver2019.source_url !== "https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2019/2019_Budget%20Book_V1-OnlineVersion-compressed.pdf" ||
+      denver2019.source_page !== 6 || denver2019.source_sha256 !== "95c42fc5f567b3e4527166ff502b2e6145fce0a6bf5f8949d4df8ebc46b03fa2" ||
+      denver2019.page_fixture !== "fixtures/atlas/portrait-sources/denver-2019-budget-page.pdf" ||
+      denver2019.page_fixture_sha256 !== "1861dddc8b95d0d7718bd6152a172d4cd1a5fc11e11fdad7cac08762add184c9" ||
+      denver2019.alias_source_url !== "https://herndon-leadership.squarespace.com/meet-chris" ||
+      denver2019.alias_source_sha256 !== "1b12312bdefa5c8638a9c9147bc389009fce2d0f26d722224aa8ca45c32683b0" ||
+      !Array.isArray(denver2019.portraits) || denver2019.portraits.length !== 10) throw new Error("invalid 2019 Denver portrait proof");
+  const denver2020 = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/denver-2020-budget-proof.json"), "utf8"));
+  if (denver2020.source_url !== "https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2020/2020BudgetVolume1.pdf" ||
+      denver2020.source_page !== 6 || denver2020.source_sha256 !== "dae887ea080560ece3eae5430dbe80918b2befc548b3aa291f480acdbfe6e7e1" ||
+      denver2020.page_fixture !== "fixtures/atlas/portrait-sources/denver-2020-budget-page.pdf" ||
+      denver2020.page_fixture_sha256 !== "4dc327169778d106dc9f88c2902aacbe69740bf7dd564b2cbef96942fa06368e" ||
+      denver2020.portrait?.person_id !== 472 || denver2020.portrait?.name !== "Candi CdeBaca" ||
+      denver2020.portrait?.image_index !== 14 || denver2020.portrait?.original_sha256 !== "ae31c6ea93f266454d497e25c390bc4c8e34a09a1df9fcab06cb97e53086d9d0" ||
+      denver2020.portrait?.sha256 !== "d81c9f4e4d3af48a6629196c5693a8a8a6b3f2a2362336a4c46c1994e68c771e") throw new Error("invalid 2020 Denver portrait proof");
+  for (const denver of [denver2019, denver2020]) {
+    const pagePath = join(repositoryRoot, denver.page_fixture);
+    const meta = await lstat(pagePath);
+    if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 2_000_000 ||
+        createHash("sha256").update(await readFile(pagePath)).digest("hex") !== denver.page_fixture_sha256) {
+      throw new Error("Denver source page digest mismatch");
+    }
+  }
   for (const record of research.records) for (const motion of record.actions ?? []) for (const vote of motion.votes) {
     if (vote.portrait?.source_kind !== "embedded_pdf") continue;
-    const isLittleton = record.jurisdiction_ref === "us-co-place-0845255";
-    const isCommerce = record.jurisdiction_ref === "us-co-place-0816495";
-    const isLater = isLittleton && vote.portrait.source_document_sha256 === later.source_sha256;
-    const selected = isCommerce ? commerce : isLittleton ? (isLater ? later : littleton) :
-      (vote.portrait.source_document_sha256 === arapahoe2024.source_sha256 ? arapahoe2024 : proof);
-    const source = selected.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
-    if (!source || (!isLittleton && !isCommerce && record.jurisdiction_ref !== "us-co-county-08005") ||
-        vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||
-        vote.portrait.source_url !== selected.source_url || vote.portrait.source_document_sha256 !== selected.source_sha256 ||
-        vote.portrait.source_page !== selected.source_page ||
-        (isLittleton && !isLater && vote.portrait.embedded_original_sha256 !== source.original_sha256)) {
-      throw new Error("Embedded portrait identity does not match its source proof");
-    }
+    assertEmbeddedPortraitMatches(record, vote, { proof, arapahoe2024, littleton, later, commerce, denver2019, denver2020 });
   }
   for (const [path, portrait] of portraits) {
     const meta = await lstat(join(root, path));

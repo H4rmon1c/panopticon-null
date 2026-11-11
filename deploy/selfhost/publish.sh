@@ -178,7 +178,7 @@ PNUL_VALIDATE_RELEASE=1 "$node_bin" --test "$stage/scripts/test-client.mjs"
 cp -- "$stage/public/research-signals.json" "$stage/api/v1/research.json"
 
 # Operator scripts are needed for staging validation, not for browsers.
-rm -- "$stage/scripts/build-alert-api.mjs" "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/test-client.mjs"
+rm -- "$stage/scripts/build-alert-api.mjs" "$stage/scripts/build-decision-pages.mjs" "$stage/scripts/filter-portraits.mjs" "$stage/scripts/validate.mjs" "$stage/scripts/validate-embedded-portrait.mjs" "$stage/scripts/test-client.mjs"
 find "$stage" -type d -exec chmod 755 {} +
 find "$stage" -type f -exec chmod 644 {} +
 
