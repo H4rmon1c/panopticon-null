@@ -1,0 +1,1621 @@
+{
+  "schema_version": 1,
+  "purpose": "School district website discovery leads only; no source policy, decision, vote, or contract is verified.",
+  "sources": {
+    "cde_directory": {
+      "url": "https://ed.cde.state.co.us/district-and-boces-websites-and-maps",
+      "sha256": "c88dc2680759fe648b1be1f9fa402cb62dce7bc144957db11afdceb514992474"
+    },
+    "nces_directory": {
+      "url": "https://nces.ed.gov/ccd/Data/zip/ccd_lea_029_2425_w_1a_073025.zip",
+      "sha256": "2745169e4bc7cd53adff179830c3d4b9bb035ac79580ecea01ef389a161936a9"
+    },
+    "archived_on": "2026-11-11"
+  },
+  "counts": {
+    "geography_school_districts": 178,
+    "with_website_lead": 177,
+    "without_website_lead": 1
+  },
+  "school_districts": [
+    {
+      "jurisdiction_ref": "us-co-school-0800001",
+      "listing_name": "Cheyenne County RE-5",
+      "website_url": "http://www.cheyennesd.net/",
+      "state_district_code": "0520",
+      "nces_district_id": "0800001",
+      "source_locator": "CDE district code 0520",
+      "crosswalk_locator": "NCES ST_LEAID CO-0520"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0800016",
+      "listing_name": "Yuma 1",
+      "website_url": "http://www.yumaschools.org/",
+      "state_district_code": "3200",
+      "nces_district_id": "0800016",
+      "source_locator": "CDE district code 3200",
+      "crosswalk_locator": "NCES ST_LEAID CO-3200"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0800017",
+      "listing_name": "Wray RD-2",
+      "website_url": "http://www.wrayschools.org/",
+      "state_district_code": "3210",
+      "nces_district_id": "0800017",
+      "source_locator": "CDE district code 3210",
+      "crosswalk_locator": "NCES ST_LEAID CO-3210"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0800018",
+      "listing_name": "Idalia RJ-3",
+      "website_url": "http://www.idaliaco.us/",
+      "state_district_code": "3220",
+      "nces_district_id": "0800018",
+      "source_locator": "CDE district code 3220",
+      "crosswalk_locator": "NCES ST_LEAID CO-3220"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0800019",
+      "listing_name": "Liberty J-4",
+      "website_url": "http://www.libertyschoolj4.com/",
+      "state_district_code": "3230",
+      "nces_district_id": "0800019",
+      "source_locator": "CDE district code 3230",
+      "crosswalk_locator": "NCES ST_LEAID CO-3230"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0801920",
+      "listing_name": "Academy 20",
+      "website_url": "https://www.asd20.org/",
+      "state_district_code": "1040",
+      "nces_district_id": "0801920",
+      "source_locator": "CDE district code 1040",
+      "crosswalk_locator": "NCES ST_LEAID CO-1040"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0801950",
+      "listing_name": "Adams County 14",
+      "website_url": "http://www.adams14.org/",
+      "state_district_code": "0030",
+      "nces_district_id": "0801950",
+      "source_locator": "CDE district code 0030",
+      "crosswalk_locator": "NCES ST_LEAID CO-0030"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0801980",
+      "listing_name": "Agate 300",
+      "website_url": "https://www.agateschools.net/",
+      "state_district_code": "0960",
+      "nces_district_id": "0801980",
+      "source_locator": "CDE district code 0960",
+      "crosswalk_locator": "NCES ST_LEAID CO-0960"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802010",
+      "listing_name": "Aguilar Reorganized 6",
+      "website_url": "http://www.aguilarschools.com/",
+      "state_district_code": "1620",
+      "nces_district_id": "0802010",
+      "source_locator": "CDE district code 1620",
+      "crosswalk_locator": "NCES ST_LEAID CO-1620"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802040",
+      "listing_name": "Akron R-1",
+      "website_url": "http://www.akronrams.net/",
+      "state_district_code": "3030",
+      "nces_district_id": "0802040",
+      "source_locator": "CDE district code 3030",
+      "crosswalk_locator": "NCES ST_LEAID CO-3030"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802070",
+      "listing_name": "Alamosa RE-11J",
+      "website_url": "http://alamosa.k12.co.us/",
+      "state_district_code": "0100",
+      "nces_district_id": "0802070",
+      "source_locator": "CDE district code 0100",
+      "crosswalk_locator": "NCES ST_LEAID CO-0100"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802130",
+      "listing_name": "South Conejos RE-10",
+      "website_url": "http://southconejos.com/",
+      "state_district_code": "0580",
+      "nces_district_id": "0802130",
+      "source_locator": "CDE district code 0580",
+      "crosswalk_locator": "NCES ST_LEAID CO-0580"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802190",
+      "listing_name": "Archuleta County 50 JT",
+      "website_url": "http://www.mypagosaschools.com/",
+      "state_district_code": "0220",
+      "nces_district_id": "0802190",
+      "source_locator": "CDE district code 0220",
+      "crosswalk_locator": "NCES ST_LEAID CO-0220"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802220",
+      "listing_name": "Arickaree R-2",
+      "website_url": "https://www.arickaree.org/",
+      "state_district_code": "3040",
+      "nces_district_id": "0802220",
+      "source_locator": "CDE district code 3040",
+      "crosswalk_locator": "NCES ST_LEAID CO-3040"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802260",
+      "listing_name": "Arriba-Flagler C-20",
+      "website_url": "https://www.af20.net/",
+      "state_district_code": "1450",
+      "nces_district_id": "0802260",
+      "source_locator": "CDE district code 1450",
+      "crosswalk_locator": "NCES ST_LEAID CO-1450"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802280",
+      "listing_name": "Aspen 1",
+      "website_url": "http://www.aspenk12.net/",
+      "state_district_code": "2640",
+      "nces_district_id": "0802280",
+      "source_locator": "CDE district code 2640",
+      "crosswalk_locator": "NCES ST_LEAID CO-2640"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802310",
+      "listing_name": "Ault-Highland RE-9",
+      "website_url": "https://www.weldre9.org/",
+      "state_district_code": "3145",
+      "nces_district_id": "0802310",
+      "source_locator": "CDE district code 3145",
+      "crosswalk_locator": "NCES ST_LEAID CO-3145"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802340",
+      "listing_name": "Adams-Arapahoe 28J",
+      "website_url": "http://www.aurorak12.org/",
+      "state_district_code": "0180",
+      "nces_district_id": "0802340",
+      "source_locator": "CDE district code 0180",
+      "crosswalk_locator": "NCES ST_LEAID CO-0180"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802370",
+      "listing_name": "Platte Canyon 1",
+      "website_url": "http://www.plattecanyonschools.org/",
+      "state_district_code": "2600",
+      "nces_district_id": "0802370",
+      "source_locator": "CDE district code 2600",
+      "crosswalk_locator": "NCES ST_LEAID CO-2600"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802400",
+      "listing_name": "Bayfield 10 JT-R",
+      "website_url": "http://www.bayfield.k12.co.us/",
+      "state_district_code": "1530",
+      "nces_district_id": "0802400",
+      "source_locator": "CDE district code 1530",
+      "crosswalk_locator": "NCES ST_LEAID CO-1530"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802430",
+      "listing_name": "Bennett 29J",
+      "website_url": "https://www.bsd29j.com/",
+      "state_district_code": "0050",
+      "nces_district_id": "0802430",
+      "source_locator": "CDE district code 0050",
+      "crosswalk_locator": "NCES ST_LEAID CO-0050"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802460",
+      "listing_name": "Bethune R-5",
+      "website_url": "http://www.bethuneschool.com/",
+      "state_district_code": "1490",
+      "nces_district_id": "0802460",
+      "source_locator": "CDE district code 1490",
+      "crosswalk_locator": "NCES ST_LEAID CO-1490"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802490",
+      "listing_name": "Boulder Valley RE 2",
+      "website_url": "http://www.bvsd.org/",
+      "state_district_code": "0480",
+      "nces_district_id": "0802490",
+      "source_locator": "CDE district code 0480",
+      "crosswalk_locator": "NCES ST_LEAID CO-0480"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802520",
+      "listing_name": "Branson Reorganized 82",
+      "website_url": "http://www.bransonschoolonline.com/",
+      "state_district_code": "1750",
+      "nces_district_id": "0802520",
+      "source_locator": "CDE district code 1750",
+      "crosswalk_locator": "NCES ST_LEAID CO-1750"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802550",
+      "listing_name": "Briggsdale RE-10",
+      "website_url": "http://www.briggsdaleschool.org/",
+      "state_district_code": "3146",
+      "nces_district_id": "0802550",
+      "source_locator": "CDE district code 3146",
+      "crosswalk_locator": "NCES ST_LEAID CO-3146"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802580",
+      "listing_name": "School District 27J",
+      "website_url": "http://www.sd27j.org/",
+      "state_district_code": "0040",
+      "nces_district_id": "0802580",
+      "source_locator": "CDE district code 0040",
+      "crosswalk_locator": "NCES ST_LEAID CO-0040"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802610",
+      "listing_name": "Brush RE-2(J)",
+      "website_url": "http://www.brushschools.org/",
+      "state_district_code": "2395",
+      "nces_district_id": "0802610",
+      "source_locator": "CDE district code 2395",
+      "crosswalk_locator": "NCES ST_LEAID CO-2395"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802640",
+      "listing_name": "Buena Vista R-31",
+      "website_url": "http://www.bvschools.org/",
+      "state_district_code": "0490",
+      "nces_district_id": "0802640",
+      "source_locator": "CDE district code 0490",
+      "crosswalk_locator": "NCES ST_LEAID CO-0490"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802670",
+      "listing_name": "Burlington RE-6J",
+      "website_url": "http://www.burlingtonk12.org/",
+      "state_district_code": "1500",
+      "nces_district_id": "0802670",
+      "source_locator": "CDE district code 1500",
+      "crosswalk_locator": "NCES ST_LEAID CO-1500"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802700",
+      "listing_name": "Byers 32J",
+      "website_url": "http://www.byers32j.k12.co.us/",
+      "state_district_code": "0190",
+      "nces_district_id": "0802700",
+      "source_locator": "CDE district code 0190",
+      "crosswalk_locator": "NCES ST_LEAID CO-0190"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802730",
+      "listing_name": "Calhan RJ-1",
+      "website_url": "http://www.calhanschool.org/",
+      "state_district_code": "0970",
+      "nces_district_id": "0802730",
+      "source_locator": "CDE district code 0970",
+      "crosswalk_locator": "NCES ST_LEAID CO-0970"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802760",
+      "listing_name": "Campo RE-6",
+      "website_url": "http://www.campok12.org/",
+      "state_district_code": "0270",
+      "nces_district_id": "0802760",
+      "source_locator": "CDE district code 0270",
+      "crosswalk_locator": "NCES ST_LEAID CO-0270"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802790",
+      "listing_name": "Canon City RE-1",
+      "website_url": "http://www.canoncityschools.org/",
+      "state_district_code": "1140",
+      "nces_district_id": "0802790",
+      "source_locator": "CDE district code 1140",
+      "crosswalk_locator": "NCES ST_LEAID CO-1140"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802850",
+      "listing_name": "Center 26 JT",
+      "website_url": "http://www.center.k12.co.us/",
+      "state_district_code": "2810",
+      "nces_district_id": "0802850",
+      "source_locator": "CDE district code 2810",
+      "crosswalk_locator": "NCES ST_LEAID CO-2810"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802880",
+      "listing_name": "Cheraw 31",
+      "website_url": "https://www.cheraw.k12.co.us/",
+      "state_district_code": "2560",
+      "nces_district_id": "0802880",
+      "source_locator": "CDE district code 2560",
+      "crosswalk_locator": "NCES ST_LEAID CO-2560"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802910",
+      "listing_name": "Cherry Creek 5",
+      "website_url": "http://www.cherrycreekschools.org/",
+      "state_district_code": "0130",
+      "nces_district_id": "0802910",
+      "source_locator": "CDE district code 0130",
+      "crosswalk_locator": "NCES ST_LEAID CO-0130"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0802940",
+      "listing_name": "Cheyenne Mountain 12",
+      "website_url": "http://www.cmsd.k12.co.us/",
+      "state_district_code": "1020",
+      "nces_district_id": "0802940",
+      "source_locator": "CDE district code 1020",
+      "crosswalk_locator": "NCES ST_LEAID CO-1020"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803000",
+      "listing_name": "Clear Creek RE-1",
+      "website_url": "http://www.ccsdre1.org/",
+      "state_district_code": "0540",
+      "nces_district_id": "0803000",
+      "source_locator": "CDE district code 0540",
+      "crosswalk_locator": "NCES ST_LEAID CO-0540"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803030",
+      "listing_name": "Plateau Valley 50",
+      "website_url": "http://www.pvsd50.org/",
+      "state_district_code": "1990",
+      "nces_district_id": "0803030",
+      "source_locator": "CDE district code 1990",
+      "crosswalk_locator": "NCES ST_LEAID CO-1990"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803060",
+      "listing_name": "Colorado Springs 11",
+      "website_url": "http://www.d11.org/",
+      "state_district_code": "1010",
+      "nces_district_id": "0803060",
+      "source_locator": "CDE district code 1010",
+      "crosswalk_locator": "NCES ST_LEAID CO-1010"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803090",
+      "listing_name": "Montezuma-Cortez RE-1",
+      "website_url": "http://www.cortez.k12.co.us/",
+      "state_district_code": "2035",
+      "nces_district_id": "0803090",
+      "source_locator": "CDE district code 2035",
+      "crosswalk_locator": "NCES ST_LEAID CO-2035"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803120",
+      "listing_name": "Cotopaxi RE-3",
+      "website_url": "http://www.cotopaxire3.org/",
+      "state_district_code": "1160",
+      "nces_district_id": "0803120",
+      "source_locator": "CDE district code 1160",
+      "crosswalk_locator": "NCES ST_LEAID CO-1160"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803150",
+      "listing_name": "Creede School District",
+      "website_url": "http://www.creedek12.net/",
+      "state_district_code": "2010",
+      "nces_district_id": "0803150",
+      "source_locator": "CDE district code 2010",
+      "crosswalk_locator": "NCES ST_LEAID CO-2010"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803180",
+      "listing_name": "Cripple Creek-Victor RE-1",
+      "website_url": "https://ccvschools.com/",
+      "state_district_code": "3010",
+      "nces_district_id": "0803180",
+      "source_locator": "CDE district code 3010",
+      "crosswalk_locator": "NCES ST_LEAID CO-3010"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803210",
+      "listing_name": "Crowley County RE-1-J",
+      "website_url": "http://www.cck12.net/",
+      "state_district_code": "0770",
+      "nces_district_id": "0803210",
+      "source_locator": "CDE district code 0770",
+      "crosswalk_locator": "NCES ST_LEAID CO-0770"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803240",
+      "listing_name": "De Beque 49JT",
+      "website_url": "http://www.dbschools.org/",
+      "state_district_code": "1980",
+      "nces_district_id": "0803240",
+      "source_locator": "CDE district code 1980",
+      "crosswalk_locator": "NCES ST_LEAID CO-1980"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803270",
+      "listing_name": "Deer Trail 26J",
+      "website_url": "http://www.dt26j.com/",
+      "state_district_code": "0170",
+      "nces_district_id": "0803270",
+      "source_locator": "CDE district code 0170",
+      "crosswalk_locator": "NCES ST_LEAID CO-0170"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803300",
+      "listing_name": "Upper Rio Grande School District C-7",
+      "website_url": "http://www.dncsd.org/",
+      "state_district_code": "2730",
+      "nces_district_id": "0803300",
+      "source_locator": "CDE district code 2730",
+      "crosswalk_locator": "NCES ST_LEAID CO-2730"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803330",
+      "listing_name": "Delta County 50(J)",
+      "website_url": "http://www.deltaschools.com/",
+      "state_district_code": "0870",
+      "nces_district_id": "0803330",
+      "source_locator": "CDE district code 0870",
+      "crosswalk_locator": "NCES ST_LEAID CO-0870"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803360",
+      "listing_name": "Denver County 1",
+      "website_url": "http://www.dpsk12.org/",
+      "state_district_code": "0880",
+      "nces_district_id": "0803360",
+      "source_locator": "CDE district code 0880",
+      "crosswalk_locator": "NCES ST_LEAID CO-0880"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803390",
+      "listing_name": "Dolores RE-4a",
+      "website_url": "http://doloresschools.org/",
+      "state_district_code": "2055",
+      "nces_district_id": "0803390",
+      "source_locator": "CDE district code 2055",
+      "crosswalk_locator": "NCES ST_LEAID CO-2055"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803420",
+      "listing_name": "Dolores County RE No.2",
+      "website_url": "http://www.dc2j.org/",
+      "state_district_code": "0890",
+      "nces_district_id": "0803420",
+      "source_locator": "CDE district code 0890",
+      "crosswalk_locator": "NCES ST_LEAID CO-0890"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803450",
+      "listing_name": "Douglas County RE 1",
+      "website_url": "https://www.dcsdk12.org/",
+      "state_district_code": "0900",
+      "nces_district_id": "0803450",
+      "source_locator": "CDE district code 0900",
+      "crosswalk_locator": "NCES ST_LEAID CO-0900"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803480",
+      "listing_name": "Durango 9-R",
+      "website_url": "http://www.durangoschools.org/",
+      "state_district_code": "1520",
+      "nces_district_id": "0803480",
+      "source_locator": "CDE district code 1520",
+      "crosswalk_locator": "NCES ST_LEAID CO-1520"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803510",
+      "listing_name": "Eads RE-1",
+      "website_url": "http://www.eadseagles.org/",
+      "state_district_code": "1430",
+      "nces_district_id": "0803510",
+      "source_locator": "CDE district code 1430",
+      "crosswalk_locator": "NCES ST_LEAID CO-1430"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803540",
+      "listing_name": "Eagle County RE 50",
+      "website_url": "http://www.eagleschools.net/",
+      "state_district_code": "0910",
+      "nces_district_id": "0803540",
+      "source_locator": "CDE district code 0910",
+      "crosswalk_locator": "NCES ST_LEAID CO-0910"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803600",
+      "listing_name": "Eaton RE-2",
+      "website_url": "http://www.eaton.k12.co.us/",
+      "state_district_code": "3085",
+      "nces_district_id": "0803600",
+      "source_locator": "CDE district code 3085",
+      "crosswalk_locator": "NCES ST_LEAID CO-3085"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803630",
+      "listing_name": "Edison 54 JT",
+      "website_url": "https://www.edison54jt.org/",
+      "state_district_code": "1120",
+      "nces_district_id": "0803630",
+      "source_locator": "CDE district code 1120",
+      "crosswalk_locator": "NCES ST_LEAID CO-1120"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803690",
+      "listing_name": "Elbert 200",
+      "website_url": "http://www.elbertschool.org/",
+      "state_district_code": "0950",
+      "nces_district_id": "0803690",
+      "source_locator": "CDE district code 0950",
+      "crosswalk_locator": "NCES ST_LEAID CO-0950"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803720",
+      "listing_name": "Elizabeth School District",
+      "website_url": "https://www.elizabethschooldistrict.org/",
+      "state_district_code": "0920",
+      "nces_district_id": "0803720",
+      "source_locator": "CDE district code 0920",
+      "crosswalk_locator": "NCES ST_LEAID CO-0920"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803750",
+      "listing_name": "Ellicott 22",
+      "website_url": "http://www.ellicottschools.org/",
+      "state_district_code": "1050",
+      "nces_district_id": "0803750",
+      "source_locator": "CDE district code 1050",
+      "crosswalk_locator": "NCES ST_LEAID CO-1050"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803780",
+      "listing_name": "Englewood 1",
+      "website_url": "http://www.englewoodschools.net/",
+      "state_district_code": "0120",
+      "nces_district_id": "0803780",
+      "source_locator": "CDE district code 0120",
+      "crosswalk_locator": "NCES ST_LEAID CO-0120"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803810",
+      "listing_name": "Park (Estes Park) R-3",
+      "website_url": "http://www.estesschools.org/",
+      "state_district_code": "1570",
+      "nces_district_id": "0803810",
+      "source_locator": "CDE district code 1570",
+      "crosswalk_locator": "NCES ST_LEAID CO-1570"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803840",
+      "listing_name": "Park County RE-2",
+      "website_url": "http://www.parkcountyre2.org/",
+      "state_district_code": "2610",
+      "nces_district_id": "0803840",
+      "source_locator": "CDE district code 2610",
+      "crosswalk_locator": "NCES ST_LEAID CO-2610"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803870",
+      "listing_name": "District 49",
+      "website_url": "http://www.d49.org/",
+      "state_district_code": "1110",
+      "nces_district_id": "0803870",
+      "source_locator": "CDE district code 1110",
+      "crosswalk_locator": "NCES ST_LEAID CO-1110"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803930",
+      "listing_name": "Frenchman RE-3",
+      "website_url": "https://www.flemingschools.org/",
+      "state_district_code": "1850",
+      "nces_district_id": "0803930",
+      "source_locator": "CDE district code 1850",
+      "crosswalk_locator": "NCES ST_LEAID CO-1850"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803960",
+      "listing_name": "Fremont RE-2",
+      "website_url": "http://www.re-2.org/",
+      "state_district_code": "1150",
+      "nces_district_id": "0803960",
+      "source_locator": "CDE district code 1150",
+      "crosswalk_locator": "NCES ST_LEAID CO-1150"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0803990",
+      "listing_name": "Poudre R-1",
+      "website_url": "http://www.psdschools.org/",
+      "state_district_code": "1550",
+      "nces_district_id": "0803990",
+      "source_locator": "CDE district code 1550",
+      "crosswalk_locator": "NCES ST_LEAID CO-1550"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804020",
+      "listing_name": "Weld Re-8 Schools",
+      "website_url": "http://www.weld8.org/",
+      "state_district_code": "3140",
+      "nces_district_id": "0804020",
+      "source_locator": "CDE district code 3140",
+      "crosswalk_locator": "NCES ST_LEAID CO-3140"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804050",
+      "listing_name": "Fort Morgan RE-3",
+      "website_url": "http://www.morgan.k12.co.us/",
+      "state_district_code": "2405",
+      "nces_district_id": "0804050",
+      "source_locator": "CDE district code 2405",
+      "crosswalk_locator": "NCES ST_LEAID CO-2405"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804080",
+      "listing_name": "Fountain 8",
+      "website_url": "http://www.ffc8.org/",
+      "state_district_code": "1000",
+      "nces_district_id": "0804080",
+      "source_locator": "CDE district code 1000",
+      "crosswalk_locator": "NCES ST_LEAID CO-1000"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804110",
+      "listing_name": "Fowler R-4J",
+      "website_url": "http://www.fowler.k12.co.us/",
+      "state_district_code": "2540",
+      "nces_district_id": "0804110",
+      "source_locator": "CDE district code 2540",
+      "crosswalk_locator": "NCES ST_LEAID CO-2540"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804140",
+      "listing_name": "Sierra Grande R-30",
+      "website_url": "http://www.sierragrandeschool.net/",
+      "state_district_code": "0740",
+      "nces_district_id": "0804140",
+      "source_locator": "CDE district code 0740",
+      "crosswalk_locator": "NCES ST_LEAID CO-0740"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804200",
+      "listing_name": "Weld County RE-1",
+      "website_url": "https://www.wcsdre1.org/en",
+      "state_district_code": "3080",
+      "nces_district_id": "0804200",
+      "source_locator": "CDE district code 3080",
+      "crosswalk_locator": "NCES ST_LEAID CO-3080"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804230",
+      "listing_name": "Gilpin County RE-1",
+      "website_url": "http://www.gilpin.k12.co.us/",
+      "state_district_code": "1330",
+      "nces_district_id": "0804230",
+      "source_locator": "CDE district code 1330",
+      "crosswalk_locator": "NCES ST_LEAID CO-1330"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804260",
+      "listing_name": "Roaring Fork RE-1",
+      "website_url": "http://www.rfsd.k12.co.us/",
+      "state_district_code": "1180",
+      "nces_district_id": "0804260",
+      "source_locator": "CDE district code 1180",
+      "crosswalk_locator": "NCES ST_LEAID CO-1180"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804290",
+      "listing_name": "Granada RE-1",
+      "website_url": "http://www.granadaschools.org/",
+      "state_district_code": "2650",
+      "nces_district_id": "0804290",
+      "source_locator": "CDE district code 2650",
+      "crosswalk_locator": "NCES ST_LEAID CO-2650"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804320",
+      "listing_name": "East Grand 2",
+      "website_url": "http://www.egsd.org/",
+      "state_district_code": "1350",
+      "nces_district_id": "0804320",
+      "source_locator": "CDE district code 1350",
+      "crosswalk_locator": "NCES ST_LEAID CO-1350"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804350",
+      "listing_name": "Mesa County Valley 51",
+      "website_url": "http://www.mesa.k12.co.us/index.cfm",
+      "state_district_code": "2000",
+      "nces_district_id": "0804350",
+      "source_locator": "CDE district code 2000",
+      "crosswalk_locator": "NCES ST_LEAID CO-2000"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804380",
+      "listing_name": "Garfield 16",
+      "website_url": "http://www.garfield16.org/",
+      "state_district_code": "1220",
+      "nces_district_id": "0804380",
+      "source_locator": "CDE district code 1220",
+      "crosswalk_locator": "NCES ST_LEAID CO-1220"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804410",
+      "listing_name": "Greeley 6",
+      "website_url": "http://www.greeleyschools.org/",
+      "state_district_code": "3120",
+      "nces_district_id": "0804410",
+      "source_locator": "CDE district code 3120",
+      "crosswalk_locator": "NCES ST_LEAID CO-3120"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804440",
+      "listing_name": "Pawnee RE-12",
+      "website_url": "http://www.pawneeschool.org/",
+      "state_district_code": "3148",
+      "nces_district_id": "0804440",
+      "source_locator": "CDE district code 3148",
+      "crosswalk_locator": "NCES ST_LEAID CO-3148"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804470",
+      "listing_name": "Gunnison Watershed RE1J",
+      "website_url": "http://www.gunnisonschools.net/",
+      "state_district_code": "1360",
+      "nces_district_id": "0804470",
+      "source_locator": "CDE district code 1360",
+      "crosswalk_locator": "NCES ST_LEAID CO-1360"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804500",
+      "listing_name": "Hanover 28",
+      "website_url": "https://www.hanoverhornets.org/",
+      "state_district_code": "1070",
+      "nces_district_id": "0804500",
+      "source_locator": "CDE district code 1070",
+      "crosswalk_locator": "NCES ST_LEAID CO-1070"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804530",
+      "listing_name": "Harrison 2",
+      "website_url": "http://www.hsd2.org/",
+      "state_district_code": "0980",
+      "nces_district_id": "0804530",
+      "source_locator": "CDE district code 0980",
+      "crosswalk_locator": "NCES ST_LEAID CO-0980"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804560",
+      "listing_name": "Haxtun RE-2J",
+      "website_url": "https://haxtunk12.org/",
+      "state_district_code": "2630",
+      "nces_district_id": "0804560",
+      "source_locator": "CDE district code 2630",
+      "crosswalk_locator": "NCES ST_LEAID CO-2630"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804590",
+      "listing_name": "Hayden RE-1",
+      "website_url": "http://www.haydenschools.org/",
+      "state_district_code": "2760",
+      "nces_district_id": "0804590",
+      "source_locator": "CDE district code 2760",
+      "crosswalk_locator": "NCES ST_LEAID CO-2760"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804620",
+      "listing_name": "Hinsdale County RE 1",
+      "website_url": "http://www.lakecityschool.org/",
+      "state_district_code": "1380",
+      "nces_district_id": "0804620",
+      "source_locator": "CDE district code 1380",
+      "crosswalk_locator": "NCES ST_LEAID CO-1380"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804650",
+      "listing_name": "Hoehne Reorganized 3",
+      "website_url": "http://www.hoehnesd.org/",
+      "state_district_code": "1600",
+      "nces_district_id": "0804650",
+      "source_locator": "CDE district code 1600",
+      "crosswalk_locator": "NCES ST_LEAID CO-1600"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804680",
+      "listing_name": "Holly RE-3",
+      "website_url": "http://www.hollyschool.org/",
+      "state_district_code": "2670",
+      "nces_district_id": "0804680",
+      "source_locator": "CDE district code 2670",
+      "crosswalk_locator": "NCES ST_LEAID CO-2670"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804710",
+      "listing_name": "Holyoke RE-1J",
+      "website_url": "http://www.hcosd.org/",
+      "state_district_code": "2620",
+      "nces_district_id": "0804710",
+      "source_locator": "CDE district code 2620",
+      "crosswalk_locator": "NCES ST_LEAID CO-2620"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804740",
+      "listing_name": "Genoa-Hugo C113",
+      "website_url": "http://www.genoahugo.org/",
+      "state_district_code": "1780",
+      "nces_district_id": "0804740",
+      "source_locator": "CDE district code 1780",
+      "crosswalk_locator": "NCES ST_LEAID CO-1780"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804770",
+      "listing_name": "Ignacio 11 JT",
+      "website_url": "http://www.ignacioschools.org/",
+      "state_district_code": "1540",
+      "nces_district_id": "0804770",
+      "source_locator": "CDE district code 1540",
+      "crosswalk_locator": "NCES ST_LEAID CO-1540"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804800",
+      "listing_name": "Jefferson County R-1",
+      "website_url": "http://www.jeffcopublicschools.org/",
+      "state_district_code": "1420",
+      "nces_district_id": "0804800",
+      "source_locator": "CDE district code 1420",
+      "crosswalk_locator": "NCES ST_LEAID CO-1420"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804830",
+      "listing_name": "Johnstown-Milliken RE-5J",
+      "website_url": "https://weldre5j.org/",
+      "state_district_code": "3110",
+      "nces_district_id": "0804830",
+      "source_locator": "CDE district code 3110",
+      "crosswalk_locator": "NCES ST_LEAID CO-3110"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804860",
+      "listing_name": "Julesburg RE-1",
+      "website_url": "http://www.julesburg.org/",
+      "state_district_code": "2862",
+      "nces_district_id": "0804860",
+      "source_locator": "CDE district code 2862",
+      "crosswalk_locator": "NCES ST_LEAID CO-2862"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804890",
+      "listing_name": "Karval RE-23",
+      "website_url": "http://www.karvalschool.org/",
+      "state_district_code": "1810",
+      "nces_district_id": "0804890",
+      "source_locator": "CDE district code 1810",
+      "crosswalk_locator": "NCES ST_LEAID CO-1810"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804920",
+      "listing_name": "Weld County School District RE-3J",
+      "website_url": "http://www.re3j.com/",
+      "state_district_code": "3090",
+      "nces_district_id": "0804920",
+      "source_locator": "CDE district code 3090",
+      "crosswalk_locator": "NCES ST_LEAID CO-3090"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804950",
+      "listing_name": "Platte Valley RE-7",
+      "website_url": "http://www.plattevalley.k12.co.us/",
+      "state_district_code": "3130",
+      "nces_district_id": "0804950",
+      "source_locator": "CDE district code 3130",
+      "crosswalk_locator": "NCES ST_LEAID CO-3130"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0804980",
+      "listing_name": "Kim Reorganized 88",
+      "website_url": "http://www.kimk12.org/",
+      "state_district_code": "1760",
+      "nces_district_id": "0804980",
+      "source_locator": "CDE district code 1760",
+      "crosswalk_locator": "NCES ST_LEAID CO-1760"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805010",
+      "listing_name": "Kiowa C-2",
+      "website_url": "http://www.kiowaschool.org/",
+      "state_district_code": "0930",
+      "nces_district_id": "0805010",
+      "source_locator": "CDE district code 0930",
+      "crosswalk_locator": "NCES ST_LEAID CO-0930"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805040",
+      "listing_name": "Kit Carson R-1",
+      "website_url": "http://www.kcsdr1.org/",
+      "state_district_code": "0510",
+      "nces_district_id": "0805040",
+      "source_locator": "CDE district code 0510",
+      "crosswalk_locator": "NCES ST_LEAID CO-0510"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805070",
+      "listing_name": "West Grand 1-JT",
+      "website_url": "http://www.westgrand.k12.co.us/",
+      "state_district_code": "1340",
+      "nces_district_id": "0805070",
+      "source_locator": "CDE district code 1340",
+      "crosswalk_locator": "NCES ST_LEAID CO-1340"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805100",
+      "listing_name": "North Conejos RE-1J",
+      "website_url": "https://www.northconejos.com/",
+      "state_district_code": "0550",
+      "nces_district_id": "0805100",
+      "source_locator": "CDE district code 0550",
+      "crosswalk_locator": "NCES ST_LEAID CO-0550"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805130",
+      "listing_name": "East Otero R-1",
+      "website_url": "http://www.lajuntaschools.org/",
+      "state_district_code": "2520",
+      "nces_district_id": "0805130",
+      "source_locator": "CDE district code 2520",
+      "crosswalk_locator": "NCES ST_LEAID CO-2520"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805160",
+      "listing_name": "La Veta RE-2",
+      "website_url": "https://lvk12.org/",
+      "state_district_code": "1400",
+      "nces_district_id": "0805160",
+      "source_locator": "CDE district code 1400",
+      "crosswalk_locator": "NCES ST_LEAID CO-1400"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805190",
+      "listing_name": "Lake County R-1",
+      "website_url": "http://www.lakecountyschools.net/",
+      "state_district_code": "1510",
+      "nces_district_id": "0805190",
+      "source_locator": "CDE district code 1510",
+      "crosswalk_locator": "NCES ST_LEAID CO-1510"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805220",
+      "listing_name": "Lamar RE-2",
+      "website_url": "https://www.lamarschools.org/",
+      "state_district_code": "2660",
+      "nces_district_id": "0805220",
+      "source_locator": "CDE district code 2660",
+      "crosswalk_locator": "NCES ST_LEAID CO-2660"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805250",
+      "listing_name": "Las Animas RE-1",
+      "website_url": "https://www.la-schools.com/",
+      "state_district_code": "0290",
+      "nces_district_id": "0805250",
+      "source_locator": "CDE district code 0290",
+      "crosswalk_locator": "NCES ST_LEAID CO-0290"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805280",
+      "listing_name": "Limon RE-4J",
+      "website_url": "http://www.limonbadgers.com/",
+      "state_district_code": "1790",
+      "nces_district_id": "0805280",
+      "source_locator": "CDE district code 1790",
+      "crosswalk_locator": "NCES ST_LEAID CO-1790"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805310",
+      "listing_name": "Littleton 6",
+      "website_url": "http://www.littletonpublicschools.net/",
+      "state_district_code": "0140",
+      "nces_district_id": "0805310",
+      "source_locator": "CDE district code 0140",
+      "crosswalk_locator": "NCES ST_LEAID CO-0140"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805340",
+      "listing_name": "Lone Star 101",
+      "website_url": "http://lonestarschool.net/",
+      "state_district_code": "3060",
+      "nces_district_id": "0805340",
+      "source_locator": "CDE district code 3060",
+      "crosswalk_locator": "NCES ST_LEAID CO-3060"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805370",
+      "listing_name": "St Vrain Valley RE 1J",
+      "website_url": "http://www.svvsd.org/",
+      "state_district_code": "0470",
+      "nces_district_id": "0805370",
+      "source_locator": "CDE district code 0470",
+      "crosswalk_locator": "NCES ST_LEAID CO-0470"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805400",
+      "listing_name": "Thompson R2-J",
+      "website_url": "https://www.tsd.org/",
+      "state_district_code": "1560",
+      "nces_district_id": "0805400",
+      "source_locator": "CDE district code 1560",
+      "crosswalk_locator": "NCES ST_LEAID CO-1560"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805460",
+      "listing_name": "Mancos RE-6",
+      "website_url": "http://www.mancosre6.edu/",
+      "state_district_code": "2070",
+      "nces_district_id": "0805460",
+      "source_locator": "CDE district code 2070",
+      "crosswalk_locator": "NCES ST_LEAID CO-2070"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805490",
+      "listing_name": "Manitou Springs 14",
+      "website_url": "http://www.mssd14.org/",
+      "state_district_code": "1030",
+      "nces_district_id": "0805490",
+      "source_locator": "CDE district code 1030",
+      "crosswalk_locator": "NCES ST_LEAID CO-1030"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805520",
+      "listing_name": "Manzanola 3J",
+      "website_url": "http://www.manzanola.k12.co.us/",
+      "state_district_code": "2535",
+      "nces_district_id": "0805520",
+      "source_locator": "CDE district code 2535",
+      "crosswalk_locator": "NCES ST_LEAID CO-2535"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805550",
+      "listing_name": "Mapleton 1",
+      "website_url": "http://www.mapleton.us/",
+      "state_district_code": "0010",
+      "nces_district_id": "0805550",
+      "source_locator": "CDE district code 0010",
+      "crosswalk_locator": "NCES ST_LEAID CO-0010"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805580",
+      "listing_name": "Mc Clave RE-2",
+      "website_url": "http://www.mcclaveschool.org/",
+      "state_district_code": "0310",
+      "nces_district_id": "0805580",
+      "source_locator": "CDE district code 0310",
+      "crosswalk_locator": "NCES ST_LEAID CO-0310"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805610",
+      "listing_name": "Meeker RE1",
+      "website_url": "http://www.meeker.k12.co.us/",
+      "state_district_code": "2710",
+      "nces_district_id": "0805610",
+      "source_locator": "CDE district code 2710",
+      "crosswalk_locator": "NCES ST_LEAID CO-2710"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805640",
+      "listing_name": "Buffalo RE-4",
+      "website_url": "https://www.merino.k12.co.us/",
+      "state_district_code": "1860",
+      "nces_district_id": "0805640",
+      "source_locator": "CDE district code 1860",
+      "crosswalk_locator": "NCES ST_LEAID CO-1860"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805670",
+      "listing_name": "Miami/Yoder 60 JT",
+      "website_url": "http://www.miamiyoder.org/",
+      "state_district_code": "1130",
+      "nces_district_id": "0805670",
+      "source_locator": "CDE district code 1130",
+      "crosswalk_locator": "NCES ST_LEAID CO-1130"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805700",
+      "listing_name": "Moffat 2",
+      "website_url": "https://www.moffatschools.org/",
+      "state_district_code": "2800",
+      "nces_district_id": "0805700",
+      "source_locator": "CDE district code 2800",
+      "crosswalk_locator": "NCES ST_LEAID CO-2800"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805730",
+      "listing_name": "Moffat County RE:No 1",
+      "website_url": "http://www.moffatsd.org/",
+      "state_district_code": "2020",
+      "nces_district_id": "0805730",
+      "source_locator": "CDE district code 2020",
+      "crosswalk_locator": "NCES ST_LEAID CO-2020"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805760",
+      "listing_name": "Monte Vista C-8",
+      "website_url": "http://www.monte.k12.co.us/",
+      "state_district_code": "2740",
+      "nces_district_id": "0805760",
+      "source_locator": "CDE district code 2740",
+      "crosswalk_locator": "NCES ST_LEAID CO-2740"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805790",
+      "listing_name": "Montrose County RE-1J",
+      "website_url": "http://www.mcsd.org/",
+      "state_district_code": "2180",
+      "nces_district_id": "0805790",
+      "source_locator": "CDE district code 2180",
+      "crosswalk_locator": "NCES ST_LEAID CO-2180"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805820",
+      "listing_name": "Lewis-Palmer 38",
+      "website_url": "http://www.lewispalmer.org/",
+      "state_district_code": "1080",
+      "nces_district_id": "0805820",
+      "source_locator": "CDE district code 1080",
+      "crosswalk_locator": "NCES ST_LEAID CO-1080"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805850",
+      "listing_name": "West End RE-2",
+      "website_url": "http://www.westendschools.org/",
+      "state_district_code": "2190",
+      "nces_district_id": "0805850",
+      "source_locator": "CDE district code 2190",
+      "crosswalk_locator": "NCES ST_LEAID CO-2190"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805880",
+      "listing_name": "Norwood R-2J",
+      "website_url": "http://www.norwoodk12.org/",
+      "state_district_code": "2840",
+      "nces_district_id": "0805880",
+      "source_locator": "CDE district code 2840",
+      "crosswalk_locator": "NCES ST_LEAID CO-2840"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805910",
+      "listing_name": "South Routt RE 3",
+      "website_url": "http://www.southroutt.k12.co.us/",
+      "state_district_code": "2780",
+      "nces_district_id": "0805910",
+      "source_locator": "CDE district code 2780",
+      "crosswalk_locator": "NCES ST_LEAID CO-2780"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805940",
+      "listing_name": "Otis R-3",
+      "website_url": "http://www.otisr3.com/",
+      "state_district_code": "3050",
+      "nces_district_id": "0805940",
+      "source_locator": "CDE district code 3050",
+      "crosswalk_locator": "NCES ST_LEAID CO-3050"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0805970",
+      "listing_name": "Ouray R-1",
+      "website_url": "https://www.ourayschool.org/",
+      "state_district_code": "2580",
+      "nces_district_id": "0805970",
+      "source_locator": "CDE district code 2580",
+      "crosswalk_locator": "NCES ST_LEAID CO-2580"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806000",
+      "listing_name": "Revere School District",
+      "website_url": "https://www.revereschool.com/",
+      "state_district_code": "2865",
+      "nces_district_id": "0806000",
+      "source_locator": "CDE district code 2865",
+      "crosswalk_locator": "NCES ST_LEAID CO-2865"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806030",
+      "listing_name": "Plateau RE-5",
+      "website_url": "http://www.peetzschool.org/",
+      "state_district_code": "1870",
+      "nces_district_id": "0806030",
+      "source_locator": "CDE district code 1870",
+      "crosswalk_locator": "NCES ST_LEAID CO-1870"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806060",
+      "listing_name": "Peyton 23 JT",
+      "website_url": "http://www.peyton.k12.co.us/",
+      "state_district_code": "1060",
+      "nces_district_id": "0806060",
+      "source_locator": "CDE district code 1060",
+      "crosswalk_locator": "NCES ST_LEAID CO-1060"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806090",
+      "listing_name": "Pritchett RE-3",
+      "website_url": "http://www.pritchettre3.org/",
+      "state_district_code": "0240",
+      "nces_district_id": "0806090",
+      "source_locator": "CDE district code 0240",
+      "crosswalk_locator": "NCES ST_LEAID CO-0240"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806120",
+      "listing_name": "Pueblo City 60",
+      "website_url": "https://www.pueblod60.org/",
+      "state_district_code": "2690",
+      "nces_district_id": "0806120",
+      "source_locator": "CDE district code 2690",
+      "crosswalk_locator": "NCES ST_LEAID CO-2690"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806150",
+      "listing_name": "Pueblo County 70",
+      "website_url": "http://www.district70.org/",
+      "state_district_code": "2700",
+      "nces_district_id": "0806150",
+      "source_locator": "CDE district code 2700",
+      "crosswalk_locator": "NCES ST_LEAID CO-2700"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806180",
+      "listing_name": "Rangely RE-4",
+      "website_url": "http://www.rangelyk12.org/",
+      "state_district_code": "2720",
+      "nces_district_id": "0806180",
+      "source_locator": "CDE district code 2720",
+      "crosswalk_locator": "NCES ST_LEAID CO-2720"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806210",
+      "listing_name": "Ridgway R-2",
+      "website_url": "http://www.ridgway.k12.co.us/",
+      "state_district_code": "2590",
+      "nces_district_id": "0806210",
+      "source_locator": "CDE district code 2590",
+      "crosswalk_locator": "NCES ST_LEAID CO-2590"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806240",
+      "listing_name": "Garfield RE-2",
+      "website_url": "http://www.garfieldre2.org/",
+      "state_district_code": "1195",
+      "nces_district_id": "0806240",
+      "source_locator": "CDE district code 1195",
+      "crosswalk_locator": "NCES ST_LEAID CO-1195"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806270",
+      "listing_name": "Rocky Ford R-2",
+      "website_url": "http://www.rockyfordk12.org/",
+      "state_district_code": "2530",
+      "nces_district_id": "0806270",
+      "source_locator": "CDE district code 2530",
+      "crosswalk_locator": "NCES ST_LEAID CO-2530"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806300",
+      "listing_name": "Mountain Valley RE 1",
+      "website_url": "http://mountainvalleyschool.org/",
+      "state_district_code": "2790",
+      "nces_district_id": "0806300",
+      "source_locator": "CDE district code 2790",
+      "crosswalk_locator": "NCES ST_LEAID CO-2790"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806330",
+      "listing_name": "Salida R-32",
+      "website_url": "http://www.salidaschools.com/",
+      "state_district_code": "0500",
+      "nces_district_id": "0806330",
+      "source_locator": "CDE district code 0500",
+      "crosswalk_locator": "NCES ST_LEAID CO-0500"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806360",
+      "listing_name": "Centennial R-1",
+      "website_url": "http://www.centennialschool.net/",
+      "state_district_code": "0640",
+      "nces_district_id": "0806360",
+      "source_locator": "CDE district code 0640",
+      "crosswalk_locator": "NCES ST_LEAID CO-0640"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806390",
+      "listing_name": "Sanford 6J",
+      "website_url": "http://www.sanfordschools.org/",
+      "state_district_code": "0560",
+      "nces_district_id": "0806390",
+      "source_locator": "CDE district code 0560",
+      "crosswalk_locator": "NCES ST_LEAID CO-0560"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806420",
+      "listing_name": "Sangre De Cristo RE-22J",
+      "website_url": "https://www.sangreschools.org/",
+      "state_district_code": "0110",
+      "nces_district_id": "0806420",
+      "source_locator": "CDE district code 0110",
+      "crosswalk_locator": "NCES ST_LEAID CO-0110"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806450",
+      "listing_name": "Sargent RE-33J",
+      "website_url": "http://sargent.k12.co.us/",
+      "state_district_code": "2750",
+      "nces_district_id": "0806450",
+      "source_locator": "CDE district code 2750",
+      "crosswalk_locator": "NCES ST_LEAID CO-2750"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806480",
+      "listing_name": "Widefield 3",
+      "website_url": "http://www.wsd3.org/",
+      "state_district_code": "0990",
+      "nces_district_id": "0806480",
+      "source_locator": "CDE district code 0990",
+      "crosswalk_locator": "NCES ST_LEAID CO-0990"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806510",
+      "listing_name": "Hi-Plains R-23",
+      "website_url": "http://www.hp-patriots.com/",
+      "state_district_code": "1460",
+      "nces_district_id": "0806510",
+      "source_locator": "CDE district code 1460",
+      "crosswalk_locator": "NCES ST_LEAID CO-1460"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806540",
+      "listing_name": "Sheridan 2",
+      "website_url": "http://ssd2.org/",
+      "state_district_code": "0123",
+      "nces_district_id": "0806540",
+      "source_locator": "CDE district code 0123",
+      "crosswalk_locator": "NCES ST_LEAID CO-0123"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806570",
+      "listing_name": "Silverton 1",
+      "website_url": "http://www.silvertonschool.org/",
+      "state_district_code": "2820",
+      "nces_district_id": "0806570",
+      "source_locator": "CDE district code 2820",
+      "crosswalk_locator": "NCES ST_LEAID CO-2820"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806600",
+      "listing_name": "Big Sandy 100J",
+      "website_url": "https://bigsandy100j.com/",
+      "state_district_code": "0940",
+      "nces_district_id": "0806600",
+      "source_locator": "CDE district code 0940",
+      "crosswalk_locator": "NCES ST_LEAID CO-0940"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806630",
+      "listing_name": "Springfield RE-4",
+      "website_url": "http://www.spre4.org/",
+      "state_district_code": "0250",
+      "nces_district_id": "0806630",
+      "source_locator": "CDE district code 0250",
+      "crosswalk_locator": "NCES ST_LEAID CO-0250"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806660",
+      "listing_name": "Steamboat Springs RE-2",
+      "website_url": "https://www.steamboatschools.net/",
+      "state_district_code": "2770",
+      "nces_district_id": "0806660",
+      "source_locator": "CDE district code 2770",
+      "crosswalk_locator": "NCES ST_LEAID CO-2770"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806690",
+      "listing_name": "Valley RE-1",
+      "website_url": "http://www.re1valleyschools.org/",
+      "state_district_code": "1828",
+      "nces_district_id": "0806690",
+      "source_locator": "CDE district code 1828",
+      "crosswalk_locator": "NCES ST_LEAID CO-1828"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806720",
+      "listing_name": "Prairie RE-11",
+      "website_url": "http://www.prairieschool.org/",
+      "state_district_code": "3147",
+      "nces_district_id": "0806720",
+      "source_locator": "CDE district code 3147",
+      "crosswalk_locator": "NCES ST_LEAID CO-3147"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806750",
+      "listing_name": "Strasburg 31J",
+      "website_url": "http://www.strasburg31j.com/",
+      "state_district_code": "0060",
+      "nces_district_id": "0806750",
+      "source_locator": "CDE district code 0060",
+      "crosswalk_locator": "NCES ST_LEAID CO-0060"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806780",
+      "listing_name": "Stratton R-4",
+      "website_url": "http://www.strattonschools.org/",
+      "state_district_code": "1480",
+      "nces_district_id": "0806780",
+      "source_locator": "CDE district code 1480",
+      "crosswalk_locator": "NCES ST_LEAID CO-1480"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806810",
+      "listing_name": "Summit RE-1",
+      "website_url": "https://www.summitk12.org/",
+      "state_district_code": "3000",
+      "nces_district_id": "0806810",
+      "source_locator": "CDE district code 3000",
+      "crosswalk_locator": "NCES ST_LEAID CO-3000"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806840",
+      "listing_name": "Swink 33",
+      "website_url": "http://www.swinkk12.net/",
+      "state_district_code": "2570",
+      "nces_district_id": "0806840",
+      "source_locator": "CDE district code 2570",
+      "crosswalk_locator": "NCES ST_LEAID CO-2570"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806870",
+      "listing_name": "Telluride R-1",
+      "website_url": "http://www.tellurideschool.org/",
+      "state_district_code": "2830",
+      "nces_district_id": "0806870",
+      "source_locator": "CDE district code 2830",
+      "crosswalk_locator": "NCES ST_LEAID CO-2830"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806900",
+      "listing_name": "Adams 12 Five Star Schools",
+      "website_url": "http://www.adams12.org/",
+      "state_district_code": "0020",
+      "nces_district_id": "0806900",
+      "source_locator": "CDE district code 0020",
+      "crosswalk_locator": "NCES ST_LEAID CO-0020"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806930",
+      "listing_name": "Plainview RE-2",
+      "website_url": "http://www.plainviewhawks.org/",
+      "state_district_code": "1440",
+      "nces_district_id": "0806930",
+      "source_locator": "CDE district code 1440",
+      "crosswalk_locator": "NCES ST_LEAID CO-1440"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806960",
+      "listing_name": "Trinidad 1",
+      "website_url": "http://www.tsd1.org/",
+      "state_district_code": "1580",
+      "nces_district_id": "0806960",
+      "source_locator": "CDE district code 1580",
+      "crosswalk_locator": "NCES ST_LEAID CO-1580"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0806990",
+      "listing_name": "Vilas RE-5",
+      "website_url": "http://www.vilasre5.us/",
+      "state_district_code": "0260",
+      "nces_district_id": "0806990",
+      "source_locator": "CDE district code 0260",
+      "crosswalk_locator": "NCES ST_LEAID CO-0260"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807080",
+      "listing_name": "Huerfano RE-1",
+      "website_url": "http://huerfano.k12.co.us/",
+      "state_district_code": "1390",
+      "nces_district_id": "0807080",
+      "source_locator": "CDE district code 1390",
+      "crosswalk_locator": "NCES ST_LEAID CO-1390"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807110",
+      "listing_name": "Walsh RE-1",
+      "website_url": "http://www.walsheagles.com/",
+      "state_district_code": "0230",
+      "nces_district_id": "0807110",
+      "source_locator": "CDE district code 0230",
+      "crosswalk_locator": "NCES ST_LEAID CO-0230"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807140",
+      "listing_name": "Weldon Valley RE-20(J)",
+      "website_url": "http://www.weldonvalley.org/",
+      "state_district_code": "2505",
+      "nces_district_id": "0807140",
+      "source_locator": "CDE district code 2505",
+      "crosswalk_locator": "NCES ST_LEAID CO-2505"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807200",
+      "listing_name": "Custer County School District C-1",
+      "website_url": "https://www.custercountyschools.org/",
+      "state_district_code": "0860",
+      "nces_district_id": "0807200",
+      "source_locator": "CDE district code 0860",
+      "crosswalk_locator": "NCES ST_LEAID CO-0860"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807230",
+      "listing_name": "Westminster Public Schools",
+      "website_url": "https://www.wps.org/",
+      "state_district_code": "0070",
+      "nces_district_id": "0807230",
+      "source_locator": "CDE district code 0070",
+      "crosswalk_locator": "NCES ST_LEAID CO-0070"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807260",
+      "listing_name": "Primero Reorganized 2",
+      "website_url": "http://www.primeroschool.org/",
+      "state_district_code": "1590",
+      "nces_district_id": "0807260",
+      "source_locator": "CDE district code 1590",
+      "crosswalk_locator": "NCES ST_LEAID CO-1590"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807290",
+      "listing_name": "Wiggins RE-50(J)",
+      "website_url": "http://www.wiggins50.k12.co.us/",
+      "state_district_code": "2515",
+      "nces_district_id": "0807290",
+      "source_locator": "CDE district code 2515",
+      "crosswalk_locator": "NCES ST_LEAID CO-2515"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807320",
+      "listing_name": "Wiley RE-13 JT",
+      "website_url": "http://www.wileyschool.org/",
+      "state_district_code": "2680",
+      "nces_district_id": "0807320",
+      "source_locator": "CDE district code 2680",
+      "crosswalk_locator": "NCES ST_LEAID CO-2680"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807350",
+      "listing_name": "Weld RE-4",
+      "website_url": "http://weldre4.org/",
+      "state_district_code": "3100",
+      "nces_district_id": "0807350",
+      "source_locator": "CDE district code 3100",
+      "crosswalk_locator": "NCES ST_LEAID CO-3100"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807380",
+      "listing_name": "Woodland Park RE-2",
+      "website_url": "http://www.wpsdk12.org/",
+      "state_district_code": "3020",
+      "nces_district_id": "0807380",
+      "source_locator": "CDE district code 3020",
+      "crosswalk_locator": "NCES ST_LEAID CO-3020"
+    },
+    {
+      "jurisdiction_ref": "us-co-school-0807410",
+      "listing_name": "Woodlin R-104",
+      "website_url": "http://www.woodlinschool.com/",
+      "state_district_code": "3070",
+      "nces_district_id": "0807410",
+      "source_locator": "CDE district code 3070",
+      "crosswalk_locator": "NCES ST_LEAID CO-3070"
+    }
+  ],
+  "unmapped": [
+    {
+      "jurisdiction_ref": "us-co-school-0807050",
+      "name": "North Park School District R-1"
+    }
+  ]
+}

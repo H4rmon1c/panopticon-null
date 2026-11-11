@@ -11,7 +11,10 @@ no relevant decision exists.
 ## What the machine does
 
 1. Seed municipality websites from the existing Colorado Municipal League
-   directory and county sites from an archived county-clerks directory. Visit
+   directory, county sites from an archived county-clerks directory, and
+   school district websites from an exact CDE district-code to NCES-ID join.
+   The pinned, reproducible school directory provides 177 website leads for
+   178 mapped school districts; a shared-host site remains unbound. Visit
    up to twelve prioritized, same-host pages across two navigation steps on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
    Document links may contain encoded spaces; other encoded path sequences are
@@ -105,6 +108,11 @@ no relevant decision exists.
    These excerpts are still preliminary mentions and do not create vote claims.
    Source links whose verified redirect has a queued or screened alternate are
    counted as redirects rather than failed document extractions.
+   School-district research references use generic descriptions and omit
+   personal names, raw passages, and vote lists until a separate source can
+   establish an appropriate public official identity. School-site links to
+   third-party legislative portals are not automatically attributed to the
+   district until the responsible agency is established.
 
 The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release

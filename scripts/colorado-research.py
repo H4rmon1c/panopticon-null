@@ -32,6 +32,7 @@ from vendor.protego import Protego
 ROOT = Path(__file__).resolve().parents[1]
 GEOGRAPHY = ROOT / 'web/panopticon-terminal/geography/colorado-jurisdictions.json'
 DIRECTORY = ROOT / 'configs/states/co-municipal-websites.v1.json'
+SCHOOL_DIRECTORY = ROOT / 'configs/states/co-school-websites.v1.json'
 CALENDARS = ROOT / 'configs/states/co-calendar-geography.v1.json'
 COUNTY_DIRECTORIES = ('https://dmv.colorado.gov/county-offices',
                       'https://www.clerkandrecorder.org/find-your-county-clerk')
@@ -782,7 +783,7 @@ def discover_one(ref, name, website, budget):
                                                     'label': ' '.join(label.split())[:160]})
                     subdomain = url.hostname or ''
                     client = subdomain.removesuffix('.legistar.com')
-                    if (url.scheme == 'https' and subdomain.endswith('.legistar.com')
+                    if (not ref.startswith('us-co-school-') and url.scheme == 'https' and subdomain.endswith('.legistar.com')
                             and re.fullmatch(r'[a-z0-9-]{1,80}', client)
                             and '.' not in client and not url.username and not url.password
                             and url.port in (None, 443)):
@@ -868,12 +869,56 @@ def record_discovery(db, result):
                        (ref, item['url'], json.dumps(item), utcnow()))
 
 
+def school_website_leads():
+    """Validate the exact state-code/NCES-ID join before using a school lead."""
+    directory = json.loads(read_blob(SCHOOL_DIRECTORY, 2_000_000))
+    geography = {item['id']: item for item in json.loads(GEOGRAPHY.read_text())['jurisdictions']
+                 if item['kind'] == 'school_district'}
+    sources = directory.get('sources', {})
+    if (directory.get('schema_version') != 1
+            or sources.get('cde_directory') != {'url': 'https://ed.cde.state.co.us/district-and-boces-websites-and-maps',
+                                                'sha256': 'c88dc2680759fe648b1be1f9fa402cb62dce7bc144957db11afdceb514992474'}
+            or sources.get('nces_directory') != {'url': 'https://nces.ed.gov/ccd/Data/zip/ccd_lea_029_2425_w_1a_073025.zip',
+                                                 'sha256': '2745169e4bc7cd53adff179830c3d4b9bb035ac79580ecea01ef389a161936a9'}):
+        raise ValueError('invalid school directory provenance')
+    entries = directory.get('school_districts', [])
+    if not isinstance(entries, list):
+        raise ValueError('invalid school directory entries')
+    leads, state_codes = [], set()
+    seen = set()
+    for item in entries:
+        ref, name, url = item['jurisdiction_ref'], item['listing_name'], item['website_url']
+        code, nces = item['state_district_code'], item['nces_district_id']
+        parsed = urlsplit(url)
+        if (ref in seen or code in state_codes or ref not in geography
+                or not re.fullmatch(r'\d{4}', code) or not re.fullmatch(r'08\d{5}', nces)
+                or ref != 'us-co-school-' + nces or geography[ref]['code'] != nces
+                or not isinstance(name, str) or not name.strip() or len(name) > 200 or not name.isprintable()
+                or item['source_locator'] != f'CDE district code {code}'
+                or item['crosswalk_locator'] != f'NCES ST_LEAID CO-{code}'
+                or parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or parsed.password
+                or parsed.port not in (None, 80, 443) or parsed.query or parsed.fragment or len(url) > 2000
+                or parsed.hostname.lower() in ('sites.google.com', 'facebook.com', 'www.facebook.com')):
+            raise ValueError('invalid school directory binding')
+        seen.add(ref)
+        state_codes.add(code)
+        leads.append((ref, name, url))
+    missing = directory.get('unmapped', [])
+    if (not isinstance(missing, list) or len({item['jurisdiction_ref'] for item in missing}) != len(missing)
+            or {item['jurisdiction_ref'] for item in missing} != set(geography) - seen
+            or directory.get('counts') != {'geography_school_districts': len(geography),
+                                           'with_website_lead': len(leads), 'without_website_lead': len(missing)}):
+        raise ValueError('school directory counts do not match geography')
+    return leads
+
+
 def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_failed=False):
     budget = DownloadBudget(300 * 1024 * 1024)
     county = bootstrap_counties(data_dir, db, budget)
     cities = json.loads(DIRECTORY.read_text())['municipalities']
     leads = [(x['jurisdiction_ref'], x['listing_name'], x['website_url']) for x in cities if x.get('website_url')]
     leads += [(ref, name, url) for ref, (name, url) in county.items()]
+    leads.extend(school_website_leads())
     if only_usable:
         usable = {ref for ref, raw in db.execute('SELECT jurisdiction_ref,result_json FROM discovery')
                   if json.loads(raw).get('state') == 'directory_site_checked'}
@@ -890,7 +935,7 @@ def discover(data_dir, db, limit, workers, refresh, only_usable=False, only_fail
                    WHERE COALESCE(a.attempted_at,d.checked_at) >= ?''', (cutoff,))}
         leads = [item for item in leads if item[0] not in already]
     leads = leads[:limit]
-    print(f'Checking {len(leads)} county/municipal website leads with {workers} workers', flush=True)
+    print(f'Checking {len(leads)} county, municipal, or school website leads with {workers} workers', flush=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = [pool.submit(discover_one, *item, budget) for item in leads]
         for count, job in enumerate(as_completed(jobs), 1):
@@ -2302,6 +2347,8 @@ def collect_portraits(data_dir, db, limit):
     names = {}
     for ref, raw in db.execute("SELECT jurisdiction_ref,result_json FROM document_candidates WHERE state='matched'"):
         try:
+            if ref.startswith('us-co-school-'):
+                continue
             result = json.loads(raw)
             # OCR currently flattens an entire page into one line; it cannot
             # establish that a named official is near a particular reference.
@@ -2323,7 +2370,7 @@ def collect_portraits(data_dir, db, limit):
     for client, matter, history_id, raw, ref in db.execute('''SELECT a.client,a.matter_id,a.history_id,
             a.captures_json,l.jurisdiction_ref FROM matter_actions a JOIN leads l
             ON a.client=l.client AND a.matter_id=l.matter_id'''):
-        if clients.get(client) != ref:
+        if clients.get(client) != ref or ref.startswith('us-co-school-'):
             continue
         try:
             action = materialize_action(data_dir, receipts, client, matter, history_id, raw)
@@ -2818,15 +2865,17 @@ def export_report(data_dir, db, output, assets_dir=None):
                 continue
             if not terms:
                 raise ValueError('archived query terms do not match this source title')
+            school = geography[ref]['kind'] == 'school_district'
             entry = {'id': identifier, 'kind': 'matter_reference', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
-                'jurisdiction': jurisdiction_name(geography[ref]), 'file': public_text(item.get('MatterFile'), 100),
-                'title': reference_title(title, terms), 'signals': terms, 'source_status': public_text(item.get('MatterStatusName'), 100),
+                'jurisdiction': jurisdiction_name(geography[ref]), 'file': 'School district agenda item' if school else public_text(item.get('MatterFile'), 100),
+                'title': reference_title(title, terms, school), 'signals': terms, 'source_status': '' if school else public_text(item.get('MatterStatusName'), 100),
                 'source_url': url, 'matter_url': f'https://{API_HOST}/v1/{client}/Matters/{matter}',
                 'source_sha256': source_digest, 'locator': f'$[{row_index}].MatterTitle',
                 'captured_at': receipt['retrieved_at'], 'last_screened_at': updated}
             motions = []
             current_history = db.execute('SELECT history_sha256 FROM matter_action_checks WHERE client=? AND matter_id=?', (client, matter)).fetchone()
-            for action_id, action_raw in db.execute('SELECT history_id,captures_json FROM matter_actions WHERE client=? AND matter_id=? ORDER BY history_id DESC LIMIT 10', (client, matter)):
+            actions = [] if school else db.execute('SELECT history_id,captures_json FROM matter_actions WHERE client=? AND matter_id=? ORDER BY history_id DESC LIMIT 10', (client, matter))
+            for action_id, action_raw in actions:
                 try:
                     motion = materialize_action(data_dir, receipts, client, matter, action_id, action_raw)
                     motion['historical'] = bool(current_history and current_history[0] and current_history[0] != motion['history_sha256'])
@@ -2912,7 +2961,8 @@ def export_report(data_dir, db, output, assets_dir=None):
             seen_documents.add(key)
             quote = citation['quote']
             # A public comment can contain a private person's name or address.
-            private_context = public_comment_context(lines, number)
+            school = geography[ref]['kind'] == 'school_district'
+            private_context = school or public_comment_context(lines, number)
             ocr_page = result.get('extraction_status') == 'complete_with_ocr'
             title = reference_title(quote, labels, private_context or ocr_page)
             people = [] if private_context or ocr_page else officials_near_reference(lines, number)
@@ -2927,7 +2977,7 @@ def export_report(data_dir, db, output, assets_dir=None):
                     continue
             record = {'id': 'co-document-' + sha((ref + '\0' + doc_digest).encode())[:24],
                 'kind': 'meeting_document', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref, 'jurisdiction': jurisdiction_name(geography[ref]),
-                'file': public_text(candidate.get('label'), 120), 'title': title,
+                'file': 'School district meeting document' if school else public_text(candidate.get('label'), 120), 'title': title,
                 'signals': labels, 'source_status': '', 'source_url': url,
                 'source_sha256': doc_digest, 'locator': f'extracted line {number}',
                 'captured_at': receipt['retrieved_at'], 'last_screened_at': updated,
@@ -2938,7 +2988,7 @@ def export_report(data_dir, db, output, assets_dir=None):
             if 'redirect_receipt' in candidate:
                 record.update(capture_adjustment=candidate['capture_adjustment'],
                               indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
-            if not ocr_page:
+            if not ocr_page and not school:
                 highlights = document_highlights(lines, number, finding['matched_rule_ids'])
                 if highlights:
                     record['document_highlights'] = highlights
