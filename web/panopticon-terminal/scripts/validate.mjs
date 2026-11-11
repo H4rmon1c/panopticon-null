@@ -62,6 +62,20 @@ try {
       createHash("sha256").update(await readFile(page)).digest("hex") !== proof.page_fixture_sha256) {
     throw new Error("Arapahoe source page digest mismatch");
   }
+  const arapahoe2024 = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/arapahoe-2024-budget-proof.json"), "utf8"));
+  if (arapahoe2024.source_url !== "https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2024%20Adopted%20Budget.pdf" ||
+      arapahoe2024.source_page !== 61 || arapahoe2024.source_sha256 !== "4e5366320ab2e190c4f5ab080669458566ed7a82fc666da85330db7588528f0c" ||
+      arapahoe2024.page_fixture !== "fixtures/atlas/portrait-sources/arapahoe-2024-budget-page.pdf" ||
+      arapahoe2024.page_fixture_sha256 !== "53e344b2f0f9747f1f1461e38934eafea675c1c81963c0901629411e99aa6531" ||
+      arapahoe2024.alias_source_url !== "https://www.jessicaforcommissioner.com/home-1" ||
+      arapahoe2024.alias_source_sha256 !== "0ba051c1be247ce00d6ea2aaa282af5707fc7f2fd001aa0ed4fb26fc2fd90712" ||
+      !Array.isArray(arapahoe2024.portraits) || arapahoe2024.portraits.length !== 2) throw new Error("invalid 2024 Arapahoe portrait proof");
+  const arapahoe2024Page = join(repositoryRoot, arapahoe2024.page_fixture);
+  const arapahoe2024Meta = await lstat(arapahoe2024Page);
+  if (!arapahoe2024Meta.isFile() || arapahoe2024Meta.isSymbolicLink() || arapahoe2024Meta.size > 2_000_000 ||
+      createHash("sha256").update(await readFile(arapahoe2024Page)).digest("hex") !== arapahoe2024.page_fixture_sha256) {
+    throw new Error("2024 Arapahoe source page digest mismatch");
+  }
   const littleton = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/littleton-2023-report-proof.json"), "utf8"));
   if (littleton.source_url !== "https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2023-littleton-reports/2023-02-feb-littleton-report.pdf" ||
       littleton.source_page !== 3 || littleton.source_sha256 !== "34a8dc30a20a37c23179b122722175be6cf3c253c825009db6fbdeb4cff6ea7e" ||
@@ -92,7 +106,8 @@ try {
     if (vote.portrait?.source_kind !== "embedded_pdf") continue;
     const isLittleton = record.jurisdiction_ref === "us-co-place-0845255";
     const isLater = isLittleton && vote.portrait.source_document_sha256 === later.source_sha256;
-    const selected = isLittleton ? (isLater ? later : littleton) : proof;
+    const selected = isLittleton ? (isLater ? later : littleton) :
+      (vote.portrait.source_document_sha256 === arapahoe2024.source_sha256 ? arapahoe2024 : proof);
     const source = selected.portraits.find((item) => item.person_id === vote.person_id && item.name === vote.name);
     if (!source || (!isLittleton && record.jurisdiction_ref !== "us-co-county-08005") ||
         vote.portrait.embedded_image_index !== source.image_index || vote.portrait.sha256 !== source.sha256 ||

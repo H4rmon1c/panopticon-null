@@ -72,6 +72,7 @@ function render(report) {
             const portraitSource = portrait.source_kind === 'embedded_pdf'
               ? `${portrait.source_url}#page=${portrait.source_page}` : portrait.source_url;
             detail.append(external(portraitSource, 'Portrait source ↗'));
+            if (portrait.identity_source_url) detail.append(external(portrait.identity_source_url, 'Name identification ↗'));
             if (portrait.source_kind === 'embedded_pdf') {
               const portraitProof = node('details', 'proof');
               portraitProof.append(node('summary', '', 'Portrait capture details'));
@@ -135,6 +136,13 @@ function render(report) {
     const sourceLabel = item.kind === 'meeting_document' ? `Open captured ${item.document_format === 'docx' ? 'Word' : 'PDF'} meeting document ↗` :
       item.kind === 'agenda_portal_reference' ? 'Open official meeting page ↗' : 'Open captured source query ↗';
     card.append(external(item.source_url, sourceLabel));
+    if (item.capture_adjustment) {
+      if (item.capture_adjustment === 'timestamp_omitted') {
+        card.append(node('p', 'meta', 'The indexed link included a timestamp; the captured document uses the same path without it. The versions may differ.'));
+      }
+      card.append(external(item.indexed_source_url, 'Original indexed link ↗'));
+      card.append(external(item.source_index_url, 'Government agenda index ↗'));
+    }
     if (item.matter_url) card.append(external(item.matter_url, 'Open official matter ↗'));
     const permalink = node('a', 'source', 'Link to this reference ↗');
     const referenceUrl = new URL('./research.html', location.href);

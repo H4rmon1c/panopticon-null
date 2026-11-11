@@ -73,6 +73,75 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(result[0][0]['url'], url)
         self.assertEqual(result[0][1], b'%PDF-example')
 
+    def test_http_can_return_a_redirect_without_contacting_its_destination(self):
+        answers = [(2, 1, 6, '', ('8.8.8.8', 443))]
+        with patch('public_http.socket.getaddrinfo', return_value=answers), \
+             patch('public_http.socket.create_connection') as connect, \
+             patch('public_http.ssl.create_default_context'), \
+             patch('public_http.http.client.HTTPResponse') as response_class:
+            response = response_class.return_value
+            response.status = 302
+            response.getheader.side_effect = lambda name, default=None: 'https://outside.example/robots.txt' if name == 'Location' else default
+            response.read.side_effect = [b'']
+            result = get('https://example.org/robots.txt', {'example.org'}, interval=0,
+                         redirects=0, stop_at_redirect=True)
+        self.assertEqual(result[0][0]['redirect_target'], 'https://outside.example/robots.txt')
+        self.assertEqual(connect.call_count, 1)
+
+    def test_vendor_robots_redirect_is_bounded_and_does_not_authorize_vendor_content(self):
+        original = 'https://town.example.org/robots.txt'
+        vendor = 'https://cms3.revize.com/revize/town/robots.txt'
+        body = b'User-agent: *\nDisallow: /private\n'
+        first = receipt(original, b'')
+        first.update(status=302, redirect_target=vendor)
+        final = receipt(vendor, body)
+        final['content_type'] = 'text/plain'
+        def fetch(url, hosts, **kwargs):
+            self.assertEqual(hosts, {urlsplit(url).hostname})
+            self.assertTrue(kwargs['stop_at_redirect'])
+            self.assertEqual(kwargs['redirects'], 0)
+            return [(first, b'')] if url == original else [(final, body)]
+        aliases = {'town.example.org', 'www.town.example.org'}
+        with patch.object(module, 'get', side_effect=fetch):
+            rules, observations = module.get_robots('town.example.org', aliases)
+        self.assertFalse(module.allowed(rules, 'https://town.example.org/private/document'))
+        self.assertTrue(module.allowed(rules, 'https://town.example.org/agendas'))
+        self.assertEqual(len(observations), 2)
+        self.assertEqual(aliases, {'town.example.org', 'www.town.example.org'})
+
+    def test_robots_rejects_untrusted_redirects_and_html_homepages(self):
+        original = 'https://town.example.org/robots.txt'
+        for destination in ('http://cms3.revize.com/revize/town/robots.txt',
+                            'https://attacker.example/robots.txt',
+                            'https://cms3.revize.com.attacker.example/robots.txt',
+                            'https://cms3.revize.com:444/revize/town/robots.txt',
+                            'https://cms3.revize.com/revize/town/robots.txt?other=1',
+                            'https://cms3.revize.com/revize/town/index.html',
+                            'https://user@cms3.revize.com/revize/town/robots.txt'):
+            first = receipt(original, b'')
+            first.update(status=302, redirect_target=destination)
+            with self.subTest(destination=destination), patch.object(module, 'get', return_value=[(first, b'')]) as fetch:
+                with self.assertRaises(module.RobotsDenied):
+                    module.get_robots('town.example.org')
+                self.assertEqual(fetch.call_count, 1)
+        for content_type, body in [('text/html', b'User-agent: *'), ('text/plain', b'<!DOCTYPE html><html>')]:
+            meta = receipt(original, body)
+            meta['content_type'] = content_type
+            with self.subTest(content_type=content_type), patch.object(module, 'get', return_value=[(meta, body)]):
+                with self.assertRaises(module.RobotsDenied):
+                    module.get_robots('town.example.org')
+
+    def test_robots_wildcards_use_longest_match_and_include_query(self):
+        rules = module.RobotsPolicy(b'User-agent: *\nDisallow: /\nAllow: /*.pdf$\nDisallow: /private/*.pdf$\n')
+        self.assertTrue(module.allowed(rules, 'https://town.example.org/agendas/meeting.pdf'))
+        self.assertFalse(module.allowed(rules, 'https://town.example.org/private/meeting.pdf'))
+        self.assertFalse(module.allowed(rules, 'https://town.example.org/agendas/meeting.pdf?t=123'))
+        self.assertFalse(module.allowed(rules, 'https://town.example.org/agendas/meeting.html'))
+        # Regression for GHSA-wjmf-p669-5m5p: many wildcards must not trigger
+        # exponential regex backtracking when a remote site supplies robots.txt.
+        hostile = module.RobotsPolicy(('User-agent: *\nDisallow: /' + '*1' * 100 + '*Z\n').encode())
+        self.assertTrue(module.allowed(hostile, 'https://town.example.org/' + '1' * 2000))
+
     def test_low_storage_stops_new_collection_before_it_fills_the_disk(self):
         with patch.object(module.os, 'statvfs', return_value=SimpleNamespace(f_bavail=100, f_frsize=4096, f_favail=100000)):
             with self.assertRaises(ValueError): module.require_storage_headroom(Path('/tmp'))
@@ -288,10 +357,166 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(module.candidate_kind('https://city.example.org/uploads/council%20minutes.pdf', index, 'Minutes')[0], 'minutes')
         for bad in ['http://city.example.org/uploads/agenda.pdf', 'https://evil.example/uploads/agenda.pdf',
                     'https://city.example.org/uploads/agenda.pdf?token=x', 'https://city.example.org/uploads/%2e%2e/agenda.pdf',
+                    'https://city.example.org/uploads/agenda.pdf?t=123&redirect=x',
+                    'https://city.example.org/uploads/agenda.pdf?t=1%32',
                     'https://city.example.org/uploads/%252e%252e/agenda.pdf', 'https://city.example.org/uploads%2fagenda.pdf',
                     'https://city.example.org/uploads/%0aagenda.pdf', 'https://city.example.org/uploads/%ZZagenda.pdf',
                     'https://city.example.org/uploads/unrelated.pdf']:
             self.assertIsNone(module.candidate_kind(bad, index, ''))
+        self.assertEqual(module.candidate_kind('https://city.example.org/uploads/agenda.pdf?t=202611110000000', index, '')[0], 'agenda')
+
+    def test_same_site_html_base_and_timestamp_remain_bound_to_the_original_anchor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index = 'https://city.example.org/your_city/agendas.php'
+                page = (b'<base href="https://city.example.org/">'
+                        b'<a href="Documents/City Council/Minutes.pdf?t=202611110000000">Minutes</a>')
+                url = 'https://city.example.org/Documents/City Council/Minutes.pdf?t=202611110000000'
+                module.archive(root, [(receipt(index, page), page)])
+                links, base = module.page_links(page, index)
+                self.assertEqual(module.resolve_page_link(index, base, links[0][0]), url)
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                module.checked_document_candidate(root, url, candidate)
+                with self.assertRaises(ValueError):
+                    module.checked_document_candidate(root, url.split('?')[0], {**candidate, 'url': url.split('?')[0]})
+                with self.assertRaises(ValueError):
+                    module.checked_document_candidate(root, url.replace('202611110000000', '1'),
+                                                      {**candidate, 'url': url.replace('202611110000000', '1')})
+            finally:
+                db.close()
+
+    def test_document_redirect_is_preserved_without_exhausting_the_byte_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index, url = 'https://city.example.org/agenda', 'https://city.example.org/agenda.pdf'
+                page = b'<a href="/agenda.pdf">Agenda</a>'
+                module.archive(root, [(receipt(index, page), page)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                redirect_body = b'redirect'
+                redirect = receipt(url, redirect_body)
+                redirect.update(status=302, redirect_target='https://other.example/agenda.pdf')
+                budget = module.DownloadBudget(25 * 1024 * 1024)
+                with patch.object(module, 'cached_robots', return_value=(None, [])), \
+                     patch.object(module, 'get', return_value=[(redirect, redirect_body)]) as fetch:
+                    result, observations = module.screen_one(root, 'us-co-county-08051', candidate,
+                                                             '/unused', threading.Lock(), budget, False, {})
+                self.assertEqual(result['state'], 'error')
+                self.assertIn('HTTP 302', result['error'])
+                self.assertEqual(observations, [(redirect, redirect_body)])
+                self.assertEqual(budget.remaining, 25 * 1024 * 1024 - len(redirect_body))
+                self.assertTrue(fetch.call_args.kwargs['stop_at_redirect'])
+            finally:
+                db.close()
+
+    def test_small_remaining_run_budget_defers_instead_of_mislabeling_a_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                index, url = 'https://city.example.org/agenda', 'https://city.example.org/agenda.pdf'
+                page = b'<a href="/agenda.pdf">Agenda</a>'
+                module.archive(root, [(receipt(index, page), page)])
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0}
+                with patch.object(module, 'cached_robots', return_value=(None, [])), \
+                     patch.object(module, 'get', side_effect=ValueError('HTTP response exceeds byte limit')):
+                    small, _ = module.screen_one(root, 'us-co-county-08051', candidate, '/unused', threading.Lock(),
+                                                 module.DownloadBudget(2 * 1024 * 1024), False, {})
+                    large, _ = module.screen_one(root, 'us-co-county-08051', candidate, '/unused', threading.Lock(),
+                                                 module.DownloadBudget(25 * 1024 * 1024), False, {})
+                self.assertEqual(small['state'], 'deferred')
+                self.assertEqual(large['state'], 'error')
+            finally:
+                db.close()
+
+    def test_vendor_document_requires_preserved_redirect_and_marks_timestamp_uncertainty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-county-08051', 'https://example.org/agenda'
+                linked = 'https://example.org/Documents/Meeting Minutes.docx?t=123'
+                origin = linked.split('?')[0]
+                target = 'https://cms3.revize.com/revize/town/Documents/Meeting Minutes.docx'
+                page = b'<a href="/Documents/Meeting Minutes.docx?t=123">Minutes</a>'
+                module.archive(root, [(receipt(index, page), page)])
+                candidate = {'url': linked, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0, 'label': 'Minutes'}
+                first = receipt(linked, b'')
+                first.update(status=302, redirect_target=target + '?t=123')
+                second = receipt(origin, b'')
+                second.update(status=302, redirect_target=target)
+                def fetch(url, _hosts, **_kwargs):
+                    return [(first, b'')] if url == linked else [(second, b'')]
+                with patch.object(module, 'cached_robots', return_value=(None, [])), patch.object(module, 'get', side_effect=fetch):
+                    result, observations = module.screen_one(root, ref, candidate, '/unused', threading.Lock(),
+                                                             module.DownloadBudget(50 * 1024 * 1024), False, {})
+                self.assertEqual(result['state'], 'error')
+                alternate = result['alternate_candidate']
+                self.assertEqual(alternate['capture_adjustment'], 'timestamp_omitted')
+                module.archive(root, observations)
+                module.checked_document_candidate(root, target, alternate)
+                for changed in ({'linked_url': origin}, {'origin_url': linked}, {'capture_adjustment': 'direct_redirect'},
+                                {'indexed_redirect_receipt': {}},
+                                {'url': target.replace('cms3.revize.com', 'attacker.example')},
+                                {'url': target.replace('Meeting Minutes', 'Other Minutes')}):
+                    bad = {**alternate, **changed}
+                    with self.subTest(changed=changed), self.assertRaises(ValueError):
+                        module.checked_document_candidate(root, bad['url'], bad)
+                document = b'PK\x03\x04fixture'
+                capture = receipt(target, document)
+                module.archive(root, [(capture, document)])
+                response = SimpleNamespace(returncode=0, stdout=b'Flock Safety discussion\n', stderr=b'')
+                with patch.object(module.shutil, 'which', side_effect=lambda name, **_: '/usr/bin/' + name), \
+                     patch.object(module.subprocess, 'run', return_value=response):
+                    screened = module.extract_saved_docx(root, ref, alternate, capture)
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, target, json.dumps(alternate), json.dumps(screened), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                record = json.loads(output.read_text())['records'][0]
+                self.assertEqual(record['source_url'], target)
+                self.assertEqual(record['indexed_source_url'], linked)
+                self.assertEqual(record['source_index_url'], index)
+                self.assertEqual(record['capture_adjustment'], 'timestamp_omitted')
+                (root / 'observations' / (module.sha((json.dumps(second, sort_keys=True, separators=(',', ':')) + '\n').encode()) + '.json')).unlink()
+                with self.assertRaises(ValueError):
+                    module.checked_document_candidate(root, target, alternate)
+            finally:
+                db.close()
+
+    def test_document_queue_prioritizes_preserved_vendor_redirects_per_jurisdiction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref = 'us-co-county-08051'
+                normal = {'url': 'https://www.example.org/z-agenda.pdf'}
+                vendor = {'url': 'https://cms3.revize.com/revize/example/a-agenda.pdf', 'redirect_receipt': {'status': 302}}
+                with db:
+                    for candidate in (normal, vendor):
+                        db.execute("insert into document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at) values (?,?,?,'pending',?)",
+                                   (ref, candidate['url'], json.dumps(candidate), module.utcnow()))
+                with patch.object(module, 'screen_one', return_value=({'state': 'error', 'error': 'fixture'}, [])) as screen:
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1)
+                self.assertEqual(screen.call_args.args[2]['url'], vendor['url'])
+            finally:
+                db.close()
+
+    def test_foreign_html_base_cannot_rebind_relative_documents_or_navigation(self):
+        page = 'https://city.example.org/agendas/index.html'
+        body = (b'<base href="https://attacker.example/">'
+                b'<a href="minutes.pdf">Minutes</a>'
+                b'<a href="https://city.example.org/real-minutes.pdf">Minutes</a>')
+        links, base = module.page_links(body, page)
+        self.assertIsNone(base)
+        self.assertIsNone(module.resolve_page_link(page, base, links[0][0]))
+        self.assertEqual(module.resolve_page_link(page, base, links[1][0]), 'https://city.example.org/real-minutes.pdf')
+        self.assertNotIn('https://city.example.org/agendas/minutes.pdf', module.discovery_targets(links, page, base))
 
     def test_civic_year_selectors_accept_only_bounded_numeric_values(self):
         body = (b'<a href="javascript:changeYear(2025, 1, \'a1\')">2025</a>'

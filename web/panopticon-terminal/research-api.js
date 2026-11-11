@@ -6,6 +6,16 @@ const digest = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(val
 const safeText = (value, maximum) => typeof value === 'string' && value.length <= maximum &&
   !/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u.test(value);
 const locator = (value) => typeof value === 'string' && /^\$\[\d+\]$/.test(value);
+function publicResearchUrl(value) {
+  if (typeof value !== 'string' || value.length > 4000) throw new Error('Invalid research source URL');
+  let url;
+  try { url = new URL(value); } catch { throw new Error('Invalid research source URL'); }
+  if (url.protocol !== 'https:' || !url.hostname.includes('.') || url.username || url.password || url.hash ||
+      url.port || /^(?:localhost|\[|[0-9.]+$)/i.test(url.hostname) || /\.(?:localhost|local|internal)$/i.test(url.hostname)) {
+    throw new Error('Unsafe research source URL');
+  }
+  return url;
+}
 
 export function matchesResearchQuery(item, value) {
   const query = value.trim().toLocaleLowerCase();
@@ -19,10 +29,14 @@ export function matchesResearchQuery(item, value) {
 function validatePortrait(portrait, context = null) {
   if (!onlyKeys(portrait, ['src', 'sha256', 'source_url', 'image_url', 'caption', 'portrait_date',
       'source_kind', 'source_document_sha256', 'source_page', 'embedded_image_index',
-      'embedded_original_sha256', 'image_transform']) ||
+      'embedded_original_sha256', 'image_transform', 'identity_source_url']) ||
       !digest(portrait.sha256) ||
       !new RegExp(`^\\./research-portraits/${portrait.sha256}\\.(?:jpg|png|webp)$`).test(portrait.src) ||
       portrait.portrait_date !== 'not_established' || !safeText(portrait.caption, 250)) throw new Error('Invalid research portrait');
+  if (portrait.identity_source_url !== undefined && (context?.client !== 'arapahoe' ||
+      context.jurisdiction !== 'us-co-county-08005' || context.personId !== 572)) {
+    throw new Error('Unexpected portrait identity source');
+  }
   let page;
   try { page = new URL(portrait.source_url); }
   catch { throw new Error('Invalid portrait source URL'); }
@@ -68,6 +82,22 @@ function validatePortrait(portrait, context = null) {
           portrait.image_url !== undefined || portrait.source_page !== 3 ||
           portrait.source_document_sha256 !== '34a8dc30a20a37c23179b122722175be6cf3c253c825009db6fbdeb4cff6ea7e' ||
           portrait.source_url !== 'https://www.littletonco.gov/files/sharedassets/public/v/1/communications/littleton-reports/2023-littleton-reports/2023-02-feb-littleton-report.pdf') {
+        throw new Error('Embedded portrait does not match the recorded voter and source');
+      }
+      return;
+    }
+    if (context?.client === 'arapahoe' && context.jurisdiction === 'us-co-county-08005' && [571, 572].includes(context.personId)) {
+      const expected = new Map([
+        [572, ['Jessica Campbell', 1, '3ea3f82d546b3de7b1d07cfdb69e429e643b6ade00677f189bdee6fc59b1e5a6', 'Jessica Campbell-Swanson', 'https://www.jessicaforcommissioner.com/home-1']],
+        [571, ['Leslie Summey', 3, '942839934eb8ea112842148a95aa7deb38f94793e503d7ea5bf76e09cf439da2', 'Leslie Summey', undefined]],
+      ]).get(context.personId);
+      if (!expected || context.name !== expected[0] || portrait.embedded_image_index !== expected[1] ||
+          portrait.sha256 !== expected[2] || portrait.src !== `./research-portraits/${expected[2]}.jpg` ||
+          portrait.caption !== `2024 county board; source labels this portrait ${expected[3]}.` ||
+          portrait.identity_source_url !== expected[4] || portrait.image_url !== undefined ||
+          portrait.embedded_original_sha256 !== undefined || portrait.image_transform !== undefined ||
+          portrait.source_page !== 61 || portrait.source_document_sha256 !== '4e5366320ab2e190c4f5ab080669458566ed7a82fc666da85330db7588528f0c' ||
+          portrait.source_url !== 'https://cms3.revize.com/revize/arapahoe/Finance/Complete%20Budget%20Document/2024%20Adopted%20Budget.pdf') {
         throw new Error('Embedded portrait does not match the recorded voter and source');
       }
       return;
@@ -150,7 +180,8 @@ export function validateResearch(report) {
   for (const record of report.records) {
     if (!onlyKeys(record, ['id', 'kind', 'confidence', 'jurisdiction_ref', 'jurisdiction', 'file', 'title', 'signals',
       'source_status', 'source_url', 'matter_url', 'source_sha256', 'locator', 'captured_at', 'last_screened_at',
-      'people_context', 'historical', 'ocr', 'actions', 'document_format']) ||
+      'people_context', 'historical', 'ocr', 'actions', 'document_format',
+      'capture_adjustment', 'indexed_source_url', 'source_index_url']) ||
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
         !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
@@ -173,13 +204,7 @@ export function validateResearch(report) {
     }
     const parsedUrls = [];
     for (const value of [record.source_url, ...(record.matter_url ? [record.matter_url] : [])]) {
-      if (typeof value !== 'string') throw new Error('Invalid research source URL');
-      let url;
-      try { url = new URL(value); } catch { throw new Error('Invalid research source URL'); }
-      if (url.protocol !== 'https:' || !url.hostname.includes('.') || url.username || url.password || url.hash ||
-          url.port || /^(?:localhost|\[|[0-9.]+$)/i.test(url.hostname) || /\.(?:localhost|local|internal)$/i.test(url.hostname) || value.length > 4000) {
-        throw new Error('Unsafe research source URL');
-      }
+      const url = publicResearchUrl(value);
       if (record.kind === 'matter_reference' && url.hostname !== 'webapi.legistar.com') {
         throw new Error('Matter reference is not from the official portal API');
       }
@@ -191,7 +216,8 @@ export function validateResearch(report) {
       const matter = /^\/v1\/([a-z0-9-]+)\/Matters\/([1-9]\d*)$/.exec(parsedUrls[1].pathname);
       if (!source || !matter || source[1] !== matter[1] || parsedUrls[1].search ||
           record.id !== `co-legistar-${matter[1]}-${matter[2]}`) throw new Error('Matter identity is inconsistent');
-    } else if (record.kind === 'meeting_document' && (!/^co-document-[a-f0-9]{24}$/.test(record.id) || parsedUrls[0].search ||
+    } else if (record.kind === 'meeting_document' && (!/^co-document-[a-f0-9]{24}$/.test(record.id) ||
+        (parsedUrls[0].search && (!/^\?t=[0-9]{1,20}$/.test(parsedUrls[0].search) || !/\.(?:pdf|docx)$/i.test(parsedUrls[0].pathname))) ||
         !(/\/AgendaCenter\/ViewFile\/(?:Agenda|Minutes)\/_[0-9]{8}-[0-9]{1,12}$/i.test(parsedUrls[0].pathname) ||
           /\.(?:pdf|docx)$/i.test(parsedUrls[0].pathname)))) throw new Error('Meeting document URL is inconsistent');
     else if (record.kind === 'agenda_portal_reference') {
@@ -201,6 +227,22 @@ export function validateResearch(report) {
           !/^HTML text node [1-9]\d*$/.test(record.locator)) throw new Error('Agenda portal source is inconsistent');
     }
     if (record.kind !== 'matter_reference' && record.matter_url !== undefined) throw new Error('Unexpected matter URL');
+    const hasRedirectProof = record.capture_adjustment !== undefined || record.indexed_source_url !== undefined || record.source_index_url !== undefined;
+    if (hasRedirectProof) {
+      if (record.kind !== 'meeting_document' || !['timestamp_omitted', 'direct_redirect'].includes(record.capture_adjustment)) {
+        throw new Error('Invalid alternate document capture');
+      }
+      const linked = publicResearchUrl(record.indexed_source_url);
+      const index = publicResearchUrl(record.source_index_url);
+      const capture = parsedUrls[0];
+      const prefix = capture.pathname.endsWith(linked.pathname) ? capture.pathname.slice(0, -linked.pathname.length) : '';
+      if (linked.hostname !== index.hostname || capture.search ||
+          !/^(?:cms[0-9]+(?:files[0-9]*)?|webgen[0-9]+files[0-9]*)\.revize\.com$/i.test(capture.hostname) ||
+          !/^\/(?:revize\/)?[a-z0-9_-]{1,80}$/i.test(prefix) ||
+          (record.capture_adjustment === 'timestamp_omitted' ? !/^\?t=[0-9]{1,20}$/.test(linked.search) : Boolean(linked.search))) {
+        throw new Error('Alternate document does not match its indexed source');
+      }
+    }
     if (record.kind === 'meeting_document' && record.ocr !== undefined && typeof record.ocr !== 'boolean') throw new Error('Invalid OCR label');
     if (record.document_format !== undefined && (record.kind !== 'meeting_document' || !['pdf', 'docx'].includes(record.document_format))) throw new Error('Invalid document format');
     if (record.kind === 'meeting_document' && ((/\.docx$/i.test(parsedUrls[0].pathname) && record.document_format !== 'docx') ||

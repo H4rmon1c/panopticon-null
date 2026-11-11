@@ -16,6 +16,12 @@ no relevant decision exists.
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
    Document links may contain encoded spaces; other encoded path sequences are
    left out of the queue to avoid ambiguous separators, traversal, and controls.
+   Same-origin HTML base URLs and numeric `t` timestamp queries are retained
+   when rebinding a document to its original index link. If an indexed link
+   redirects to a Revize document, the collector can separately capture the
+   same path without a numeric timestamp when source policy permits. The
+   original index and link remain visible, and the page states that the
+   captured document may be a different version.
    For captured CivicPlus agenda indexes, the collector also reads published
    year/category selectors without executing their JavaScript and requests a
    bounded number of older official indexes. It rotates between jurisdictions,
@@ -63,6 +69,9 @@ no relevant decision exists.
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture
    are pinned in `fixtures/atlas/portrait-sources/arapahoe-2022-budget-proof.json`.
+   Two additional Arapahoe voters have original JPEG streams from a labeled
+   2024 county budget page. Jessica Campbell's different source caption is
+   supported by a separately preserved self-published name-identity source.
    Seven Littleton voters have portraits from a labeled 2023 city newsletter.
    Its embedded JPEG 2000 streams are retained in the source PDF; lossless PNG
    display copies and their original-stream digests are independently verified
@@ -82,6 +91,11 @@ The research collector records its own machine observations; it does not
 fabricate human review decisions or change the existing verified-release
 gates. Source policy is checked for each captured site. Explicit robots
 disallows, access denials, CAPTCHAs, and login requirements are not bypassed.
+The collector understands robots wildcard and longest-match rules using the
+pinned, vendored Protego parser. A municipality may redirect its robots file
+to a narrowly scoped Revize host. A vendor document is only followed when an
+archived redirect from the government site binds it to the same document path;
+the vendor does not become a general trusted source for that jurisdiction.
 The collector uses TLS verification, public-IP-only DNS checks with connection
 pinning, bounded reads, per-host pacing, and restricted redirects. Archive
 bytes are content-addressed. The document queue is resumable and retains

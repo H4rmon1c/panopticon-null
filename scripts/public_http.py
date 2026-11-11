@@ -58,7 +58,8 @@ def wait_turn(host, interval):
         time.sleep(target - now)
 
 
-def get(url, hosts, *, maximum=1_500_000, timeout=12, interval=1.0, redirects=2, redirect_guard=None, budget=None):
+def get(url, hosts, *, maximum=1_500_000, timeout=12, interval=1.0, redirects=2, redirect_guard=None, budget=None,
+        stop_at_redirect=False):
     """Return bounded raw bytes and a receipt for each validated request hop."""
     if not 0 < maximum <= 20 * 1024 * 1024 or not 0 <= redirects <= 3:
         raise ValueError('invalid request bounds')
@@ -135,6 +136,8 @@ def get(url, hosts, *, maximum=1_500_000, timeout=12, interval=1.0, redirects=2,
         else:
             raise RuntimeError('public HTTPS connection failed') from last_error
         if receipt['status'] not in (301, 302, 303, 307, 308):
+            return observations
+        if stop_at_redirect:
             return observations
         if not receipt.get('redirect_target'):
             raise ValueError('redirect without destination')
