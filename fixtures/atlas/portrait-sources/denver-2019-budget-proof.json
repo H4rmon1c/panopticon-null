@@ -1,0 +1,101 @@
+{
+  "source_url": "https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2019/2019_Budget%20Book_V1-OnlineVersion-compressed.pdf",
+  "source_sha256": "95c42fc5f567b3e4527166ff502b2e6145fce0a6bf5f8949d4df8ebc46b03fa2",
+  "source_page": 6,
+  "page_fixture": "fixtures/atlas/portrait-sources/denver-2019-budget-page.pdf",
+  "page_fixture_sha256": "1861dddc8b95d0d7718bd6152a172d4cd1a5fc11e11fdad7cac08762add184c9",
+  "portraits": [
+    {
+      "name": "Jolon Clark",
+      "person_id": 280,
+      "source_label": "Jolon Clark, President",
+      "image_index": 0,
+      "row": 0,
+      "column": 0,
+      "sha256": "0727c6f5be8eac62e77cebc8205ef0cce1ce135ff97660a4b2c56203a9c11cab"
+    },
+    {
+      "name": "Rafael Espinoza",
+      "person_id": 251,
+      "source_label": "Rafael Espinoza",
+      "image_index": 2,
+      "row": 0,
+      "column": 2,
+      "sha256": "65cd497bae1eb0dc690861a35a677d5c31617e0f89a4a983ada3ea1c4ac7c368"
+    },
+    {
+      "name": "Paul López",
+      "person_id": 267,
+      "source_label": "Paul D. López",
+      "image_index": 4,
+      "row": 1,
+      "column": 1,
+      "sha256": "93678a634b6f7aadd1856e910dd779da41e472349b9e5129027375bc26b9e109"
+    },
+    {
+      "name": "Kendra Black",
+      "person_id": 270,
+      "source_label": "Kendra Black",
+      "image_index": 5,
+      "row": 1,
+      "column": 2,
+      "sha256": "0702ffac28e24b926c78f7742e22f9716287475c2bed4cc4c4c981d4385c92a5"
+    },
+    {
+      "name": "Mary Beth Susman",
+      "person_id": 275,
+      "source_label": "Mary Beth Susman",
+      "image_index": 6,
+      "row": 2,
+      "column": 0,
+      "sha256": "39b60a76c699fe3cca797fac5fc740264cdc6acbfd8f083992f36486ef81ecde"
+    },
+    {
+      "name": "Albus Brooks",
+      "person_id": 286,
+      "source_label": "Albus Brooks",
+      "image_index": 9,
+      "row": 3,
+      "column": 0,
+      "sha256": "574e42284d797c38e762b4d0610275abcb5391b412667182bbc2ddebc9dbbbc6"
+    },
+    {
+      "name": "Wayne New",
+      "person_id": 254,
+      "source_label": "Wayne New",
+      "image_index": 10,
+      "row": 3,
+      "column": 1,
+      "sha256": "9f5ae85940f49171d75261367ae50d5b07960473436568268e0aa9f32ff9e52f"
+    },
+    {
+      "name": "Robin Kniech",
+      "person_id": 260,
+      "source_label": "Robin Kniech",
+      "image_index": 11,
+      "row": 3,
+      "column": 2,
+      "sha256": "127567b9dcda9d28b615bd8af7f84889fbf13ceb4153e13920012c74631c9e30"
+    },
+    {
+      "name": "Debbie Ortega",
+      "person_id": 263,
+      "source_label": "Deborah \"Debbie\" Ortega",
+      "image_index": 13,
+      "row": 3,
+      "column": 3,
+      "sha256": "3743068bf74365a5601edae654256ee441890ad3755bbabd57fdb4b950f5a2c3"
+    },
+    {
+      "name": "Chris Herndon",
+      "person_id": 282,
+      "source_label": "Christopher Herndon",
+      "image_index": 8,
+      "row": 2,
+      "column": 2,
+      "sha256": "b1fee6543bec39b61756f6fae16d526678bfa52d1cfadafe48729f5ce99a5f40"
+    }
+  ],
+  "alias_source_url": "https://herndon-leadership.squarespace.com/meet-chris",
+  "alias_source_sha256": "1b12312bdefa5c8638a9c9147bc389009fce2d0f26d722224aa8ca45c32683b0"
+}

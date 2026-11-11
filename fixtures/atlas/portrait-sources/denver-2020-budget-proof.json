@@ -1,0 +1,18 @@
+{
+  "source_url": "https://www.denvergov.org/content/dam/denvergov/Portals/344/documents/Budget/2020/2020BudgetVolume1.pdf",
+  "source_sha256": "dae887ea080560ece3eae5430dbe80918b2befc548b3aa291f480acdbfe6e7e1",
+  "source_page": 6,
+  "page_fixture": "fixtures/atlas/portrait-sources/denver-2020-budget-page.pdf",
+  "page_fixture_sha256": "4dc327169778d106dc9f88c2902aacbe69740bf7dd564b2cbef96942fa06368e",
+  "portrait": {
+    "name": "Candi CdeBaca",
+    "person_id": 472,
+    "source_label": "Candi CdeBaca",
+    "image_index": 14,
+    "row": 3,
+    "column": 0,
+    "original_sha256": "ae31c6ea93f266454d497e25c390bc4c8e34a09a1df9fcab06cb97e53086d9d0",
+    "layout_sha256": "85be45d496b152c5734d59bcfd35d23ddcdf4038ff104adff879f4dafa1c0506",
+    "sha256": "d81c9f4e4d3af48a6629196c5693a8a8a6b3f2a2362336a4c46c1994e68c771e"
+  }
+}
