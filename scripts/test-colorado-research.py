@@ -23,6 +23,9 @@ spec.loader.exec_module(module)
 docx_spec = importlib.util.spec_from_file_location('extract_docx', ROOT / 'scripts/extract-docx.py')
 docx_module = importlib.util.module_from_spec(docx_spec)
 docx_spec.loader.exec_module(docx_module)
+school_spec = importlib.util.spec_from_file_location('school_directory', ROOT / 'scripts/build-colorado-school-websites.py')
+school_module = importlib.util.module_from_spec(school_spec)
+school_spec.loader.exec_module(school_module)
 from public_http import checked_url, get, public_ip  # noqa: E402
 
 
@@ -41,6 +44,74 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_school_directory_joins_exact_ids_and_rejects_ambiguous_or_shared_hosts(self):
+        html = b'''<ul>
+          <li><a href="https://one.example/">One District</a> - 1234 - TOWN</li>
+          <li><a href="https://same.example/">Four District</a> - 4567 - TOWN</li>
+          <li><a href="https://same.example/sub">Four District</a> - 4567 - TOWN</li>
+          <li><a href="https://two.example/">Two District</a> - 2345 - TOWN</li>
+          <li><a href="https://sites.google.com/district">Three District</a> - 3456 - TOWN</li>
+        </ul>'''
+        csv_data = ('ST,ST_LEAID,LEAID\nCO,CO-1234,0800001\nCO,CO-4567,0800004\n'
+                    'CO,CO-2345,0800002\nCO,CO-2345,0800999\nCO,CO-3456,0800003\n').encode()
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('directory.csv', csv_data)
+        geography = [{'id': f'us-co-school-080000{i}', 'kind': 'school_district',
+                      'code': f'080000{i}', 'name': f'District {i}'} for i in range(1, 5)]
+        result = school_module.build(html, stream.getvalue(), geography)
+        self.assertEqual(result['counts'], {'geography_school_districts': 4, 'with_website_lead': 2, 'without_website_lead': 2})
+        self.assertEqual({row['website_url'] for row in result['school_districts']}, {'https://one.example/', 'https://same.example/'})
+        self.assertEqual({row['jurisdiction_ref'] for row in result['unmapped']}, {'us-co-school-0800002', 'us-co-school-0800003'})
+
+    def test_school_directory_rejects_altered_identity_or_source(self):
+        self.assertEqual(len(module.school_website_leads()), 177)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'school-directory.json'
+            original = json.loads(module.SCHOOL_DIRECTORY.read_text())
+            for mutation in ('nces', 'code', 'source', 'shared_host'):
+                data = json.loads(json.dumps(original))
+                if mutation == 'nces': data['school_districts'][0]['nces_district_id'] = '0809999'
+                if mutation == 'code': data['school_districts'][0]['state_district_code'] = '9999'
+                if mutation == 'source': data['sources']['nces_directory']['sha256'] = '0' * 64
+                if mutation == 'shared_host': data['school_districts'][0]['website_url'] = 'https://sites.google.com/other'
+                path.write_text(json.dumps(data))
+                with patch.object(module, 'SCHOOL_DIRECTORY', path), self.assertRaises(ValueError):
+                    module.school_website_leads()
+
+    def test_discovery_schedules_school_leads_without_manual_case_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            directory = root / 'cities.json'
+            directory.write_text(json.dumps({'municipalities': []}))
+            school = ('us-co-school-0801920', 'Academy 20', 'https://school.example.org/')
+            def discovered(ref, name, website, _budget):
+                return ({'jurisdiction_ref': ref, 'name': name, 'website_lead': website,
+                         'checked_at': module.utcnow(), 'state': 'directory_site_checked', 'portals': [], 'documents': []}, [])
+            try:
+                with patch.object(module, 'DIRECTORY', directory), patch.object(module, 'bootstrap_counties', return_value={}), \
+                     patch.object(module, 'school_website_leads', return_value=[school]), \
+                     patch.object(module, 'discover_one', side_effect=discovered):
+                    module.discover(root, db, limit=2, workers=1, refresh=False)
+                self.assertEqual(db.execute('select jurisdiction_ref from discovery').fetchone()[0], school[0])
+            finally:
+                db.close()
+
+    def test_school_website_links_do_not_automatically_bind_another_agency_portal(self):
+        home = 'https://school.example.org/'
+        body = b'<a href="https://city.legistar.com/Calendar.aspx">City council agenda</a>'
+        def fetch(url, _hosts, **_kwargs):
+            content = body if url == home else b''
+            meta = receipt(url, content)
+            meta.update(content_type='text/html', status=200 if url == home else 404)
+            return [(meta, content)]
+        robots = receipt(home + 'robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), patch.object(module, 'get', side_effect=fetch):
+            result, _ = module.discover_one('us-co-school-0801920', 'Academy 20', home, module.DownloadBudget(30_000_000))
+        self.assertEqual(result['state'], 'directory_site_checked')
+        self.assertEqual(result['portals'], [])
+
     def test_network_scope_rejects_private_mixed_and_credential_targets(self):
         for address in ['127.0.0.1', '10.0.0.1', '169.254.169.254', '224.0.0.1',
                         '::1', '2001:db8::1', '3fff::1', '64:ff9b::1', '::ffff:8.8.8.8']:
@@ -1817,6 +1888,70 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(len(report['records']), 1)
                 self.assertNotIn('Jane Example', output.read_text())
                 self.assertEqual(report['records'][0]['people_context'], [])
+            finally:
+                db.close()
+
+    def test_school_document_results_do_not_publish_private_names_or_passages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                ref, index = 'us-co-school-0801920', 'https://school.example.org/agenda'
+                url = 'https://school.example.org/agenda.pdf'
+                page = b'<a href="/agenda.pdf">Student Jane Example agenda</a>'
+                pdf = b'%PDF-school'
+                page_obs, pdf_obs = receipt(index, page), receipt(url, pdf)
+                module.archive(root, [(page_obs, page), (pdf_obs, pdf)])
+                text = b'Jane Example discussed Flock cameras.\n' + b'Other line\n' * 24 + b'Jane Example proposed a Flock camera resolution.\n'
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page), 'anchor_index': 0,
+                             'label': 'Student Jane Example agenda'}
+                result = {'state': 'matched', 'receipt': pdf_obs, 'document_sha256': module.sha(pdf),
+                          'extracted_sha256': module.sha(text), 'evidence_id': 'evidence:school',
+                          'finding': {'evidence_id': 'evidence:school', 'matched_rule_ids': ['vendor.flock-safety'],
+                                      'citations': [{'evidence_id': 'evidence:school', 'locator': {'kind': 'line', 'start': 1},
+                                                     'quote': 'Jane Example discussed Flock cameras.'}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://school.example.org/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, url, json.dumps(candidate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertNotIn('Jane Example', output.read_text())
+                self.assertEqual(report['records'][0]['people_context'], [])
+                self.assertNotIn('document_highlights', report['records'][0])
+                self.assertEqual(report['records'][0]['file'], 'School district meeting document')
+            finally:
+                db.close()
+
+    def test_school_matter_results_do_not_publish_raw_title_or_personal_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                client, ref = 'school-fixture', 'us-co-school-0801920'
+                url = module.query_url(client, 0, 100, module.LEGACY_TERM_VERSION)
+                source = [{'MatterId': 123, 'MatterTitle': 'Flock cameras discussed by Jane Example',
+                           'MatterFile': 'Student Jane Example', 'MatterStatusName': 'Jane Example'}]
+                body = json.dumps(source).encode(); obs = receipt(url, body)
+                module.archive(root, [(obs, body)])
+                with db:
+                    db.execute('insert into scan_history values (?,?,?,?)', (client, 0, obs['sha256'], json.dumps(obs)))
+                    db.execute('insert into leads values (?,?,?,?,?,?,?,?,?)',
+                               ('co-legistar-school-fixture-123', ref, client, 123, 0, 0, obs['sha256'],
+                                json.dumps({'title': source[0]['MatterTitle']}), module.utcnow()))
+                    db.execute('insert into matter_actions values (?,?,?,?,?)', (client, 123, 1, '{}', module.utcnow()))
+                output = root / 'public.json'
+                with patch.object(module, 'clients_from_store', return_value={client: ref}):
+                    module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertNotIn('Jane Example', output.read_text())
+                self.assertNotIn('actions', report['records'][0])
+                self.assertEqual(report['records'][0]['file'], 'School district agenda item')
             finally:
                 db.close()
 
