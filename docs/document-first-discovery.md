@@ -57,11 +57,12 @@ Remove `--dry-run` to fetch. Each newly preserved index also updates a private S
 Indexed snapshots contribute never-fetched historical candidates; duplicate URLs are collapsed. Accepted prior receipts act as durable checkpoints. Already archived URLs are rechecked after `--refresh-after-seconds` only when they still appear on the newest index, or when an operator selects an older snapshot explicitly. When both historical candidates and current refreshes are due, the private scheduler alternates their priority between runs, so neither class can occupy every bounded selection window. A failed request remains eligible after its cooldown; a failed batch reports nonzero without undoing successful private captures. A link that falls outside the current reviewed path or exact robots rules is marked blocked in the private scheduler and reported while other eligible links continue. These blocked links are reconsidered when a new index snapshot or policy review changes their context. A missing or expired document-path review blocks only that path's candidates; other reviewed paths can continue. The origin review remains a prerequisite for the whole run. The queue does not parse a vote or publish a case.
 
 Legacy candidate artifacts created before the scheduling index was added do not enter the automatic backlog until the official index is rediscovered under a current review. An exact old digest can still be processed with `--snapshot`; historical backfill of every pre-index artifact is a separate migration task. The current candidate matrix is empty, so no scheduled backlog is affected.
-The 256-row window alternates pending and current-refresh work, but it does
-not balance candidates across different document policies. A large backlog
-for one policy can delay another policy by several runs; the bounded cursor
-still advances, and the operator can use an exact `--snapshot` for targeted
-backfill. Per-policy scheduling fairness remains a scaling task.
+The 256-row window alternates pending and current-refresh work. Within each
+turn, it interleaves meeting HTML and document PDF candidates, so a large
+meeting backlog does not hide the PDF policy from the bounded window. Each
+selected candidate still passes the same raw-byte, receipt, review, and path
+checks before a request. An exact `--snapshot` remains available for targeted
+historical work.
 
 [`candidate-queues.tsv`](../deploy/selfhost/candidate-queues.tsv) is intentionally empty until source reviews are complete. Add one exact config/origin row after review, then run [`collect-candidates.sh`](../deploy/selfhost/collect-candidates.sh) periodically. It validates its entire bounded matrix before calling the CLI and shares the collector lock while reading candidate artifacts. An optional [`panopticon-candidates.timer`](../deploy/selfhost/panopticon-candidates.timer) is prepared for 15-minute checks on a future self-hosted server; it has not been enabled. `bash deploy/selfhost/test-candidate-queue.sh` tests the schedule without network access. The regular calendar collector still needs historical calendar paging; a default calendar view can omit older meetings before they ever become candidates.
 

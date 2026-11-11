@@ -136,9 +136,9 @@ impl Store {
     }
 
     /// Return a bounded page, alternating the preferred class after each
-    /// attempted queue run. A historical backlog cannot hide current refreshes,
-    /// and frequent refreshes cannot hide never-fetched links. Blocked rows
-    /// never occupy a due page.
+    /// attempted queue run. Within each class, interleave meeting HTML and
+    /// document PDF candidates so one path policy cannot fill the whole page.
+    /// Blocked rows never occupy a due page.
     pub fn candidate_queue_due(
         &self,
         origin_source_id: &str,
@@ -155,20 +155,32 @@ impl Store {
         let cutoff = now_unix.saturating_sub(refresh_after_seconds);
         let limit = i64::try_from(limit).map_err(|_| invalid("due query limit overflow"))?;
         let mut statement = self.connection().prepare(
-            "SELECT i.url, i.kind, i.anchor_index, i.snapshot_digest,
-                    i.last_seen_digest = o.latest_digest,
-                    i.last_attempt_unix, i.last_success_unix
-             FROM candidate_queue_items i
-             JOIN candidate_queue_origins o ON o.origin_source_id = i.origin_source_id
-             WHERE i.origin_source_id = ?1 AND i.retry_after_unix <= ?2
-               AND (
-                 i.status = 'pending'
-                 OR (i.status = 'archived'
-                     AND i.last_seen_digest = o.latest_digest
-                     AND COALESCE(i.last_success_unix, -9223372036854775808) <= ?3)
-               )
-             ORDER BY CASE WHEN i.status = o.next_class THEN 0 ELSE 1 END,
-                      COALESCE(i.last_attempt_unix, -9223372036854775808), i.url
+            "WITH due AS (
+               SELECT i.url, i.kind, i.anchor_index, i.snapshot_digest,
+                      i.last_seen_digest = o.latest_digest AS is_current,
+                      i.last_attempt_unix, i.last_success_unix,
+                      CASE WHEN i.status = o.next_class THEN 0 ELSE 1 END AS class_rank,
+                      CASE WHEN i.kind = 'meeting' THEN 0 ELSE 1 END AS policy_rank,
+                      ROW_NUMBER() OVER (
+                        PARTITION BY
+                          CASE WHEN i.status = o.next_class THEN 0 ELSE 1 END,
+                          CASE WHEN i.kind = 'meeting' THEN 0 ELSE 1 END
+                        ORDER BY COALESCE(i.last_attempt_unix, -9223372036854775808), i.url
+                      ) AS policy_row
+               FROM candidate_queue_items i
+               JOIN candidate_queue_origins o ON o.origin_source_id = i.origin_source_id
+               WHERE i.origin_source_id = ?1 AND i.retry_after_unix <= ?2
+                 AND (
+                   i.status = 'pending'
+                   OR (i.status = 'archived'
+                       AND i.last_seen_digest = o.latest_digest
+                       AND COALESCE(i.last_success_unix, -9223372036854775808) <= ?3)
+                 )
+             )
+             SELECT url, kind, anchor_index, snapshot_digest, is_current,
+                    last_attempt_unix, last_success_unix
+             FROM due
+             ORDER BY class_rank, policy_row, policy_rank, url
              LIMIT ?4",
         )?;
         let rows =
@@ -342,6 +354,32 @@ mod tests {
             kind: "agenda".to_owned(),
             anchor_index: index,
         }
+    }
+
+    #[test]
+    fn large_meeting_backlog_cannot_hide_document_policy_from_due_window() {
+        let dir = tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut seeds = (0..300)
+            .map(|index| CandidateQueueSeed {
+                url: format!("https://official.example.test/MeetingDetail.aspx?ID={index}"),
+                kind: "meeting".to_owned(),
+                anchor_index: index,
+            })
+            .collect::<Vec<_>>();
+        let pdf = seed(999);
+        seeds.push(pdf.clone());
+        store
+            .index_candidate_snapshot("town-index", &"a".repeat(64), 10, &seeds)
+            .unwrap();
+
+        let due = store
+            .candidate_queue_due("town-index", 11, 60, 256)
+            .unwrap();
+        assert_eq!(due.len(), 256);
+        assert_eq!(due[0].kind, "meeting");
+        assert_eq!(due[1].url, pdf.url);
+        assert_eq!(due.iter().filter(|item| item.kind == "agenda").count(), 1);
     }
 
     #[test]
