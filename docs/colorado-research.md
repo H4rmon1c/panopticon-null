@@ -14,7 +14,13 @@ no relevant decision exists.
    directory, county sites from an archived county-clerks directory, and
    school district websites from an exact CDE district-code to NCES-ID join.
    The pinned, reproducible school directory provides 177 website leads for
-   178 mapped school districts; a shared-host site remains unbound. Visit
+   178 mapped school districts; a shared-host site remains unbound. A separate
+   pinned DOLA extract supplies [special-district website leads](colorado-special-districts.md)
+   when the district ID, name, and a unique root host agree. Each such homepage
+   must also display the district's complete name before any linked documents
+   can be attributed to it. Shared-host and path-based sites need a tenant-aware
+   adapter. Discovery prioritizes never-attempted sites, then rotates by oldest
+   attempt, so a bounded run does not permanently starve later entries. Visit
    up to twelve prioritized, same-host pages across two navigation steps on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
    Document links may contain encoded spaces; other encoded path sequences are

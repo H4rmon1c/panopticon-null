@@ -1,4 +1,4 @@
-import { matchesResearchQuery, readBoundedResearchResponse } from './research-api.js';
+import { matchesResearchQuery, readBoundedResearchResponse, validResearchJurisdiction } from './research-api.js';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 
@@ -8,7 +8,7 @@ const search = document.querySelector('#research-search');
 const count = document.querySelector('#research-count');
 const results = document.querySelector('#research-results');
 const selected = new URLSearchParams(location.search).get('jurisdiction');
-const jurisdiction = /^us-co-[a-z0-9-]{1,100}$/.test(selected ?? '') ? selected : null;
+const jurisdiction = validResearchJurisdiction(selected) ? selected : null;
 const selectedRecord = new URLSearchParams(location.search).get('record');
 const recordId = /^co-[a-z0-9-]{1,150}$/.test(selectedRecord ?? '') ? selectedRecord : null;
 const node = (tag, name, value) => {

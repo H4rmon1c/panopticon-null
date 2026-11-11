@@ -39,6 +39,11 @@ new VPS; the checked-in static report alone does not contain the raw archive.
 The health endpoint includes the research stage's last run and failure state.
 A successful stage does not mean every site or PDF succeeded; individual
 screening errors and pending work are counted in the preliminary dataset.
+The bounded directory queue prioritizes websites never attempted, then the
+oldest attempts, so the additional special-district leads cannot be starved by
+frequent refreshes of the first cities in the directory. See
+[special-district discovery](../../docs/colorado-special-districts.md) for its
+identity and shared-host limits.
 
 `backup.sh` uses SQLite's online backup API while holding the collection/publication lock, then invokes encrypted restic storage for coherent copies of both databases, evidence, canonical records, discovery and research archives, configured private proposal inputs, and the current public release including API history. Configure an actual off-server backend and password file before enabling the optional backup timer. The accepted backend prefix is not proof of physical separation; verify the storage account and restoration independently. Retention deletion is deliberately an operator action. Original secrets and deployment environment files require their own encrypted recovery copy.
 
