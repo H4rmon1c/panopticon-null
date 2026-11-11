@@ -12,7 +12,7 @@ no relevant decision exists.
 
 1. Seed municipality websites from the existing Colorado Municipal League
    directory and county sites from an archived county-clerks directory. Visit
-   up to six prioritized same-host navigation pages on each site, find linked official meeting portals and
+   up to twelve prioritized, same-host pages across two navigation steps on each site, find linked official meeting portals and
    same-host agenda/minutes PDFs and Word documents, and retain the exact index page and link.
    Document links may contain encoded spaces; other encoded path sequences are
    left out of the queue to avoid ambiguous separators, traversal, and controls.

@@ -887,6 +887,84 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(result['state'], 'directory_site_checked')
         self.assertGreaterEqual(result['pages_checked'], 1)
 
+    def test_discovery_reaches_a_second_level_archive_with_bounded_same_host_requests(self):
+        home = 'https://town.example.org/'
+        pages = {
+            home: b'<a href="/meetings">Meetings</a>',
+            home + 'meetings': b'<a href="/meeting-archive">Minutes archive</a>',
+            home + 'meeting-archive': b'<a href="/documents/council-minutes.pdf">Minutes</a>',
+        }
+        calls = []
+        def fetch(url, hosts, **_kwargs):
+            calls.append(url)
+            self.assertIn('town.example.org', hosts)
+            body = pages.get(url, b'')
+            meta = receipt(url, body)
+            meta['content_type'] = 'text/html'
+            if url not in pages: meta['status'] = 404
+            return [(meta, body)]
+        robots = receipt(home + 'robots.txt', b'')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), \
+                     patch.object(module, 'get', side_effect=fetch):
+                    result, observations = module.discover_one('us-co-county-08051', 'Fixture', home,
+                                                               module.DownloadBudget(30_000_000))
+                self.assertEqual(result['state'], 'directory_site_checked')
+                self.assertLessEqual(result['pages_attempted'], module.MAX_DISCOVERY_PAGES)
+                self.assertTrue(all(urlsplit(url).hostname == 'town.example.org' for url in calls))
+                document = next(item for item in result['documents'] if item['url'].endswith('/council-minutes.pdf'))
+                self.assertEqual(document['index_url'], home + 'meeting-archive')
+                module.archive(root, observations)
+                module.checked_document_candidate(root, document['url'], document)
+            finally:
+                db.close()
+
+    def test_discovery_caps_attempts_even_when_every_deeper_page_fails(self):
+        home = 'https://town.example.org/'
+        body = b''.join(f'<a href="/agenda-{i}">Agenda {i}</a>'.encode() for i in range(100))
+        calls = []
+        def fetch(url, _hosts, **_kwargs):
+            calls.append(url)
+            data = body if url == home else b''
+            meta = receipt(url, data)
+            meta.update(content_type='text/html', status=200 if url == home else 404)
+            return [(meta, data)]
+        robots = receipt(home + 'robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), \
+             patch.object(module, 'get', side_effect=fetch):
+            result, _ = module.discover_one('us-co-county-08051', 'Fixture', home, module.DownloadBudget(30_000_000))
+        self.assertLessEqual(len(calls), module.MAX_DISCOVERY_PAGES)
+        self.assertLessEqual(result['pages_attempted'], module.MAX_DISCOVERY_PAGES)
+
+    def test_discovery_shares_second_level_budget_across_sections(self):
+        home = 'https://town.example.org/'
+        pages = {home: b''.join(f'<a href="/meeting-section-{i}">Meetings {i}</a>'.encode()
+                                for i in range(5))}
+        for i in range(5):
+            pages[home + f'meeting-section-{i}'] = b''.join(
+                f'<a href="/meeting-archive-{i}-{j}">Minutes {j}</a>'.encode()
+                for j in range(6))
+            for j in range(6):
+                pages[home + f'meeting-archive-{i}-{j}'] = (
+                    f'<a href="/documents/{i}-{j}-council-minutes.pdf">Minutes</a>'.encode())
+        calls = []
+        def fetch(url, _hosts, **_kwargs):
+            calls.append(url)
+            data = pages.get(url, b'')
+            meta = receipt(url, data)
+            meta.update(content_type='text/html', status=200 if url in pages else 404)
+            return [(meta, data)]
+        robots = receipt(home + 'robots.txt', b'')
+        with patch.object(module, 'get_robots', return_value=(None, [(robots, b'')])), \
+             patch.object(module, 'get', side_effect=fetch):
+            result, _ = module.discover_one('us-co-county-08051', 'Fixture', home, module.DownloadBudget(30_000_000))
+        self.assertEqual({item['url'].split('/')[-1] for item in result['documents']},
+                         {f'{i}-0-council-minutes.pdf' for i in range(5)})
+        self.assertLessEqual(len(calls), module.MAX_DISCOVERY_PAGES)
+
     def test_word_extraction_rejects_entities_and_ignores_deleted_text(self):
         xml = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                b'<w:body><w:p><w:r><w:t>Flock Safety</w:t></w:r><w:del><w:r><w:t> deleted</w:t></w:r></w:del>'
