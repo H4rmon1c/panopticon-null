@@ -742,11 +742,40 @@ class ResearchTests(unittest.TestCase):
                 output = root / 'public.json'
                 module.export_report(root, db, output)
                 attempt = json.loads(output.read_text())['coverage']['search_attempts'][0]
-                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (2, 1, 2))
+                # Legacy no-match PDFs lack an image-content audit and are
+                # incomplete even though their native text was screened.
+                self.assertEqual((attempt['documents_screened'], attempt['documents_failed'], attempt['documents_queued']), (0, 3, 2))
                 self.assertEqual(attempt['documents_redirected'], 1)
                 self.assertEqual(attempt['historical_index_pages_checked'], 1)
                 self.assertEqual(attempt['historical_index_errors'], 1)
                 self.assertIsNone(attempt['lookback_period'])
+            finally:
+                db.close()
+
+    def test_document_coverage_is_unverified_for_native_ocr_and_word(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                ref = 'us-co-county-08051'
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)',
+                               (ref, 'https://example.org/', module.utcnow(),
+                                json.dumps({'jurisdiction_ref': ref, 'state': 'directory_site_checked'})))
+                    results = [
+                        {'state': 'no_match', 'extraction_status': 'complete'},
+                        {'state': 'no_match', 'extraction_status': 'complete_with_ocr',
+                         'ocr_page_set_validated': True, 'ocr_page_text_mapping_version': 2},
+                        {'state': 'no_match'},
+                        {'state': 'no_match', 'document_format': 'docx', 'docx_deleted_text_excluded': True},
+                    ]
+                    for n, result in enumerate(results):
+                        db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                      VALUES (?,?,?,'no_match',?,?)''', (ref, f'https://example.org/{n}', '{}', json.dumps(result), module.utcnow()))
+                output = root / 'report.json'; module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(report['coverage']['document_screening'], {'error': 4})
+                attempt = report['coverage']['search_attempts'][0]
+                self.assertEqual((attempt['documents_screened'], attempt['documents_failed']), (0, 4))
             finally:
                 db.close()
 
@@ -1879,7 +1908,9 @@ class ResearchTests(unittest.TestCase):
                     module.ocr_saved_documents(root, db, '/bin/true', 1, 1, revalidate=True)
                 self.assertEqual(extract.call_args.args[4]['sha256'], module.sha(pdf))
                 module.export_report(root, db, output)
-                self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'no_match': 1})
+                # Older OCR covers the requested page set but does not prove
+                # that each page produced usable text.
+                self.assertEqual(json.loads(output.read_text())['coverage']['document_screening'], {'error': 1})
                 self.assertEqual(json.loads(output.read_text())['coverage']['ocr_revalidation_pending'], 0)
                 self.assertEqual(db.execute('SELECT count(*) FROM ocr_history').fetchone()[0], 1)
                 old['state'] = 'matched'
@@ -2389,6 +2420,11 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(len(json.loads(output.read_text())['records']), 1)
                 report = json.loads(output.read_text())
                 self.assertIn('A county-linked document does not establish the responsible public body', report['notice'])
+                self.assertIn('Documents are counted as incomplete while image, page, and document-part coverage is unverified', report['notice'])
+                # Reclassifying coverage must not suppress the independently
+                # revalidated native-text finding itself.
+                self.assertEqual(report['coverage']['document_screening'], {'error': 1})
+                self.assertEqual(report['records'][0]['title'], 'Flock Safety was discussed')
                 self.assertNotIn('source_scope_notice', report['records'][0])
                 result['extraction_status'] = 'complete_with_ocr'
                 db.execute('UPDATE document_candidates SET result_json=?', (json.dumps(result),))

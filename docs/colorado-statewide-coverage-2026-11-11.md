@@ -27,10 +27,12 @@ person's term, their appearance on the vote date, a contract, or deployment.
   sites were unavailable or the name was not established. The other 2,501
   entries had no attempted lead under this adapter. Many share a host or use
   a path-scoped tenant and need a source-specific attribution method.
-- The snapshot includes 25,039 completed document keyword screens, 2,594
+- The snapshot includes 25,039 historical document text keyword screens, 2,594
   incomplete attempts, and 1,618 source redirects with linked alternate
   documents. At least one document or portal page was screened in 545
-  jurisdictions. These are bounded searches, not a complete date window.
+  jurisdictions. Document results in these historical figures lack validated
+  image, page, and document-part coverage and cannot establish complete screening.
+  These are bounded searches, not a complete date window.
 
 A reached website does not mean that its full meeting history was found or
 that a missing reference proves no relevant decision exists. Preliminary

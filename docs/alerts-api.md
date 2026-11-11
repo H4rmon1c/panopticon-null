@@ -60,8 +60,11 @@ captures are labeled when the source history changes.
 Records include a stable source-based ID, exact capture URL, digest, locator,
 timestamp, and relevant terms. `lookback_period` is null; do not infer complete
 jurisdiction coverage from an empty result. `coverage.search_attempts` records
-the last website-discovery attempt and counts of completed, failed, and queued
-document screens and checked portal pages by jurisdiction.
+the last website-discovery attempt and counts of validated extraction,
+incomplete, and queued document screens and checked portal pages by jurisdiction.
+Documents count as incomplete while image, page, and document-part coverage is
+unverified, including when a source-located text match is preserved in the
+records. OCR can also miss text.
 `historical_index_pages_checked` counts successfully fetched year/category
 indexes, and `historical_index_errors` counts failed checks. Neither establishes
 a complete historical lookback. These are partial

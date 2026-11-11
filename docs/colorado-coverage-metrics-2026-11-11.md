@@ -1,7 +1,9 @@
 # Colorado coverage measures — November 11, 2026
 
-At 21:47 UTC, the private collector snapshot recorded at least one completed
-document or portal screen for **545 of 4,111 mapped entries (13.3%)**. This is
+At 21:47 UTC, the private collector snapshot recorded at least one document-text
+or portal screen for **545 of 4,111 mapped entries (13.3%)**. Document screens in
+this historical count lack validated image, page, and document-part coverage; they do not
+establish complete document screening. This is
 an activity measure, not the percentage of Colorado decisions or records
 covered. Neither a complete statewide universe of relevant decisions nor a
 complete lookback window has been established. The geography includes 3,595
