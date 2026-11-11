@@ -1307,6 +1307,25 @@ class ResearchTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_queued_redirect_is_counted_separately_from_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = module.root_store(root)
+            try:
+                url = 'https://town.example.org/agenda.pdf'
+                alt = {'url': 'https://town.example.org/alternate.pdf'}
+                db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,updated_at)
+                              VALUES (?,?,?,'pending',?)''', ('us-co-county-08001', url, json.dumps({'url': url}), module.utcnow()))
+                db.commit()
+                result = {'state': 'error', 'error': 'source redirected; alternate document queued', 'alternate_candidate': alt}
+                output = io.StringIO()
+                with patch.object(module, 'screen_one', return_value=(result, [])), redirect_stdout(output):
+                    module.screen_documents(root, db, sys.executable, 1, 1, 1)
+                self.assertIn('completed screens 0; errors 0; deferred 0; redirected 1', output.getvalue())
+                self.assertEqual(db.execute("SELECT state FROM document_candidates WHERE url=?", (alt['url'],)).fetchone()[0], 'pending')
+            finally:
+                db.close()
+
     def test_civic_history_waits_for_an_overfull_document_queue(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1755,11 +1755,11 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
     print(f'Screening up to {len(rows)} official agenda/minutes documents across '
           f'{len({ref for ref, _, _ in rows})} jurisdictions', flush=True)
     started = time.monotonic()
-    completed = errors = deferred = 0
+    completed = errors = deferred = redirected = 0
 
     def progress(finished, total):
         print(f'Document jobs {finished}/{total}; completed screens {completed}; '
-              f'errors {errors}; deferred {deferred}; elapsed {int(time.monotonic()-started)}s', flush=True)
+              f'errors {errors}; deferred {deferred}; redirected {redirected}; elapsed {int(time.monotonic()-started)}s', flush=True)
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = {pool.submit(screen_one, data_dir, ref, json.loads(raw), binary,
@@ -1777,6 +1777,8 @@ def screen_documents(data_dir, db, binary, limit, per_place, workers, retry_erro
                 continue
             if result['state'] in ('matched', 'no_match'):
                 completed += 1
+            elif result.get('alternate_candidate'):
+                redirected += 1
             else:
                 errors += 1
             with db:
