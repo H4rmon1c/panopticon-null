@@ -44,6 +44,86 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_explicit_immediate_redirect_retry_is_scoped_and_keeps_other_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                city, other = 'us-co-place-0816000', 'us-co-place-0816495'
+                for ref, suffix, error, state in [
+                    (city, 'redirect', 'not a PDF (HTTP 301)', 'error'),
+                    (city, 'notfound', 'not a PDF (HTTP 404)', 'error'),
+                    (other, 'other', 'not a PDF (HTTP 301)', 'error'),
+                    (city, 'pending', '', 'pending'),
+                ]:
+                    url = f'https://example.org/{suffix}.pdf'
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,
+                                  result_json,updated_at,last_attempt_at) VALUES (?,?,?,?,?,?,?)''',
+                               (ref, url, json.dumps({'url': url}), state, json.dumps({'error': error}), module.utcnow(), module.utcnow()))
+                db.commit(); selected = []
+                other_before = db.execute("select * from document_candidates where url like '%other.pdf'").fetchone()
+                def screen(_root, ref, candidate, *_args):
+                    selected.append((ref, candidate['url']))
+                    return {'state': 'error', 'error': 'still unavailable'}, []
+                with patch.object(module, 'screen_one', side_effect=screen):
+                    module.screen_documents(root, db, '/bin/true', 10, 10, 1, retry_errors=True,
+                                            jurisdiction=city, retry_now=True, retry_redirects=True)
+                self.assertEqual(selected, [(city, 'https://example.org/redirect.pdf')])
+                self.assertEqual(db.execute("select count(*) from document_candidates where state='pending'").fetchone()[0], 1)
+                self.assertEqual(db.execute("select * from document_candidates where url like '%other.pdf'").fetchone(), other_before)
+                with self.assertRaises(ValueError):
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1, retry_errors=True, retry_now=True)
+                with self.assertRaises(ValueError):
+                    module.screen_documents(root, db, '/bin/true', 1, 1, 1, jurisdiction=city, retry_redirects=True)
+            finally:
+                db.close()
+    def test_colorado_springs_document_page_proves_exact_download_anchor(self):
+        old = 'https://coloradosprings.gov/sites/default/files/inline-images/agenda_02.14.19.pdf'
+        page = 'https://coloradosprings.gov/document/agenda02.14.19.pdf'
+        pdf = 'https://coloradosprings.gov/system/files/inline-images/agenda_02.14.19.pdf'
+        self.assertTrue(module.springs_document_page(old, page))
+        for bad in [page.replace('coloradosprings.gov', 'attacker.example'), page.replace('agenda02', 'agenda03'),
+                    page + '?token=1', page.replace('/document/', '/other/')]:
+            self.assertFalse(module.springs_document_page(old, bad))
+        candidate = {'url': old, 'meeting_date': '2019-02-14'}
+        html = f'<a href="{pdf}">Download PDF</a>'.encode()
+        result = module.springs_page_candidate(candidate, page, html)
+        self.assertEqual(result['url'], pdf)
+        self.assertEqual(result['index_sha256'], module.sha(html))
+        self.assertIsNone(module.springs_page_candidate(candidate, page, html.replace(b'agenda_02', b'agenda_03')))
+        self.assertIsNone(module.springs_page_candidate(candidate, page, html + html))
+        self.assertIsNone(module.springs_page_candidate(candidate, page, html.replace(b'Download PDF', b'Other')))
+
+    def test_colorado_springs_document_page_is_archived_before_document_screening(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                origin = 'https://coloradosprings.gov/sites/default/files/agenda_02.14.19.pdf'
+                page = 'https://coloradosprings.gov/document/agenda02.14.19.pdf'
+                pdf = 'https://coloradosprings.gov/system/files/agenda_02.14.19.pdf'
+                index = 'https://coloradosprings.gov/agenda'
+                source = f'<a href="{origin}">Agenda PDF</a>'.encode()
+                html = f'<a href="{pdf}">Download PDF</a>'.encode()
+                module.archive(root, [(receipt(index, source), source)])
+                candidate = {'url': origin, 'index_url': index, 'index_sha256': module.sha(source),
+                             'anchor_index': 0, 'meeting_date': None}
+                redirect = receipt(origin, b''); redirect.update(status=301, redirect_target=page)
+                landing = receipt(page, html); landing['content_type'] = 'text/html'
+                def get(url, *_args, **_kwargs):
+                    return [(redirect, b'')] if url == origin else [(landing, html)]
+                with patch.object(module, 'cached_robots', return_value=(None, [])), patch.object(module, 'get', side_effect=get):
+                    result, observations = module.screen_one(root, 'us-co-place-0816000', candidate, '/bin/false',
+                                                               __import__('threading').Lock(), module.DownloadBudget(50_000_000), False, {})
+                self.assertEqual(result['error'], 'source redirected; alternate document queued')
+                module.archive(root, observations)
+                alternate = result['alternate_candidate']
+                self.assertIn((page, module.sha(html)), module.observation_keys(root))
+                module.checked_document_candidate(root, pdf, alternate)
+                with patch.object(module, 'cached_robots', return_value=(None, [])), patch.object(module, 'get', side_effect=get):
+                    result, _ = module.screen_one(root, 'us-co-place-0816495', candidate, '/bin/false',
+                                                  __import__('threading').Lock(), module.DownloadBudget(50_000_000), False, {})
+                self.assertNotIn('alternate_candidate', result)
+            finally:
+                db.close()
     def test_machuga_cross_agency_portrait_requires_all_captures_and_exact_vote(self):
         with tempfile.TemporaryDirectory() as tmp:
             assets = Path(tmp) / 'assets'

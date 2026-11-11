@@ -26,3 +26,30 @@ To fetch and screen only the source-bound direct candidates, run
 This reopens each archived index, rechecks the exact directory binding, receipt,
 heading, and link ordinal, and uses the existing bounded sandbox extractor. It
 writes a separate private `tenant-screening.json`, without publishing findings.
+
+`python3 scripts/colorado_tenant_followup.py --data-dir /absolute/private/path --pnull-bin /absolute/path/to/pnull`
+also follows up to three clearly labeled meeting or document navigation links
+from each verified directory tenant page. The linked page must be on the same
+HTTPS host, return a direct HTML response, and repeat the exact full district
+heading. Each direct document keeps the captured secondary index digest and
+anchor ordinal; the output also preserves the parent page and navigation
+anchor. The existing sandbox screens those documents with a shared download
+budget and no automatic public attribution. This command writes a separate
+`tenant-secondary-screening.json` and refuses to overwrite it on a later run.
+
+## Shared-root sites
+
+`python3 scripts/colorado_shared_districts.py --data-dir /absolute/private/path --offset 0 --limit 80`
+groups distinct provisional district IDs from the pinned directory that advertise
+the same root host. It fetches each root once and records names visible on the
+page and direct same-host agenda/minutes anchors. A visible name does not make
+every document on a shared site that district's record. The private output is
+`shared-host-leads-OFFSET.json`; use a fresh offset to cover subsequent hosts.
+
+`python3 scripts/colorado_screen_shared_leads.py --data-dir /absolute/private/path --pnull-bin /absolute/path/to/pnull --offset 0`
+rechecks the directory group, original page receipt and each anchor before
+sandbox screening. Results go to `shared-host-screening-OFFSET.json`. The
+extractor uses an internal shared-site sentinel, not a real jurisdiction;
+neither the lead nor its screen establishes district ownership, a vote or a
+decision, and neither command publishes anything. Further source-specific
+attribution is required before public use.
