@@ -167,6 +167,11 @@ function render(report) {
       card.append(external(item.indexed_source_url, 'Original indexed link ↗'));
       card.append(external(item.source_index_url, 'Government agenda index ↗'));
     }
+    if (item.springs_source_chain) {
+      card.append(external(item.springs_source_chain.original_index_url, 'Original labeled city index ↗'));
+      card.append(external(item.springs_source_chain.original_document_url, 'Original indexed document link ↗'));
+      card.append(external(item.springs_source_chain.landing_url, 'City document landing page ↗'));
+    }
     if (item.matter_url) card.append(external(item.matter_url, 'Open official matter ↗'));
     const permalink = node('a', 'source', 'Link to this reference ↗');
     const referenceUrl = new URL('./research.html', location.href);
@@ -178,6 +183,13 @@ function render(report) {
     detail.append(node('p', '', `Locator: ${item.locator}`));
     detail.append(node('p', '', `Captured: ${item.captured_at}`));
     detail.append(node('p', 'digest', `SHA-256 ${item.source_sha256}`));
+    if (item.springs_source_chain) {
+      const chain = item.springs_source_chain;
+      detail.append(node('p', '', `Original index anchor ${chain.original_anchor_index}; landing-page anchor ${chain.landing_anchor_index}.`));
+      detail.append(node('p', 'digest', `Original index SHA-256 ${chain.original_index_sha256}`));
+      detail.append(node('p', 'digest', `Landing page SHA-256 ${chain.landing_sha256}`));
+      detail.append(node('p', 'digest', `Archived HTTP ${chain.redirect_status} receipt SHA-256 ${chain.redirect_receipt_sha256}; captured ${chain.redirect_captured_at}.`));
+    }
     card.append(detail);
     results.append(card);
   }

@@ -267,7 +267,7 @@ export function validateResearch(report) {
     if (!onlyKeys(record, ['id', 'kind', 'confidence', 'jurisdiction_ref', 'jurisdiction', 'file', 'title', 'signals',
       'source_status', 'source_url', 'matter_url', 'source_sha256', 'locator', 'captured_at', 'last_screened_at',
       'people_context', 'historical', 'ocr', 'actions', 'document_format',
-      'capture_adjustment', 'indexed_source_url', 'source_index_url', 'document_highlights']) ||
+      'capture_adjustment', 'indexed_source_url', 'source_index_url', 'document_highlights', 'springs_source_chain']) ||
         !/^co-[a-z0-9-]{1,150}$/.test(record.id) || seen.has(record.id) ||
         !['matter_reference', 'meeting_document', 'agenda_portal_reference'].includes(record.kind) ||
         record.confidence !== 'unconfirmed_source_reference' ||
@@ -324,6 +324,32 @@ export function validateResearch(report) {
             !highlight.signals.length || highlight.signals.length > 24 ||
             highlight.signals.some((signal) => !safeText(signal, 100) || !signal.trim())) throw new Error('Invalid document highlight');
         seenLocations.add(highlight.locator);
+      }
+    }
+    if (record.springs_source_chain !== undefined) {
+      const chain = record.springs_source_chain;
+      if (record.kind !== 'meeting_document' || record.jurisdiction_ref !== 'us-co-place-0816000' ||
+          record.capture_adjustment !== undefined || !onlyKeys(chain, ['original_index_url', 'original_index_sha256',
+            'original_anchor_index', 'original_document_url', 'redirect_status', 'redirect_captured_at',
+            'redirect_receipt_sha256', 'landing_url', 'landing_sha256', 'landing_anchor_index']) ||
+          !digest(chain.original_index_sha256) || !digest(chain.redirect_receipt_sha256) || !digest(chain.landing_sha256) ||
+          ![chain.original_anchor_index, chain.landing_anchor_index].every((n) => Number.isSafeInteger(n) && n >= 0 && n < 100000) ||
+          ![301, 302, 303, 307, 308].includes(chain.redirect_status) ||
+          typeof chain.redirect_captured_at !== 'string' || !Number.isFinite(Date.parse(chain.redirect_captured_at))) {
+        throw new Error('Invalid Colorado Springs source chain');
+      }
+      const index = publicResearchUrl(chain.original_index_url);
+      const original = publicResearchUrl(chain.original_document_url);
+      const landing = publicResearchUrl(chain.landing_url);
+      const capture = parsedUrls[0];
+      const old = /^\/sites\/default\/files\/(?:inline-images\/)?([A-Za-z0-9._-]+\.pdf)$/i.exec(original.pathname);
+      const dest = /^\/document\/([A-Za-z0-9.-]+\.pdf)$/i.exec(landing.pathname);
+      if ([index, original, landing, capture].some((u) => u.hostname !== 'coloradosprings.gov') ||
+          (index.search && !/^\?page=[0-9]{1,5}$/.test(index.search)) || original.search || landing.search || capture.search ||
+          !old || !dest || old[1].includes('..') || dest[1].includes('..') ||
+          old[1].replaceAll('_', '').toLowerCase() !== dest[1].toLowerCase() ||
+          capture.pathname !== '/system' + original.pathname.slice('/sites/default'.length)) {
+        throw new Error('Colorado Springs source chain identity differs');
       }
     }
     const hasRedirectProof = record.capture_adjustment !== undefined || record.indexed_source_url !== undefined || record.source_index_url !== undefined;

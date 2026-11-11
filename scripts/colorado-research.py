@@ -3740,7 +3740,6 @@ def export_report(data_dir, db, output, assets_dir=None):
             key = (ref, doc_digest)
             if key in seen_documents:
                 continue
-            seen_documents.add(key)
             quote = citation['quote']
             # A public comment can contain a private person's name or address.
             school = geography[ref]['kind'] == 'school_district'
@@ -3772,11 +3771,25 @@ def export_report(data_dir, db, output, assets_dir=None):
             if 'redirect_receipt' in candidate:
                 record.update(capture_adjustment=candidate['capture_adjustment'],
                               indexed_source_url=candidate['linked_url'], source_index_url=candidate['index_url'])
+            if springs_source is not None:
+                original_index = urlsplit(springs_source['index_url'])
+                if original_index.query and not re.fullmatch(r'page=[0-9]{1,5}', original_index.query):
+                    raise ValueError('Colorado Springs source index query is not public-safe')
+                redirect = springs_source['redirect_receipt']
+                receipt_bytes = (json.dumps(redirect, sort_keys=True, separators=(',', ':')) + '\n').encode()
+                record['springs_source_chain'] = {
+                    'original_index_url': springs_source['index_url'], 'original_index_sha256': springs_source['index_sha256'],
+                    'original_anchor_index': springs_source['anchor_index'], 'original_document_url': springs_source['url'],
+                    'redirect_status': redirect['status'], 'redirect_captured_at': redirect['retrieved_at'],
+                    'redirect_receipt_sha256': sha(receipt_bytes), 'landing_url': candidate['index_url'],
+                    'landing_sha256': candidate['index_sha256'], 'landing_anchor_index': candidate['anchor_index'],
+                }
             if not ocr_page and not school and not special:
                 highlights = document_highlights(lines, number, finding['matched_rule_ids'])
                 if highlights:
                     record['document_highlights'] = highlights
             records.append(record)
+            seen_documents.add(key)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
             omitted += 1
             omission_reasons[str(error)[:100]] += 1

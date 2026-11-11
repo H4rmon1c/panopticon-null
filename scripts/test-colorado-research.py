@@ -63,6 +63,50 @@ class ResearchTests(unittest.TestCase):
                 self.assertEqual(alternate['kind'], 'minutes')
                 self.assertEqual(alternate['springs_source']['index_sha256'], module.sha(source))
                 module.checked_document_candidate(root, pdf, alternate)
+                # The public record exposes the same verified original index,
+                # redirect receipt and landing-page evidence as the private chain.
+                doc, text = b'%PDF-test', b'Flock cameras were discussed.\n'
+                doc_receipt = receipt(pdf, doc)
+                module.archive(root, [(doc_receipt, doc)])
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                result = {'state': 'matched', 'receipt': doc_receipt, 'candidate': alternate,
+                          'document_sha256': module.sha(doc), 'extracted_sha256': module.sha(text),
+                          'evidence_id': 'evidence:test', 'finding': {'evidence_id': 'evidence:test',
+                          'matched_rule_ids': ['vendor.flock-safety'], 'citations': [{'evidence_id': 'evidence:test',
+                          'locator': {'kind': 'line', 'start': 1}, 'quote': 'Flock cameras were discussed.'}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', ('us-co-place-0816000',
+                               'https://coloradosprings.gov/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', ('us-co-place-0816000', pdf, json.dumps(alternate), json.dumps(result), module.utcnow()))
+                output = root / 'public.json'
+                module.export_report(root, db, output)
+                public = json.loads(output.read_text())['records'][0]['springs_source_chain']
+                self.assertEqual(public['original_index_url'], index)
+                self.assertEqual(public['original_index_sha256'], module.sha(source))
+                self.assertEqual(public['original_document_url'], origin)
+                self.assertEqual(public['landing_url'], page)
+                self.assertEqual(public['landing_sha256'], module.sha(html))
+                self.assertEqual(public['redirect_status'], 301)
+                self.assertEqual(public['redirect_receipt_sha256'], module.sha((json.dumps(redirect, sort_keys=True, separators=(',', ':')) + '\n').encode()))
+                # An unsafe current source must not suppress a separately
+                # verifiable historical source for the same PDF digest.
+                unsafe_index = index + '?token=private'
+                module.archive(root, [(receipt(unsafe_index, source), source)])
+                unsafe = {**alternate, 'springs_source': {**alternate['springs_source'], 'index_url': unsafe_index}}
+                unsafe_result = {**result, 'candidate': unsafe}
+                with db:
+                    db.execute('UPDATE document_candidates SET candidate_json=?, result_json=? WHERE url=?',
+                               (json.dumps(unsafe), json.dumps(unsafe_result), pdf))
+                    db.execute('INSERT INTO document_history VALUES (?,?,?,?,?,?,?)',
+                               ('us-co-place-0816000', pdf, module.sha(doc), json.dumps(alternate),
+                                json.dumps(result), module.utcnow(), module.utcnow()))
+                module.export_report(root, db, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(len(report['records']), 1)
+                self.assertEqual(report['records'][0]['springs_source_chain']['original_index_url'], index)
+                self.assertTrue(report['records'][0]['historical'])
                 changes = [
                     {'springs_source': {**alternate['springs_source'], 'url': origin.replace('october', 'january')}},
                     {'springs_source': {**alternate['springs_source'], 'anchor_index': 99}},
