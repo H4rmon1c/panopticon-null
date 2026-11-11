@@ -7,6 +7,16 @@ import re
 from urllib.parse import urlsplit
 
 SEEDS = {
+    'sterling-bwc': {
+        'jurisdiction_ref': 'us-co-place-0873935',
+        'url': 'https://www.sterlingcolo.com/departments/police_department/officer_body-worn_cameras.php',
+        'agency': 'The Sterling Police Department issues body worn cameras to all sworn members',
+        'claim': 'The Sterling Police Department issues body worn cameras to all sworn members',
+        'combined_start': 'The Sterling Police Department issues body worn cameras to all sworn members',
+        'context_sha256': '21bbbc9777b42e654c5d0b6e3d468ea820461c5ac2b35acee75e2aa7ba661bde',
+        'title': 'Sterling police describe their body-worn camera program.',
+        'signals': ['Body-worn cameras'],
+    },
     'greeley-flock': {
         'jurisdiction_ref': 'us-co-place-0832155',
         'url': 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/',
@@ -245,7 +255,7 @@ def materialize(research, data_dir, db, receipts, name, raw, updated, state='act
             'context_state': state,
             'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref,
             'jurisdiction': {'broomfield-flock': 'Broomfield', 'boulder-uas': 'Boulder', 'westminster-axon': 'Westminster',
-                             'greeley-flock': 'Greeley', 'boulder-flock': 'Boulder'}[name],
+                             'greeley-flock': 'Greeley', 'boulder-flock': 'Boulder', 'sterling-bwc': 'Sterling'}[name],
             'file': 'Official police technology page', 'title': title, 'signals': signals,
             'source_status': '', 'source_url': url, 'source_sha256': digest,
             'locator': locator, 'captured_at': receipt['retrieved_at'],

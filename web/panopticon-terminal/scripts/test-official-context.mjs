@@ -5,6 +5,7 @@ import { validateResearch } from '../research-api.js';
 
 const base = JSON.parse(await readFile(new URL('../public/research-signals.json', import.meta.url), 'utf8'));
 const seeds = [
+  ['sterling-bwc', 'us-co-place-0873935', 'Sterling', 'https://www.sterlingcolo.com/departments/police_department/officer_body-worn_cameras.php', 'Sterling police describe their body-worn camera program.', ['Body-worn cameras']],
   ['greeley-flock', 'us-co-place-0832155', 'Greeley', 'https://greeleyco.gov/police/technology/automated-license-plate-reader-program/', 'Greeley police describe their Flock Safety camera program.', ['Flock Safety']],
   ['boulder-flock', 'us-co-place-0807850', 'Boulder', 'https://bouldercolorado.gov/services/flock-safety-cameras-and-boulder-police-department', 'Boulder police describe their selection of Flock Safety.', ['Flock Safety']],
   ['broomfield-flock', 'us-co-place-0809280', 'Broomfield', 'https://www.broomfield.org/4545/Flock-Safety-License-Plate-Readers', 'Broomfield police describe their Flock Safety license-plate-reader program.', ['Flock Safety', 'Automated License Plate Readers']],
@@ -25,8 +26,26 @@ function report() {
   data.coverage.jurisdictions_with_mentions = new Set(data.records.map((item) => item.jurisdiction_ref)).size;
   return data;
 }
-test('five official technology pages validate only as context', () => {
-  assert.equal(validateResearch(report()).coverage.official_page_references, 5);
+test('six official technology pages validate only as context', () => {
+  assert.equal(validateResearch(report()).coverage.official_page_references, 6);
+});
+test('research page loads matching versioned modules', async () => {
+  const html = await readFile(new URL('../research.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../research.js', import.meta.url), 'utf8');
+  assert.match(html, /research\.js\?v=sterling-context-1/);
+  assert.match(script, /research-api\.js\?v=sterling-context-1/);
+});
+test('Sterling context cannot be swapped or given an invented approval', () => {
+  for (const change of [
+    (r) => { r.jurisdiction_ref = 'us-co-place-0807850'; },
+    (r) => { r.source_url = 'https://www.sterlingcolo.com.evil.example/'; },
+    (r) => { r.title = 'Sterling approved a camera contract.'; },
+    (r) => { r.actions = []; },
+    (r) => { r.signals = ['Automated License Plate Readers']; },
+  ]) {
+    const data = report(); change(data.records.find((r) => r.id === 'co-official-context-sterling-bwc'));
+    assert.throws(() => validateResearch(data));
+  }
 });
 test('official context rejects swapped agency, destination, claims, markup and invented votes', () => {
   for (const change of [
