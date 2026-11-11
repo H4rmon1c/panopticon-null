@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Third-party discovery leads, not government-domain proof or claims of an approval.",
+  "sources": [
+    {
+      "jurisdiction_ref": "us-co-county-08017",
+      "url": "https://kiowacountypress.net/content/cheyenne-county-sheriffs-office-use-flock-license-plate-reader-cameras",
+      "source_type": "third_party_sheriff_statement"
+    },
+    {
+      "jurisdiction_ref": "us-co-county-08017",
+      "url": "https://kiowacountyindependent.com/notices/legal/cheyenne-county/7529-cheyenne-county-may-2026-ledger",
+      "source_type": "third_party_legal_notice"
+    }
+  ]
+}

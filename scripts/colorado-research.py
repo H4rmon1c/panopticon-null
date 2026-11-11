@@ -3022,8 +3022,54 @@ def authority_external_portrait(data_dir, db, receipts, ref, client, motion, vot
         return None
     identities = {(796, 'Kathy Henson'): 'us-co-county-08001', (668, 'James Amador'): 'us-co-school-0801950'}
     name = vote.get('name')
+    if (vote.get('person_id'), name) == (637, 'Craig Machuga'):
+        return machuga_portrait(data_dir, receipts, assets_dir)
     source_ref = identities.get((vote.get('person_id'), name))
     return checked_portrait(data_dir, db, receipts, source_ref, name, assets_dir) if source_ref else None
+
+
+def machuga_portrait(data_dir, receipts, assets_dir):
+    """Use pinned captures, including the agenda that links his two public roles."""
+    if assets_dir is None:
+        return None
+    page = 'https://www.sacfd.org/meet-our-district-board-of-directors'
+    city = 'https://www.c3gov.com/Government/Boards-Commissions/Urban-Renewal-Authority'
+    agenda = 'https://ompnetwork.s3-us-west-2.amazonaws.com/sites/1717/documents/agenda_22_1.pdf'
+    matter = 'https://webapi.legistar.com/v1/commerce/Matters/9151'
+    image = ('https://streamline.imgix.net/0ec9c10d-3273-4b87-a0de-62fc6b0603cd/'
+             '9a0b203c-7e23-4e21-8628-e6390fbdd0c9/C.%20Machuga.JPG?ixlib=rb-1.1.0&or=0&'
+             'w=720&h=720&fit=fill&fill=blur&auto=format%2Ccompress&s=066395a71136c9612a133dc915584835')
+    proofs = ((page, 'c62be165e986063ecd8b955dd3ee730516f92268d823060cc1d40d2abd79609b'),
+              (city, 'b7f94b19ff9a65699174df106a141fb10d3a2328b4dc3e6cd64b640be6423403'),
+              (agenda, '2936f9b6bee4c0a1b1556579dd8fb807fa0bfc5a7ec357e1fb22e352ec39a67a'),
+              (matter, 'a73a53441b86e65b3a81080f34dfe76563c203a9530d65a2a0ea7ff87741358f'),
+              (image, '03afcbdf3dcadad64a2817377403fc0e49cd55a9b6ec6855b4e78f33524e5a3f'))
+    for url, checksum in proofs:
+        if (url, checksum) not in receipts:
+            raise ValueError('Machuga portrait proof receipt missing')
+        source_blob(data_dir, checksum, 2_000_000)
+    data = source_blob(data_dir, proofs[-1][1], 2_000_000)
+    if not data.startswith(b'\xff\xd8\xff'):
+        raise ValueError('Machuga portrait is not a JPEG')
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if assets_dir.is_symlink() or not assets_dir.is_dir():
+        raise ValueError('unsafe portrait output directory')
+    target = assets_dir / (proofs[-1][1] + '.jpg')
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        if sha(read_blob(target, 2_000_000)) != proofs[-1][1]:
+            raise ValueError('existing Machuga portrait differs')
+    else:
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(data)
+    return {'src': './research-portraits/' + proofs[-1][1] + '.jpg', 'sha256': proofs[-1][1],
+            'source_url': page, 'image_url': image, 'identity_source_url': city,
+            'identity_agenda_url': agenda, 'identity_agenda_sha256': proofs[2][1],
+            'portrait_source_sha256': proofs[0][1], 'identity_source_sha256': proofs[1][1],
+            'identity_matter_url': matter, 'identity_matter_sha256': proofs[3][1],
+            'caption': 'Fire board name-labeled card shows Craig Machuga; page 1 of the 2022 appointment agenda lists a South Adams Fire Department recommendation. Identity connection is preliminary.',
+            'portrait_date': 'not_established'}
 
 
 def arapahoe_budget_portrait(data_dir, receipts, ref, client, vote, assets_dir):

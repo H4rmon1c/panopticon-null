@@ -44,6 +44,34 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_machuga_cross_agency_portrait_requires_all_captures_and_exact_vote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = Path(tmp) / 'assets'
+            calls = []
+            def fake_source(_root, digest, _limit=2_000_000):
+                calls.append(digest)
+                return b'\xff\xd8\xfffixture'
+            class EveryReceipt:
+                def __init__(self): self.missing = None
+                def __contains__(self, pair): return pair[0] != self.missing
+            receipts = EveryReceipt()
+            vote = {'name': 'Craig Machuga', 'person_id': 637}
+            motion = {'body': 'Urban Renewal Authority'}
+            with patch.object(module, 'source_blob', side_effect=fake_source):
+                portrait = module.authority_external_portrait(Path(tmp), None, receipts, 'us-co-place-0816495', 'commerce', motion, vote, assets)
+                self.assertEqual(portrait['identity_agenda_sha256'], '2936f9b6bee4c0a1b1556579dd8fb807fa0bfc5a7ec357e1fb22e352ec39a67a')
+                self.assertEqual(len(calls), 6)
+                for changed_ref, client, changed_motion, changed_vote in [
+                    ('us-co-county-08001', 'commerce', motion, vote),
+                    ('us-co-place-0816495', 'other', motion, vote),
+                    ('us-co-place-0816495', 'commerce', {'body': 'City Council'}, vote),
+                    ('us-co-place-0816495', 'commerce', motion, {**vote, 'person_id': 638}),
+                    ('us-co-place-0816495', 'commerce', motion, {**vote, 'name': 'Other Person'}),
+                ]:
+                    self.assertIsNone(module.authority_external_portrait(Path(tmp), None, receipts, changed_ref, client, changed_motion, changed_vote, assets))
+                receipts.missing = 'https://ompnetwork.s3-us-west-2.amazonaws.com/sites/1717/documents/agenda_22_1.pdf'
+                with self.assertRaises(ValueError): module.machuga_portrait(Path(tmp), receipts, assets)
+
     def test_school_directory_joins_exact_ids_and_rejects_ambiguous_or_shared_hosts(self):
         html = b'''<ul>
           <li><a href="https://one.example/">One District</a> - 1234 - TOWN</li>

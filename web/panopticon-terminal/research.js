@@ -84,6 +84,15 @@ function render(report) {
               ? `${portrait.source_url}#page=${portrait.source_page}` : portrait.source_url;
             detail.append(external(portraitSource, 'Portrait source ↗'));
             if (portrait.identity_source_url) detail.append(external(portrait.identity_source_url, 'Name identification ↗'));
+            if (portrait.identity_agenda_url) {
+              detail.append(external(portrait.identity_agenda_url, 'Appointment agenda (third-party copy) ↗'));
+              detail.append(external(portrait.identity_matter_url, 'City appointment record ↗'));
+              detail.append(node('p', 'meta', portrait.caption));
+              detail.append(node('p', 'meta digest', `Appointment agenda SHA-256 ${portrait.identity_agenda_sha256}`));
+              detail.append(node('p', 'meta digest', `Fire board page SHA-256 ${portrait.portrait_source_sha256}`));
+              detail.append(node('p', 'meta digest', `City authority roster SHA-256 ${portrait.identity_source_sha256}`));
+              detail.append(node('p', 'meta digest', `City appointment record SHA-256 ${portrait.identity_matter_sha256}`));
+            }
             if (portrait.source_kind === 'embedded_pdf') {
               const portraitProof = node('details', 'proof');
               portraitProof.append(node('summary', '', 'Portrait capture details'));
