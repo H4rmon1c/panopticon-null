@@ -28,6 +28,12 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def fixed_official_path(path):
+    return (path.startswith("/") and path != "/" and len(path) <= 160
+            and "%" not in path and "\\" not in path and "//" not in path
+            and all(part not in (".", "..") for part in path.split("/")))
+
+
 def calendar_source_ids():
     ids = set()
     for line in MATRIX.read_text(encoding="utf-8").splitlines():
@@ -68,7 +74,8 @@ def document_index_bindings(valid_refs):
             raise ValueError(f"document index source is missing: {source_id}")
         url = urlsplit(sources[0]["url"])
         if (url.scheme != "https" or not url.hostname or url.port not in (None, 443)
-                or url.username or url.password or url.path not in ("/agendas-and-minutes/", "/documents")
+                or url.username or url.password or not fixed_official_path(url.path)
+                or url.path.lower() == "/calendar.aspx"
                 or url.query or url.fragment
                 or sources[0]["minimum_interval_seconds"] < 3600
                 or not 0 < sources[0]["maximum_bytes"] <= 2_097_152):
@@ -82,7 +89,8 @@ def document_index_bindings(valid_refs):
         pdf = pdf_policies[0]
         pdf_url = urlsplit(pdf["url"])
         if (pdf["id"] in seen_pdf or pdf["id"] in scheduled or pdf_url.scheme != "https"
-                or pdf_url.netloc != url.netloc or pdf_url.path not in ("/wp-content/uploads/", "/uploads/")
+                or pdf_url.netloc != url.netloc or not fixed_official_path(pdf_url.path)
+                or not pdf_url.path.endswith("/")
                 or pdf_url.query or pdf_url.fragment or pdf["minimum_interval_seconds"] < 120
                 or not 0 < pdf["maximum_bytes"] <= 20_971_520):
             raise ValueError(f"document PDF policy is outside its reviewed shape: {source_id}")

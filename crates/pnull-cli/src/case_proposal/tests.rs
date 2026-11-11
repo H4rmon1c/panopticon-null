@@ -51,6 +51,27 @@ fn official_moffat_index_anchor_stays_on_bounded_pdf_path() {
 }
 
 #[test]
+fn del_norte_pdf_candidate_can_enter_private_proposal_without_widening_paths() {
+    let index = Url::parse("https://www.delnortecolorado.com/minutes-agendas/").unwrap();
+    let policy = Url::parse("https://www.delnortecolorado.com/wp-content/uploads/").unwrap();
+    let good = "https://www.delnortecolorado.com/wp-content/uploads/2025/09/May-14-2025-Town-Board-Meeting-Minutes-1ACC.pdf";
+    assert!(town_pdf_shape(&index, &policy, &Url::parse(good).unwrap()));
+    for bad in [
+        "https://www.delnortecolorado.com/wp-content/uploads/2025/09/minutes.pdf?download=1",
+        "https://www.delnortecolorado.com/wp-content/uploads//minutes.pdf",
+        "https://www.delnortecolorado.com/wp-content/uploads/private/minutes.pdf.exe",
+    ] {
+        assert!(!town_pdf_shape(&index, &policy, &Url::parse(bad).unwrap()));
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = root.join("configs/states/co-del-norte.toml");
+    assert_eq!(
+        geography_ref_for_index(&root, &config, "del-norte-document-index").unwrap(),
+        "us-co-place-0819795"
+    );
+}
+
+#[test]
 fn mapped_index_is_bound_to_its_exact_config_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let moffat = root.join("configs/states/co-moffat.toml");

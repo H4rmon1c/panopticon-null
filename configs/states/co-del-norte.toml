@@ -1,0 +1,33 @@
+state_code = "CO"
+state_name = "Colorado"
+jurisdiction = "Del Norte, Colorado"
+canonical_base_url = "https://panopticon.fail/co"
+x_feed_label = "Del Norte public-record alerts"
+default_dry_run = true
+demo_documents = []
+
+# Official town page lists agenda and approved-minutes PDFs. This profile is
+# unscheduled until both exact source policies have current reviews.
+[[sources]]
+id = "del-norte-document-index"
+name = "Town of Del Norte minutes and agendas index"
+url = "https://www.delnortecolorado.com/minutes-agendas/"
+source_type = "html_page"
+documented_at = "https://www.delnortecolorado.com/minutes-agendas/"
+official_discovery_url = "https://www.delnortecolorado.com/minutes-agendas/"
+minimum_interval_seconds = 86400
+maximum_bytes = 2097152
+robots_status = "Not reviewed for scheduled retrieval; capture current directives before recording a source review."
+terms_note = "Review the town's current terms and this exact index path; link candidates remain private."
+
+[[sources]]
+id = "del-norte-pdf-documents"
+name = "Town of Del Norte official uploaded PDF candidate path"
+url = "https://www.delnortecolorado.com/wp-content/uploads/"
+source_type = "candidate_index_pdf"
+documented_at = "https://www.delnortecolorado.com/minutes-agendas/"
+official_discovery_url = "https://www.delnortecolorado.com/minutes-agendas/"
+minimum_interval_seconds = 120
+maximum_bytes = 20971520
+robots_status = "Not reviewed for candidate retrieval; capture current directives before recording a source review."
+terms_note = "Review this exact upload prefix and current terms; fetch only preserved same-host PDF links."

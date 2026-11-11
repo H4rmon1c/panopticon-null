@@ -15,9 +15,15 @@ pnull --config configs/states/co-commerce-city.toml \
 
 The first command will fail until a current review of that exact calendar endpoint is recorded. Do not enable unattended retrieval merely because the endpoint is public. The review is at the **source level**, not for every new record. The scheduled matrix checks the review before each fetch. The candidate artifact and the raw source archive stay outside the static web root.
 
-## Non-Legistar town index pilot
+## Non-Legistar town indexes
 
 [Silver Plume's official agenda and minutes index](silver-plume-discovery.md) is a separate small-town HTML/PDF source. `source discover-index` creates private same-host PDF candidates under an exact upload prefix. Its index and PDF path policies remain unscheduled until reviewed. An official API may supplement a missing named roll call if one is found and reviewed; the town profile does not assume one exists.
+
+The same reviewed exact-index and same-host PDF-prefix shape now supports
+[Moffat and Simla](moffat-simla-discovery.md), [Del Norte](del-norte-discovery.md), and [Saguache](saguache-discovery.md).
+The index path and PDF prefix are configured per town, rather than chosen from
+two hardcoded index paths. A current source review is still required for each
+exact index and PDF path policy before private capture.
 
 ## Archive one discovered official document
 
@@ -63,6 +69,7 @@ The [private case proposal builder](private-case-proposals.md) accepts a
 preserved candidate archive and exact cited spans, including non-Legistar town
 PDFs. It distinguishes direct votes from consent blocks, failed motions from
 approvals, and a contract mention from an established award. Proposals retain
-explicit gaps and correction history; a separate verified release path is
-still required. Historical calendar paging and broader official source
-coverage remain future work.
+explicit gaps and correction history. The verified release bridge reopens the
+candidate and checks its current source reviews and exact proof links before
+publication. Historical calendar paging and broader official source coverage
+remain future work.

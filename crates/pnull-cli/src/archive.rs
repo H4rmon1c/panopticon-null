@@ -27,19 +27,26 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::{SourceConfig, StateConfig, source_config_digest, verify_source_review};
 
-const WORDPRESS_PDF_PREFIX: &str = "/wp-content/uploads/";
-const TOWNCLOUD_PDF_PREFIX: &str = "/uploads/";
 const MAX_QUEUE_CANDIDATES: usize = 10_000;
 const MAX_QUEUE_APPEARANCES: usize = 20_000;
 const MAX_QUEUE_FETCHES: usize = 8;
 const MAX_QUEUE_INDEX_WINDOW: usize = 256;
 
-fn town_index_path_allowed(path: &str) -> bool {
-    matches!(path, "/agendas-and-minutes/" | "/documents")
+fn fixed_official_path(path: &str) -> bool {
+    path.starts_with('/')
+        && path != "/"
+        && path.len() <= 160
+        && !path.contains(['%', '\\'])
+        && !path.contains("//")
+        && path.split('/').all(|part| part != "." && part != "..")
 }
 
-fn town_pdf_prefix_allowed(path: &str) -> bool {
-    matches!(path, WORDPRESS_PDF_PREFIX | TOWNCLOUD_PDF_PREFIX)
+pub(crate) fn document_index_path_allowed(path: &str) -> bool {
+    fixed_official_path(path) && !path.eq_ignore_ascii_case("/Calendar.aspx")
+}
+
+pub(crate) fn document_pdf_prefix_allowed(path: &str) -> bool {
+    fixed_official_path(path) && path.ends_with('/')
 }
 
 fn town_index_pdf_policy<'a>(
@@ -58,7 +65,7 @@ fn town_index_pdf_policy<'a>(
         bail!("document index has multiple PDF path policies");
     }
     let policy_url = url::Url::parse(&policy.url)?;
-    if !town_pdf_prefix_allowed(policy_url.path())
+    if !document_pdf_prefix_allowed(policy_url.path())
         || policy_url.scheme() != "https"
         || policy_url.host_str() != index_url.host_str()
         || policy_url.port_or_known_default() != Some(443)
@@ -228,15 +235,13 @@ pub(super) fn discover_index(data_dir: &Path, config: &StateConfig, source_id: &
     if source.source_type != "html_page"
         || source_url.scheme() != "https"
         || source_url.port_or_known_default() != Some(443)
-        || !town_index_path_allowed(source_url.path())
+        || !document_index_path_allowed(source_url.path())
         || source_url.query().is_some()
         || source_url.fragment().is_some()
         || !source_url.username().is_empty()
         || source_url.password().is_some()
     {
-        bail!(
-            "document index discovery requires a configured official agendas-and-minutes HTML source"
-        );
+        bail!("document index discovery requires a configured exact official HTML source");
     }
     let policy_url = url::Url::parse(&town_index_pdf_policy(config, &source_url)?.url)?;
     let store = Store::open(data_dir)?;
@@ -274,7 +279,7 @@ fn town_pdf_url_allowed(policy_url: &url::Url, candidate_url: &url::Url) -> bool
         && candidate_url.password().is_none()
         && candidate_url.query().is_none()
         && candidate_url.fragment().is_none()
-        && town_pdf_prefix_allowed(policy_url.path())
+        && document_pdf_prefix_allowed(policy_url.path())
         && candidate_url.path().starts_with(policy_url.path())
         && candidate_url.path().len() > policy_url.path().len()
         && !candidate_url.path().contains(['%', '\\'])
@@ -1297,7 +1302,7 @@ fn archive_candidate_with(
                 .context("document index source disappeared")?
                 .url
             && policy.documented_at == policy.official_discovery_url
-            && town_pdf_prefix_allowed(policy_url.path())
+            && document_pdf_prefix_allowed(policy_url.path())
             && town_pdf_url_allowed(&policy_url, &candidate_url)
     } else {
         policy_url.path() == path && candidate_url.path() == path && candidate_url.query().is_some()
@@ -1382,7 +1387,7 @@ fn load_verified_candidates(
         && calendar_url.path() == "/Calendar.aspx"
         && calendar_url.query().is_none();
     let is_town_index = calendar.source_type == "html_page"
-        && town_index_path_allowed(calendar_url.path())
+        && document_index_path_allowed(calendar_url.path())
         && calendar_url.query().is_none();
     if (!is_legistar_calendar && !is_town_index)
         || calendar_url.scheme() != "https"
@@ -1622,7 +1627,7 @@ fn checked_archive_url(
     let reviewed_url = url::Url::parse(&source.url)?;
     let requested_url = url::Url::parse(url)?;
     let path_allowed = if source.source_type == "candidate_index_pdf" {
-        town_pdf_prefix_allowed(reviewed_url.path())
+        document_pdf_prefix_allowed(reviewed_url.path())
             && town_pdf_url_allowed(&reviewed_url, &requested_url)
     } else {
         reviewed_url.path() == requested_url.path()
@@ -2448,6 +2453,35 @@ mod tests {
         config.sources[1].official_discovery_url =
             "https://official.example.test/unrelated".to_owned();
         assert!(town_index_pdf_policy(&config, &index_url).is_err());
+    }
+
+    #[test]
+    fn del_norte_index_uses_configured_exact_path_and_pdf_prefix() {
+        let mut config = town_index_config();
+        config.sources[0].url = "https://www.delnortecolorado.com/minutes-agendas/".to_owned();
+        config.sources[1].url = "https://www.delnortecolorado.com/wp-content/uploads/".to_owned();
+        config.sources[1].official_discovery_url = config.sources[0].url.clone();
+        config.sources[1].documented_at = config.sources[0].url.clone();
+        let index = url::Url::parse(&config.sources[0].url).unwrap();
+        let policy = url::Url::parse(&town_index_pdf_policy(&config, &index).unwrap().url).unwrap();
+        let html = br"<html><body>
+          <a href='/wp-content/uploads/2026/11/November-5-2026-Town-Board-Meeting-Agenda-ACC.pdf'>Agenda</a>
+          <a href='/wp-content/uploads/2025/09/May-14-2025-Town-Board-Meeting-Minutes-1ACC.pdf'>Minutes</a>
+          <a href='https://other.example/wp-content/uploads/meeting.pdf'>External</a>
+        </body></html>";
+        let candidates = parse_reviewed_index_candidates(&config, &index, html).unwrap();
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates.iter().all(|item| item.kind == "document"));
+        assert!(
+            candidates.iter().all(|item| {
+                town_pdf_url_allowed(&policy, &url::Url::parse(&item.url).unwrap())
+            })
+        );
+        assert!(!document_index_path_allowed("/"));
+        assert!(!document_index_path_allowed("/Calendar.aspx"));
+        assert!(!document_pdf_prefix_allowed("/"));
+        assert!(!document_pdf_prefix_allowed("/wp-content/uploads"));
+        assert!(!document_pdf_prefix_allowed("/wp-content//uploads/"));
     }
 
     fn install_candidate_review(store: &Store, config: &StateConfig, source_id: &str) {

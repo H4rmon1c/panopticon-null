@@ -1190,8 +1190,8 @@ fn check_candidate_archive(
 }
 
 fn town_pdf_shape(index_url: &Url, policy_url: &Url, candidate_url: &Url) -> bool {
-    matches!(index_url.path(), "/documents" | "/agendas-and-minutes/")
-        && matches!(policy_url.path(), "/uploads/" | "/wp-content/uploads/")
+    crate::archive::document_index_path_allowed(index_url.path())
+        && crate::archive::document_pdf_prefix_allowed(policy_url.path())
         && candidate_url.path().starts_with(policy_url.path())
         && candidate_url.path().len() > policy_url.path().len()
         && candidate_url.path().to_ascii_lowercase().ends_with(".pdf")
