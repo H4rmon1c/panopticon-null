@@ -2459,11 +2459,99 @@ def collect_douglas_profiles(data_dir, db, ref, people, rules, budget):
     return stored
 
 
+DOUGLAS_GALLERY = 'https://www.douglasco.gov/board-county-commissioners/current-and-former-commissioners/'
+
+
+class DouglasGallery(HTMLParser):
+    """Keep each county gallery item's caption and image in the same card."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.current = None
+        self.items = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'div':
+            if self.depth:
+                self.depth += 1
+            elif 'gallery-item' in (attrs.get('class') or '').split() and len(self.items) < 1000:
+                self.depth = 1
+                self.current = {'text': [], 'srcsets': []}
+        if self.depth and tag == 'img':
+            srcset = attrs.get('data-lazy-srcset') or attrs.get('srcset')
+            if srcset:
+                self.current['srcsets'].append(srcset[:10000])
+
+    def handle_endtag(self, tag):
+        if tag == 'div' and self.depth:
+            self.depth -= 1
+            if not self.depth:
+                self.items.append(self.current)
+                self.current = None
+
+    def handle_data(self, data):
+        if self.depth and len(self.current['text']) < 1000:
+            self.current['text'].append(data[:500])
+
+
+def douglas_gallery_image(body, name):
+    parser = DouglasGallery()
+    parser.feed(body.decode('utf8', 'replace'))
+    expected = re.compile(r'^Commissioner\s+' + re.escape(name) + r'\s*[-–—]\s*[0-9]{4}$', re.I)
+    matches = []
+    for item in parser.items:
+        caption = ' '.join(' '.join(item['text']).split())
+        if not expected.fullmatch(caption):
+            continue
+        sources = set()
+        for srcset in item['srcsets']:
+            options = []
+            for part in srcset.split(','):
+                found = re.fullmatch(r'\s*(https://www\.douglasco\.gov/wp-content/uploads/[0-9]{4}/[0-9]{2}/[A-Za-z0-9._-]+\.png)\s+([1-9][0-9]{0,3})w\s*', part)
+                if found:
+                    options.append((int(found.group(2)), found.group(1)))
+            if options:
+                sources.add(max(options)[1])
+        if len(sources) == 1:
+            matches.append((next(iter(sources)), caption))
+    return matches[0] if len(matches) == 1 else None
+
+
+def collect_douglas_gallery(data_dir, db, ref, people, rules, budget):
+    page, observations = html_page(DOUGLAS_GALLERY, 'www.douglasco.gov', rules, budget)
+    archive(data_dir, observations)
+    stored = 0
+    for name in sorted(people):
+        match = douglas_gallery_image(page, name)
+        if not match or not allowed(rules, match[0]):
+            continue
+        image_url, caption = match
+        try:
+            observations = get(image_url, {'www.douglasco.gov'}, maximum=2_000_000, timeout=20, redirects=0, budget=budget)
+            archive(data_dir, observations)
+            image_receipt, image = observations[-1]
+            if image_receipt['status'] != 200 or not image.startswith(b'\x89PNG\r\n\x1a\n'):
+                continue
+            info = {'kind': 'commissioner_gallery', 'source_url': DOUGLAS_GALLERY, 'source_sha256': sha(page),
+                    'image_url': image_url, 'image_sha256': sha(image), 'caption': caption,
+                    'extension': 'png', 'image_receipt': image_receipt}
+            with db:
+                db.execute('INSERT OR REPLACE INTO official_portraits VALUES (?,?,?)', (ref, name, json.dumps(info)))
+            stored += 1
+            people.discard(name)
+        except BudgetExhausted:
+            raise
+        except (OSError, ValueError, RuntimeError):
+            continue
+    return stored
+
+
 def collect_portraits(data_dir, db, limit):
     names = {}
     for ref, raw in db.execute("SELECT jurisdiction_ref,result_json FROM document_candidates WHERE state='matched'"):
         try:
-            if ref.startswith('us-co-school-'):
+            if ref.startswith(('us-co-school-', 'dola-district-')):
                 continue
             result = json.loads(raw)
             # OCR currently flattens an entire page into one line; it cannot
@@ -2486,7 +2574,7 @@ def collect_portraits(data_dir, db, limit):
     for client, matter, history_id, raw, ref in db.execute('''SELECT a.client,a.matter_id,a.history_id,
             a.captures_json,l.jurisdiction_ref FROM matter_actions a JOIN leads l
             ON a.client=l.client AND a.matter_id=l.matter_id'''):
-        if clients.get(client) != ref or ref.startswith('us-co-school-'):
+        if clients.get(client) != ref or ref.startswith(('us-co-school-', 'dola-district-')):
             continue
         try:
             action = materialize_action(data_dir, receipts, client, matter, history_id, raw)
@@ -2511,12 +2599,13 @@ def collect_portraits(data_dir, db, limit):
             rules, robots = get_robots(host, budget=budget)
             archive(data_dir, robots)
             if ref == 'us-co-county-08035' and host == 'www.douglasco.gov':
-                try:
-                    stored += collect_douglas_profiles(data_dir, db, ref, people, rules, budget)
-                except BudgetExhausted:
-                    raise
-                except (OSError, UnicodeError, ValueError, RuntimeError):
-                    pass
+                for collect in (collect_douglas_profiles, collect_douglas_gallery):
+                    try:
+                        stored += collect(data_dir, db, ref, people, rules, budget)
+                    except BudgetExhausted:
+                        raise
+                    except (OSError, UnicodeError, ValueError, RuntimeError):
+                        continue
             directory = f'https://{host}/m/Directory'
             alias_url = None
             alias_body = b''
@@ -2585,6 +2674,10 @@ def checked_portrait(data_dir, db, receipts, ref, name, assets_dir):
                 or not expected.match(' '.join(board[anchor][1].split()))
                 or official_profile_image(page, name) != (image_url, info['caption'])):
             raise ValueError('commissioner profile does not bind the person and image')
+    elif info.get('kind') == 'commissioner_gallery':
+        if (ref != 'us-co-county-08035' or page_url != DOUGLAS_GALLERY
+                or douglas_gallery_image(page, name) != (image_url, info['caption'])):
+            raise ValueError('commissioner gallery does not bind the person and image')
     else:
         _, base = page_links(page, page_url)
         if not any(resolve_page_link(page_url, base, src) == image_url and alt == info['caption']

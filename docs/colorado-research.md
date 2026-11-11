@@ -85,6 +85,10 @@ no relevant decision exists.
    nickname is required; a missing portrait stays missing. The interface can
    also reuse an existing sourced portrait when the portal, jurisdiction,
    person ID, and name all match. Portrait dates are not inferred.
+   For Douglas County, the collector also checks the official current-and-former
+   commissioners gallery. It accepts an image only when the exact official name
+   and image occur in the same unique gallery card, and revalidates that card,
+   the original image bytes, and both fetch receipts before export.
    Five Arapahoe County research voters also reuse the original JPEG streams
    from the labeled 2022 board page of the county's recommended budget. The
    archived PDF digest, page, image indexes, aliases, and extracted-page fixture
