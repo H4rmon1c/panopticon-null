@@ -21,6 +21,13 @@ Preflight failure must be resolved before enabling collection. The twelve record
 
 Run the real Bubblewrap/Poppler/Tesseract integration test and `python3 scripts/test-docx-sandbox.py` under the actual service account and comparable service isolation before fetching documents. Build `cargo test --locked -p pnull-ingest --test real_sandbox_pdf --no-run`, locate the executable in `target/debug/deps`, and invoke it with `--ignored --nocapture`. Repeat inside a transient systemd service with the deployed unit's `NoNewPrivileges`, capability, filesystem, and temporary-mount restrictions. Ubuntu may restrict unprivileged user namespaces through AppArmor: resolve an actual denial with a narrow Bubblewrap profile rather than removing the host-wide restriction.
 
+The research unit permits `AF_NETLINK` because Bubblewrap needs `NETLINK_ROUTE`
+to set up its isolated network namespace on Ubuntu 24.04. This is a service-wide
+address-family allowance, not a restriction to a specific Netlink protocol;
+the service still runs without capabilities, and extractors must retain their
+Bubblewrap network namespace. Verify actual extraction and network isolation
+under the installed unit's restrictions on the host before activating the timer.
+
 The collector, candidate, and publisher units mount bounded private temporary filesystems: `/tmp` is 512 MiB with 32,768 inodes; `/var/tmp` is 32 MiB with 4,096 inodes. `TMPDIR=/tmp` confines aggregate extractor workfiles to that mount. These replace `PrivateTmp` for those units and need host verification. systemd documents `TemporaryFileSystem` and mount options in [systemd.exec](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html). The publisher additionally has no network namespace connectivity; the collectors can reach HTTPS sources but can write only private state and sanitized health. Host kernel/sandbox escapes, infrastructure denial of service, provider compromise, and private evidence-store growth remain operational risks. Keep disk/inode alerts and consider a quota for the evidence volume.
 
 Start `panopticon-publish.service` first and inspect its journal/status. Check that `/srv/panopticon/site/current` resolves below the release root, all five cases and their local portraits load, failed votes stay labeled failed, and `/api/v1/alerts.json`, `/api/v1/feed.json`, `/api/v1/coverage.json`, and `/api/v1/research.json` parse correctly. Confirm private preview, evidence, `.git`, environment and database paths return 404. A dropped case must have an explicit withdrawal; the prior API history prevents silently erasing it.

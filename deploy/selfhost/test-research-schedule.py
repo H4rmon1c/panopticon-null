@@ -10,6 +10,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
+    # Bubblewrap's unshare-net setup uses NETLINK_ROUTE on Ubuntu; denying
+    # AF_NETLINK at the service boundary prevents even sandbox startup.
+    unit = (ROOT / 'deploy/selfhost/panopticon-research.service').read_text()
+    families = [line for line in unit.splitlines() if line.startswith('RestrictAddressFamilies=')]
+    assert len(families) == 1
+    assert set(families[0].split('=', 1)[1].split()) == {'AF_UNIX', 'AF_INET', 'AF_INET6', 'AF_NETLINK'}
     with tempfile.TemporaryDirectory(prefix='panopticon-research-schedule-') as tmp:
         base = Path(tmp)
         mock = base / 'python3'

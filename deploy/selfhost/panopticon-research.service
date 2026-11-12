@@ -32,7 +32,8 @@ RestrictSUIDSGID=true
 LockPersonality=true
 CapabilityBoundingSet=
 RestrictRealtime=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Bubblewrap needs NETLINK_ROUTE when creating its isolated network namespace.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LimitNOFILE=4096
 TasksMax=128
 MemoryMax=4G
