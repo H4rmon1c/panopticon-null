@@ -81,6 +81,8 @@ class Tests(unittest.TestCase):
   event={**self.event,'publishedFiles':[]};meta=m.summarize(json.dumps({'hasMore':False,'items':[event]}).encode(),date(2020,1,2));self.assertEqual(m.capture_file(self.root,{}, {'metadata':meta},None,'erieco.api.civicclerk.com',m.r.DownloadBudget(1000000),False)['state'],'no_supported_file_in_bounded_list')
  def test_api_host_and_path_are_strictly_derived(self):
   host,url=m.list_url('erieco',date(2020,1,2));self.assertEqual(host,'erieco.api.civicclerk.com');self.assertIn('cursorId=0',url)
+  for cursor in (-1,1000000000,'1',True):
+   with self.subTest(cursor=cursor),self.assertRaises(ValueError):m.list_url('erieco',date(2020,1,2),cursor)
   for bad in ('evil.example','erieco@evil','/other','erieco:443'):
    with self.subTest(bad=bad),self.assertRaises(ValueError):m.list_url(bad,date(2020,1,2))
  def run_adapter(self,response_status=200,denied=False,override=False,name='out',fetch=False):
@@ -92,8 +94,65 @@ class Tests(unittest.TestCase):
   argv=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--output-name',name,'--before','2020-01-02','--limit','1','--jurisdiction',self.ref]+(['--ignore-robots'] if override else [])+(['--fetch-files'] if fetch else [])
   with patch.object(sys,'argv',argv),patch.object(m.r,'get_robots',return_value=(Rules(),[])),patch.object(m.r,'get',side_effect=get):m.main(None)
   result=json.loads((self.root/name/'report/results.json').read_text());return result,calls
+ def test_second_page_403_is_partial_and_not_retried(self):
+  (self.root/'private-probe-results-v3.json').write_text(json.dumps({'results':[self.entry]}));calls=[]
+  def get(url,hosts,**kw):
+   calls.append(url);bad='cursorId=12)' in url;data=json.dumps({'hasMore':True,'items':[self.event]}).encode();return [(receipt(url,data,'application/json',403 if bad else 200),data)]
+  argv=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--output-name','partial','--before','2020-01-02','--jurisdiction',self.ref,'--pages','2']
+  with patch.object(sys,'argv',argv),patch.object(m,'pagination_assets',return_value=[]),patch.object(m.r,'get_robots',return_value=(None,[])),patch.object(m.r,'get',side_effect=get):m.main(None)
+  row=json.loads((self.root/'partial/report/results.json').read_text())['results'][0];self.assertEqual(row['pagination_state'],'incomplete_error');self.assertEqual([p['state'] for p in row['pages']],['list_captured','error']);self.assertEqual(len(calls),2)
+  with self.assertRaises(ValueError):m.resume_cursor(self.root/'partial',self.root,self.bind(),date(2020,1,2))
+ def test_unlinked_pagination_asset_causes_no_network(self):
+  out=self.root/'assets';out.mkdir();(out/'content').mkdir();bound=self.bind()
+  with patch.object(m.r,'get') as get,self.assertRaises(ValueError):m.pagination_assets(out,bound,m.r.DownloadBudget(1000000),False)
+  get.assert_not_called()
+ def test_pagination_caps_and_multi_tenant_resume_rejected(self):
+  base=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--output-name','bad-pages','--before','2020-01-02','--jurisdiction',self.ref]
+  for extra in (['--pages','3'],['--pages','0'],['--jurisdiction','us-co-place-0826600','--resume-archive',str(self.root/'prior')]):
+   with patch.object(sys,'argv',base+extra),patch.object(m.r,'get') as get,self.assertRaises(SystemExit):m.main(None)
+   get.assert_not_called()
  def test_private_output_and_exact_403_stop(self):
   value,calls=self.run_adapter(response_status=403);row=value['results'][0];self.assertEqual(row['state'],'error');self.assertEqual(row['status'],403);self.assertEqual(len(calls),1);self.assertEqual(calls[0][2]['redirects'],0);self.assertFalse((self.root/'out/research.sqlite3').exists());self.assertEqual((self.root/'out').stat().st_mode&0o777,0o700)
+ def prior_archive(self,name,cursor,event,parent=None,more=True):
+  root=self.root/name;root.mkdir(mode=0o700);(root/'content').mkdir(mode=0o700);(root/'report').mkdir(mode=0o700)
+  host,url=m.list_url('erieco',date(2020,1,2),cursor);body=json.dumps({'hasMore':more,'items':[event]}).encode();rec=receipt(url,body,'application/json');m.r.archive(root,[(rec,body)]);raw=(json.dumps(rec,sort_keys=True,separators=(',',':'))+'\n').encode()
+  page={'state':'list_captured','input_cursor':cursor,'list_url':url,'sha256':m.r.sha(body),'receipt_sha256':m.r.sha(raw)}
+  report={'schema_version':'pnull-private-civicclerk-v2','cutoff':'2020-01-02','resume_parent':parent,'results':[{'jurisdiction_ref':self.ref,'tenant':'erieco','portal_url':self.portal,'source_anchor':self.entry['source_anchor'],'pages':[page]}]}
+  (root/'report/results.json').write_text(json.dumps(report));return root
+ def test_resume_requires_zero_root_and_revalidates_full_ancestry(self):
+  item=self.bind();first=self.prior_archive('first',0,self.event);second_event={**self.event,'id':11,'eventDate':'2020-01-01T11:00:00Z'};second=self.prior_archive('second',12,second_event,'first')
+  cursor,seen,last,ties,proof=m.resume_cursor(second,self.root,item,date(2020,1,2));self.assertEqual(cursor,11);self.assertEqual(seen,{12,11});self.assertFalse(ties)
+  forged=self.prior_archive('forged',5,self.event)
+  with self.assertRaises(ValueError):m.resume_cursor(forged,self.root,item,date(2020,1,2))
+  report=json.loads((second/'report/results.json').read_text());report['results'][0]['pages'].append({'state':'error'});(second/'report/results.json').write_text(json.dumps(report))
+  with self.assertRaises(ValueError):m.resume_cursor(second,self.root,item,date(2020,1,2))
+ def test_resume_detects_repeats_bad_order_and_marks_boundary_ties(self):
+  item=self.bind();self.prior_archive('first',0,self.event)
+  repeated=self.prior_archive('repeated',12,self.event,'first')
+  with self.assertRaises(ValueError):m.resume_cursor(repeated,self.root,item,date(2020,1,2))
+  later=self.prior_archive('later',12,{**self.event,'id':11,'eventDate':'2020-01-01T13:00:00Z'},'first')
+  with self.assertRaises(ValueError):m.resume_cursor(later,self.root,item,date(2020,1,2))
+  tied=self.prior_archive('tied',12,{**self.event,'id':11},'first');self.assertTrue(m.resume_cursor(tied,self.root,item,date(2020,1,2))[3])
+ def test_resume_rejects_cycles_depth_and_cross_host(self):
+  item=self.bind();cycle=self.prior_archive('cycle',0,self.event,'cycle')
+  with self.assertRaises(ValueError):m.resume_cursor(cycle,self.root,item,date(2020,1,2))
+  for i in range(m.MAX_RESUME_ARCHIVES+1):self.prior_archive('chain-'+str(i),0,self.event,('chain-'+str(i+1)) if i<m.MAX_RESUME_ARCHIVES else None)
+  with self.assertRaises(ValueError):m.resume_cursor(self.root/'chain-0',self.root,item,date(2020,1,2))
+  x=self.prior_archive('wrong-host',0,self.event);report=json.loads((x/'report/results.json').read_text());report['results'][0]['pages'][0]['list_url']='https://evil.example/';(x/'report/results.json').write_text(json.dumps(report))
+  with self.assertRaises(ValueError):m.resume_cursor(x,self.root,item,date(2020,1,2))
+ def test_empty_more_and_nondescending_events_are_rejected(self):
+  with self.assertRaises(ValueError):m.summarize(b'{"hasMore":true,"items":[]}',date(2020,1,2))
+  later={**self.event,'id':11,'eventDate':'2020-01-01T13:00:00Z'}
+  with self.assertRaises(ValueError):m.summarize(json.dumps({'hasMore':False,'items':[self.event,later]}).encode(),date(2020,1,2))
+ def test_two_pages_then_explicit_resume_stays_private(self):
+  (self.root/'private-probe-results-v3.json').write_text(json.dumps({'results':[self.entry]}));calls=[]
+  def get(url,hosts,**kw):
+   calls.append(url);cursor=int(url.split('cursorId=')[1].split(')')[0]);ids={0:(12,'12'),12:(11,'11'),11:(10,'10')};eid,hour=ids[cursor];event={**self.event,'id':eid,'eventDate':'2020-01-01T'+hour+':00:00Z'};body=json.dumps({'hasMore':True,'items':[event]}).encode();return [(receipt(url,body,'application/json'),body)]
+  base=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--before','2020-01-02','--jurisdiction',self.ref,'--limit','1']
+  with patch.object(m,'pagination_assets',return_value=[]),patch.object(m.r,'get_robots',return_value=(None,[])),patch.object(m.r,'get',side_effect=get):
+   with patch.object(sys,'argv',base+['--output-name','first','--pages','2']):m.main(None)
+   with patch.object(sys,'argv',base+['--output-name','second','--pages','1','--resume-archive',str(self.root/'first')]):m.main(None)
+  first=json.loads((self.root/'first/report/results.json').read_text());second=json.loads((self.root/'second/report/results.json').read_text());self.assertEqual([p['input_cursor'] for p in first['results'][0]['pages']],[0,12]);self.assertEqual(second['results'][0]['pages'][0]['input_cursor'],11);self.assertEqual(second['resume_parent'],'first');self.assertEqual(len(calls),3);self.assertFalse((self.root/'second/research.sqlite3').exists())
  def test_utility_failure_keeps_valid_list_and_stops(self):
   v,calls=self.run_adapter(fetch=True,name='file-fails');row=v['results'][0];self.assertEqual(row['state'],'list_captured');self.assertEqual(row['file_probe']['state'],'error');self.assertEqual(len(calls),2)
  def test_private_report_is_not_consumed_by_research_export(self):
