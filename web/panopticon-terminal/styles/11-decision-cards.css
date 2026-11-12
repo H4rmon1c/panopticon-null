@@ -26,6 +26,13 @@ body[data-atlas-view="records"] #atlas-view-toggle { border:0; padding:8px 0; ba
 .records-eyebrow { color:#7ed9e2 !important; font-size:12px !important; font-weight:800; letter-spacing:.12em; margin:0 0 14px; }
 .records-intro h1 { margin:0 0 10px; font-size:clamp(2rem,4vw,3rem); line-height:1.08; letter-spacing:-.04em; color:#f2f7f4; }
 .records-intro > p:last-child { margin:0; font-size:17px; line-height:1.6; color:#bbced1; }
+.records-map { display:grid; grid-template-columns:1fr 1.3fr; align-items:center; gap:24px; margin-top:24px; padding:24px; border:1px solid #345b63; border-radius:6px; background:radial-gradient(circle at 75% 40%,#173f47,#0c2029 65%); }
+.records-map h2 { margin:0 0 10px; font-size:25px; color:#f0f8f5; }
+.records-map p:not(.records-eyebrow) { color:#c1d3d3; line-height:1.5; }
+.records-map span { color:#a7bbbc; font-size:12px; line-height:1.5; }
+.records-map svg { width:100%; max-height:260px; }
+.records-map path { fill:#224a50; stroke:#85babe; stroke-width:1; vector-effect:non-scaling-stroke; cursor:pointer; transition:fill .15s; }
+.records-map path:hover,.records-map path:focus-visible { fill:#f2bb68; stroke:#fff2cf; outline:none; }
 .records-mode-notice { margin-top:24px; padding:15px; border:1px solid #a6802d; background:#392c14; color:#ffe1a0; font-weight:700; }
 .records-linked:not([hidden]) { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; margin-top:20px; padding:16px; border:1px solid #48747a; background:#102d35; color:#e3f5f2; }
 .records-linked a, .records-linked button { color:#8ce1e9; background:none; border:0; padding:0; font:700 14px/1.4 system-ui,sans-serif; text-decoration:underline; cursor:pointer; }
@@ -89,6 +96,7 @@ body[data-atlas-view="map"] #atlas-view-toggle { padding:11px 16px; border:1px s
  body[data-atlas-view="records"] .coverage-dialog__body { grid-template-columns:1fr; }
 }
 @media (max-width:760px) {
+ .records-map { grid-template-columns:1fr; gap:8px; padding:18px; }
  .records-topbar { padding:16px 18px; align-items:flex-start; }
  .records-topbar nav { gap:12px; flex-wrap:wrap; justify-content:flex-end; }
  .records-topbar nav a, .records-topbar nav button { font-size:12px; }

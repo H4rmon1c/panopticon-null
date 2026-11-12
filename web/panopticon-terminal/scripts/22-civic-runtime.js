@@ -137,9 +137,10 @@ function installRecordList() {
   panel.tabIndex = -1;
   panel.innerHTML = `<div class="records-topbar"><a class="records-brand" href="./home.html"><span>P//F</span> PANOPTICON.FAIL</a><nav aria-label="Main navigation"><a href="./home.html">Home</a><a href="./research.html">Research leads</a><button type="button" id="atlas-view-toggle" aria-pressed="false">Explore connections</button></nav></div>
     <div class="records-content"><header class="records-intro"><p class="records-eyebrow">COLORADO · PUBLIC RECORDS</p><h1>See what your community voted on.</h1><p>Start with a decision. See the recorded vote, the people involved, and the sources behind it.</p></header>
+    <section class="records-map"><div><p class="records-eyebrow">EXPLORE COLORADO</p><h2>Start with your county.</h2><p>Choose a county to explore its places and preliminary records.</p><span>County boundaries are a directory, not proof of surveillance.</span></div><svg id="records-county-map" viewBox="0 0 700 440" role="group" aria-label="Choose a Colorado county"></svg></section>
     <div id="records-mode-notice" class="records-mode-notice" hidden></div><aside id="records-linked" class="records-linked" hidden></aside>
     <section class="records-search" aria-label="Find a decision or place"><label for="records-query">Find a place, person, or topic</label><div class="records-search__row"><input type="search" id="records-query" placeholder="Try Castle Rock, Flock, or a name" autocomplete="off"><button type="button" id="records-place-search">Search all Colorado places</button></div><p>Search released decisions here, or open the full place directory for more places and preliminary leads.</p></section>
-    <div class="records-heading"><div><h2>Released decisions</h2><p id="records-count" role="status" aria-live="polite">Loading decisions…</p></div><a href="./research.html">Browse preliminary research →</a></div>
+    <div class="records-heading"><div><h2>Released decisions</h2><p id="records-count" role="status" aria-live="polite">Loading decisions…</p></div><a id="records-research-link" href="./research.html">Browse preliminary research →</a></div>
     <p class="records-caveat">Coverage is incomplete. A place missing from this list may still have relevant records.</p><div id="atlas-record-list" class="civic-record-list"></div></div>`;
   canvas.insertAdjacentElement("afterend", panel);
   const toggle = panel.querySelector("#atlas-view-toggle");
@@ -184,7 +185,14 @@ function renderRecordList() {
     notice.hidden = mode === "public";
     notice.textContent = mode === "demo" ? "SYNTHETIC DEMONSTRATION — these are not real records." : "PRIVATE PREVIEW — these records may not be released.";
   }
-  window.renderDecisionCards(snapshot, mode, civic$("#records-query")?.value ?? "", list, civic$("#records-count"));
+  const query = civic$("#records-query")?.value ?? "";
+  window.renderDecisionCards(snapshot, mode, query, list, civic$("#records-count"));
+  const researchLink = civic$("#records-research-link");
+  if (researchLink) {
+    const term = query.trim().slice(0, 200);
+    researchLink.href = term ? `./research.html?q=${encodeURIComponent(term)}` : "./research.html";
+    researchLink.textContent = term ? `Search preliminary research for “${term}” →` : "Browse preliminary research →";
+  }
   const linked = civic$("#records-linked");
   if (linked && window.linkedDecisions) {
     linked.replaceChildren();

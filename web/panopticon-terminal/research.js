@@ -5,6 +5,7 @@ import { lookupResearchPortrait } from './portraits/lookup.js';
 const summary = document.querySelector('#research-summary');
 const scope = document.querySelector('#research-scope');
 const search = document.querySelector('#research-search');
+search.value = (new URLSearchParams(location.search).get('q') ?? '').slice(0, 200);
 const count = document.querySelector('#research-count');
 const results = document.querySelector('#research-results');
 const selected = new URLSearchParams(location.search).get('jurisdiction');

@@ -72,6 +72,22 @@ test('decision list delegates rendering to the source-bound card renderer', () =
   assert.equal(received[4], count);
 });
 
+test('the research link carries a visitor search safely into preliminary results', () => {
+  const list = {}; const link = {}; const input = { value: 'Arapahoe & Flock' };
+  const context = vm.createContext({ client: { snapshot: { entities: [] }, mode: 'public' },
+    currentState: () => ({ mode: 'public' }),
+    civic$: (selector) => ({ '#atlas-record-list': list, '#records-query': input, '#records-research-link': link })[selector] ?? null,
+    window: { renderDecisionCards() {} } });
+  const source = load('scripts/22-civic-runtime.js');
+  vm.runInContext(source.slice(source.indexOf('function renderRecordList()')), context);
+  context.renderRecordList();
+  assert.equal(link.href, './research.html?q=Arapahoe%20%26%20Flock');
+  assert.match(link.textContent, /preliminary research/);
+  input.value = '';
+  context.renderRecordList();
+  assert.equal(link.href, './research.html');
+});
+
 test('changes shortcut opens and closes the activity panel', () => {
   const body = { dataset: {} }; const notices = [];
   const context = vm.createContext({ document: { body }, currentState: () => ({}),

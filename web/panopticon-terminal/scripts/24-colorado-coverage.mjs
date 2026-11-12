@@ -115,6 +115,23 @@ export function installColoradoCoverage({ getSnapshot }) {
   let indexedEntities = null;
   let indexedMode = null;
   let caseIndex = new Map();
+  const overviewMap = document.querySelector("#records-county-map");
+  if (overviewMap) fetch("./geography/colorado-jurisdictions.json", {cache:"no-store"})
+    .then((response) => { if (!response.ok) throw new Error("County map unavailable"); return response.json(); })
+    .then((data) => {
+      if (data.schema_version !== 1 || data.counts?.county !== 64 || !Array.isArray(data.jurisdictions)) throw new Error("Invalid county map");
+      for (const county of data.jurisdictions.filter((item) => item.kind === "county")) {
+        const shape = document.createElementNS(SVG_NS, "path");
+        shape.setAttribute("d", countyPath(county.geometry));
+        shape.setAttribute("tabindex", "0"); shape.setAttribute("role", "button");
+        shape.setAttribute("aria-label", county.name);
+        const title = document.createElementNS(SVG_NS, "title"); title.textContent = county.name; shape.append(title);
+        const activate = () => open(county.name);
+        shape.addEventListener("click", activate);
+        shape.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } });
+        overviewMap.append(shape);
+      }
+    }).catch(() => { overviewMap.setAttribute("aria-label", "County map unavailable; use place search below"); });
 
   function ensureCaseIndex() {
     const snapshot = getSnapshot();
