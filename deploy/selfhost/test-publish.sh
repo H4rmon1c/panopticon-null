@@ -61,6 +61,7 @@ done
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/ouray-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/clearcreek-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/gunnison-motion-v1.json"
+grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/columbine-motion-v1.json"
 [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/cortez-orly-lucero-2017.jpg" ]] || { echo "unavailable Cortez motion leaked portrait" >&2; exit 1; }
 for photo in cortez-amy-huckins-2021.jpg cortez-rachel-medina-2022.jpg cortez-robert-dobry-2020.jpg; do
     [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/$photo" ]] || { echo "unavailable Cortez motion leaked press portrait" >&2; exit 1; }

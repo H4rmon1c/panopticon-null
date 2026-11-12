@@ -83,6 +83,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound nonrenewal motion ↗');
       related.href = './gunnison-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-cf6d9e8394298e3b40d75489') {
+      const related = node('a', 'source', 'Open the source-bound motion and attendance ↗');
+      related.href = './columbine-motion.html'; card.append(related);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));
