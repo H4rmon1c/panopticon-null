@@ -179,6 +179,9 @@ jobs:
 
           grep --quiet "Ordinance 25-93" /tmp/pnull-terminal-dom.html
           grep --quiet "Colorado Springs" /tmp/pnull-terminal-dom.html
+          grep --quiet "See what your community voted on" /tmp/pnull-terminal-dom.html
+          grep --quiet "6 Yes · 3 No" /tmp/pnull-terminal-dom.html
+          grep --quiet "Open the recorded position" /tmp/pnull-terminal-dom.html
           if grep --quiet "DEMO DATA" /tmp/pnull-terminal-dom.html; then
             echo "public default unexpectedly loaded demonstration data" >&2
             exit 1
@@ -225,7 +228,7 @@ jobs:
             cat /tmp/pnull-terminal-chrome.log
             exit "$status"
           fi
-          grep --quiet "Recorded votes on this decision" /tmp/pnull-terminal-decision-dom.html
+          grep --quiet "Recorded positions on this decision" /tmp/pnull-terminal-decision-dom.html
           grep --quiet "Portrait of Tom Bailey" /tmp/pnull-terminal-decision-dom.html
           grep --quiet "Public role and term: not established" /tmp/pnull-terminal-decision-dom.html
 
