@@ -188,3 +188,8 @@ gunnison-motion.html
 gunnison-motion.js
 gunnison-motion-api.js
 public/gunnison-motion-v1.json
+
+yuma-portraits-api.js
+assets/portraits/yuma-adam-gates.jpg
+assets/portraits/yuma-scott-weaver.jpg
+assets/portraits/yuma-mike-leerar.jpg
