@@ -17,6 +17,10 @@ panopticon.fail {
         file_server
     }
 
+    # Keep the interactive atlas and its existing deep links at /index.html.
+    @home path /
+    rewrite @home /home.html
+
     # Copy the validated static site and gated public snapshot together.
     handle {
         root * /srv/panopticon/site/current
