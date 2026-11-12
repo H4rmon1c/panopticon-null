@@ -82,16 +82,12 @@ function applyCivicShell() {
   document.body.insertAdjacentHTML("beforeend", `
     <dialog id="coverage-dialog" class="coverage-dialog" aria-labelledby="coverage-title">
       <header class="coverage-dialog__head">
-        <div><span class="eyebrow">COLORADO JURISDICTION INDEX</span><h2 id="coverage-title">Explore the statewide roster</h2></div>
+        <div><span class="eyebrow">COLORADO JURISDICTION INDEX</span><h2 id="coverage-title">Find a Colorado place</h2></div>
         <button id="coverage-close" type="button" aria-label="Close Colorado jurisdiction index">✕</button>
       </header>
       <p class="coverage-dialog__intro">A listed jurisdiction is a place to search. It is not evidence that a surveillance decision, contract, or deployment exists there. Only released cases are linked.</p>
       <div id="coverage-summary" class="coverage-summary" aria-live="polite">Loading official geography…</div>
       <div class="coverage-dialog__body">
-        <section class="coverage-map-panel" aria-label="Colorado county map">
-          <svg id="coverage-map" viewBox="0 0 700 440" role="group" aria-label="Colorado county boundaries; select a county"></svg>
-          <p>County outlines: U.S. Census Bureau, January 2025. These boundaries are geographic reference only.</p>
-        </section>
         <section class="coverage-browser" aria-label="Jurisdiction browser">
           <div class="coverage-tabs" role="group" aria-label="Jurisdiction type">
             <button type="button" data-coverage-kind="state">STATE</button>
@@ -105,8 +101,12 @@ function applyCivicShell() {
           <p id="coverage-result-count" class="coverage-result-count"></p>
           <div id="coverage-list" class="coverage-list"></div>
         </section>
+        <section id="coverage-detail" class="coverage-detail" aria-live="polite"></section>
+        <section class="coverage-map-panel" aria-label="Colorado county map">
+          <svg id="coverage-map" viewBox="0 0 700 440" role="group" aria-label="Colorado county boundaries; select a county"></svg>
+          <p>County outlines: U.S. Census Bureau, January 2025. These boundaries are geographic reference only.</p>
+        </section>
       </div>
-      <section id="coverage-detail" class="coverage-detail" aria-live="polite"></section>
     </dialog>
   `);
 

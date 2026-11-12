@@ -79,6 +79,7 @@ jobs:
           python3 scripts/test-colorado-eff-private-leads.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
           node --test web/panopticon-terminal/scripts/test-atlas-usability.mjs
+          node --test web/panopticon-terminal/scripts/test-decision-cards.mjs
           node --test web/panopticon-terminal/scripts/test-garden-motion.mjs
           node --test web/panopticon-terminal/scripts/test-keenesburg-motion.mjs
           node --test web/panopticon-terminal/scripts/test-cortez-motion.mjs

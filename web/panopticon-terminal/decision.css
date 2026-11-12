@@ -58,3 +58,6 @@ p { line-height: 1.6; }
 .empty { color: #f0d579; font-weight: 700; }
 .site-footer { border-top: 1px solid #31505b; color: #9cb8bf; font-size: .78rem; }
 @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } .site-header { align-items: start; } }
+.decision-jump { display:flex; flex-wrap:wrap; gap:10px; margin:-.8rem 0 2.2rem; }
+.decision-jump a { display:inline-block; padding:.65rem .9rem; border:1px solid #517780; border-radius:3px; color:#bceef1; font-weight:750; text-decoration:none; }
+.decision-jump a:first-child { background:#8be4ef; border-color:#8be4ef; color:#07171d; }

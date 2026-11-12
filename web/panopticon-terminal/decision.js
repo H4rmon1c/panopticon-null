@@ -1,5 +1,6 @@
 import { PanopticonClient, startSnapshotRefresh } from "./api.js";
 import { portraitForRecordedVote } from "./portraits/portraits.js";
+import { displayVote } from "./scripts/25-decision-cards.mjs";
 
 const params = new URLSearchParams(location.search);
 const casePath = /\/decisions\/([a-z0-9-]+)\.html$/.exec(location.pathname ?? "");
@@ -241,7 +242,7 @@ function renderVoteCards(model, votes, mode) {
     const voteValue = vote.vote ?? vote.position;
     const voteKey = String(voteValue ?? "").toLowerCase();
     const voteClass = ["aye", "yes"].includes(voteKey) ? "aye" : ["no", "nay"].includes(voteKey) ? "no" : "";
-    heading.append(node("strong", "", name), node("span", `vote-position${voteClass ? ` ${voteClass}` : ""}`, voteValue ?? "Vote unknown"));
+    heading.append(node("strong", "", name), node("span", `vote-position${voteClass ? ` ${voteClass}` : ""}`, displayVote(voteValue)));
     text.append(heading);
     const role = vote.role ?? vote.office_role ?? "not established";
     const term = vote.term ?? vote.office_term ?? "not established";
@@ -251,7 +252,7 @@ function renderVoteCards(model, votes, mode) {
     if (portrait?.source_conflict?.state === "UNRESOLVED") {
       text.append(node("p", "vote-detail", portrait.source_conflict.public_note));
     }
-    if (!portrait && mode !== "demo") text.append(node("p", "vote-detail", "Official portrait: not yet verified"));
+    if (!portrait && mode !== "demo") text.append(node("p", "vote-detail", "Portrait: not yet sourced"));
     const links = node("div", "vote-links");
     if (vote.evidence_id) {
       const link = node("a", "", "Vote record ↗");
@@ -271,7 +272,8 @@ function renderVoteCards(model, votes, mode) {
 
 function renderVotes(model, mode) {
   const consent = model.decision.consent_block;
-  const panel = section(consent ? "Consent agenda vote" : "Recorded votes on this decision");
+  const panel = section(consent ? "Consent agenda vote" : "Recorded positions on this decision");
+  panel.id = "recorded-votes";
   if (consent) {
     panel.append(node("p", "vote-note", `This item was included in consent motion ${consent.motion_item_id}, “${consent.motion_title}” (${consent.motion_outcome}). The roll call covers the block of items.`));
     const links = node("p", "vote-links");
@@ -308,13 +310,14 @@ function renderVotes(model, mode) {
     if (gapSource && mode !== "demo") panel.append(publicLink(gapSource.canonical_url, "Checked vote source ↗"));
     return panel;
   }
-  panel.append(node("p", "vote-note", "Recorded positions come from the cited roll call. Official portraits appear where a source is available."));
+  panel.append(node("p", "vote-note", "Positions come from the cited roll call. Portrait sources are linked below; photos may be from a different date."));
   panel.append(renderVoteCards(model, model.votes, mode));
   return panel;
 }
 
 function renderEvidence(model, mode) {
   const panel = section("Evidence and exact locators");
+  panel.id = "proof";
   if (!model.evidence.length) panel.append(node("p", "empty", "No evidence is attached to this decision. No unsupported connection is shown."));
   for (const item of model.evidence) {
     const source = model.sourceById.get(item.source_id);
@@ -371,10 +374,16 @@ function renderDecision(model, snapshot, mode) {
   if (date) addMeta(meta, `Decision date: ${date}`);
   if (snapshot.status?.last_publish) addMeta(meta, `Snapshot: ${snapshot.status.last_publish}`);
   page.append(meta);
+  const jump = node("nav", "decision-jump");
+  jump.setAttribute("aria-label", "Jump to a section");
+  for (const [href, label] of [["#recorded-votes", "Who voted"], ["#proof", "See the proof"]]) {
+    const link = node("a", "", label); link.href = href; jump.append(link);
+  }
+  page.append(jump);
 
   const grid = node("div", "grid");
   const main = node("div");
-  main.append(renderChain(model), renderVotes(model, mode));
+  main.append(renderVotes(model, mode), renderChain(model));
   const technology = renderTechnology(model);
   if (technology) main.append(technology);
   main.append(renderEvidence(model, mode), renderCorrections(model));
@@ -430,6 +439,11 @@ async function main() {
   const model = buildDecisionModel(snapshot, id);
   if (!model) throw new Error("This decision is not in the selected published dataset.");
   renderDecision(model, snapshot, client.mode);
+  if (location.hash) {
+    let anchor;
+    try { anchor = document.getElementById(decodeURIComponent(location.hash.slice(1))); } catch { /* Ignore invalid fragment. */ }
+    anchor?.scrollIntoView();
+  }
 }
 
 if (page) main().catch((error) => {

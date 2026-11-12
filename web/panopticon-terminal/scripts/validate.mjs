@@ -34,13 +34,14 @@ const scripts = [
   "scripts/15-civic-actions.js", "scripts/16-civic-context.js", "scripts/17-civic-atlas-core.js",
   "scripts/18-civic-atlas-layout.js", "scripts/19-civic-atlas-ground.js", "scripts/20-civic-atlas-links.js",
   "scripts/21-civic-atlas-helpers.js", "scripts/22-civic-runtime.js", "scripts/23-civic-polish.js",
-  "scripts/24-colorado-coverage.mjs",
+  "scripts/24-colorado-coverage.mjs", "scripts/25-decision-cards.mjs",
 ];
 const styles = [
   ...Array.from({ length: 8 }, (_, index) => `styles/0${index}.css`),
   "styles/08-civic.css",
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
+  "styles/11-decision-cards.css",
 ];
 const required = ["georgetown-motion.html", "georgetown-motion.js", "georgetown-motion-api.js", "public/georgetown-motion-v1.json", "hudson-motion.html", "hudson-motion.js", "hudson-motion-api.js", "public/hudson-motion-v1.json", "index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "buenavista-motion.html", "buenavista-motion.js", "buenavista-motion-api.js", "public/buenavista-motion-v1.json", "columbine-motion.html", "columbine-motion.js", "columbine-motion-api.js", "public/columbine-motion-v1.json", "gunnison-motion.html", "gunnison-motion.js", "gunnison-motion-api.js", "public/gunnison-motion-v1.json", "clearcreek-motion.html", "clearcreek-motion.js", "clearcreek-motion-api.js", "public/clearcreek-motion-v1.json", "ouray-motion.html", "ouray-motion.js", "ouray-motion-api.js", "public/ouray-motion-v1.json", "yuma-motion.html", "yuma-motion.js", "yuma-motion-api.js", "public/yuma-motion-v1.json", "cortez-motion.html", "cortez-motion.js", "cortez-motion-api.js", "public/cortez-motion-v1.json", "keenesburg-motion.html", "keenesburg-motion.js", "keenesburg-motion-api.js", "public/keenesburg-motion-v1.json", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];

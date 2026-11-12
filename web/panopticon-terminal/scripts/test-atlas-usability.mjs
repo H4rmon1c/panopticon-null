@@ -56,23 +56,20 @@ test('initial deep link hydrates a decision beyond the first 100 records', async
   assert.equal(selected, requested);
 });
 
-test('decision list selects a record and reveals its dossier on narrow screens', () => {
-  function node() { return { children: [], attrs: {}, append(...xs) { this.children.push(...xs); }, replaceChildren() { this.children = []; }, setAttribute(k,v) { this.attrs[k] = v; }, addEventListener(_, fn) { this.click = fn; }, querySelectorAll() { return this.children; } }; }
-  const list = node(); let selected; let scrolled = false;
-  const entries = [{ id: 'place', type: 'JURISDICTION', name: 'Castle Rock' }, { id: 'decision', type: 'DECISION', name: 'A decision', jurisdiction_ids: ['place'], subtitle: 'Pass' }];
-  const context = vm.createContext({ client: { snapshot: { entities: entries } },
-    currentState: () => ({ selected: { id: 'other' } }),
-    civic$: (selector) => selector === '#atlas-record-list' ? list : { scrollIntoView() { scrolled = true; } },
-    document: { createElement: node }, selectRecord: (id) => { selected = id; }, matchMedia: () => ({ matches: true }) });
+test('decision list delegates rendering to the source-bound card renderer', () => {
+  const list = {}; const count = {}; let received;
+  const snapshot = { entities: [{ id: 'decision', type: 'DECISION' }] };
+  const context = vm.createContext({ client: { snapshot, mode: 'public' },
+    currentState: () => ({ mode: 'public' }),
+    civic$: (selector) => selector === '#atlas-record-list' ? list : selector === '#records-count' ? count : null,
+    window: { renderDecisionCards: (...args) => { received = args; } } });
   const source = load('scripts/22-civic-runtime.js');
   vm.runInContext(source.slice(source.indexOf('function renderRecordList()')), context);
   context.renderRecordList();
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0].children[1].textContent, 'Castle Rock · Pass');
-  list.children[0].click();
-  assert.equal(selected, 'decision');
-  assert.equal(list.children[0].attrs['aria-pressed'], 'true');
-  assert.equal(scrolled, true);
+  assert.equal(received[0], snapshot);
+  assert.equal(received[1], 'public');
+  assert.equal(received[3], list);
+  assert.equal(received[4], count);
 });
 
 test('changes shortcut opens and closes the activity panel', () => {
@@ -87,10 +84,10 @@ test('changes shortcut opens and closes the activity panel', () => {
 
 test('connections shortcut exposes the map and updates its return control', () => {
   const body = { dataset: {} }; const toggle = { setAttribute(k,v) { this[k] = v; } }; let resized = false;
-  const context = vm.createContext({ document: { body }, civic$: () => toggle, atlas: { resize() { resized = true; } } });
+  const context = vm.createContext({ document: { body, querySelector: () => null }, civic$: () => toggle, atlas: { resize() { resized = true; } } });
   const source = load('scripts/22-civic-runtime.js');
   vm.runInContext(source.slice(source.indexOf('function setAtlasView('), source.indexOf('function renderRecordList()')), context);
   context.setAtlasView(true); assert.equal(body.dataset.atlasView, 'map');
-  assert.equal(toggle['aria-pressed'], 'true'); assert.equal(toggle.textContent, 'SHOW DECISION LIST'); assert.equal(resized, true);
+  assert.equal(toggle['aria-pressed'], 'true'); assert.equal(toggle.textContent, 'Back to decisions'); assert.equal(resized, true);
   context.setAtlasView(false); assert.equal(body.dataset.atlasView, 'records');
 });

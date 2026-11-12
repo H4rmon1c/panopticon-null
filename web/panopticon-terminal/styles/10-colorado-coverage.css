@@ -79,12 +79,14 @@
 
 .coverage-dialog__body {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(285px, 1fr);
+  grid-template-columns: minmax(285px, 1fr) minmax(0, 1.25fr);
+  grid-template-areas: "browser map" "detail detail";
   gap: 18px;
   padding: 18px 22px;
 }
 
 .coverage-map-panel {
+  grid-area: map;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -125,6 +127,7 @@
 }
 
 .coverage-browser {
+  grid-area: browser;
   min-width: 0;
 }
 
@@ -228,7 +231,8 @@
 }
 
 .coverage-detail {
-  margin: 0 22px 20px;
+  grid-area: detail;
+  margin: 0;
   border-top: 1px solid rgba(147, 190, 210, .22);
   padding-top: 15px;
   font-size: 10px;
@@ -273,6 +277,7 @@
 @media (max-width: 800px) {
   .coverage-dialog__body {
     grid-template-columns: 1fr;
+    grid-template-areas: "browser" "detail" "map";
   }
 
   .coverage-map-panel svg {
