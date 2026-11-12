@@ -1,6 +1,6 @@
 import {validateCortezMotion,validateCortezResearchBinding} from './cortez-motion-api.js?v=1';
 import {readBoundedResearchResponse} from './research-api.js?v=garden-motion-1';
-import {cortezPortraitFor,cortezPortraitImage} from './cortez-portrait-api.js?v=1';
+import {cortezPortraitFor,cortezPortraitImage} from './cortez-portrait-api.js?v=2';
 const status=document.querySelector('#motion-status');const content=document.querySelector('#motion-content');
 const node=(tag,text,cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el;};
 const link=(url,label)=>{const el=node('a',label,'source');el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
@@ -20,13 +20,13 @@ try {
   content.append(node('h2',data.motion));content.append(node('p',data.outcome,'title'));
   content.append(node('p',data.scope,'note'),node('p',data.notice,'note'));
   content.append(node('h3','Recorded votes on final reading'));
-  content.append(node('p','When available, Lucero’s portrait is from the city’s 2017 report; the date the photograph was taken is unknown. The meeting minutes separately record the vote. Other portraits are unavailable.','meta'));
+  content.append(node('p','When available, portraits come from the linked city report or newspaper articles; photograph dates are unknown. The meeting minutes separately record the vote. Other portraits are unavailable.','meta'));
   const list=node('ul','','garden-votes');
   for(const vote of data.votes){
     const item=node('li','','garden-vote'), portrait=cortezPortraitFor(vote);
     if(portrait)item.append(cortezPortraitImage(document,vote));
     const info=node('div','','garden-vote__details');info.append(node('strong',vote.name),node('p',`${vote.role} · ${vote.position}`,'meta'));
-    if(portrait)info.append(link(portrait.source,'City of Cortez 2017 report and portrait ↗'));
+    if(portrait)info.append(node('p',`Photo credit: ${portrait.credit}`,'meta'),link(portrait.source,portrait.label));
     item.append(info);list.append(item);
   }
   content.append(list);

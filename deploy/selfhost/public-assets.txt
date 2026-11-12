@@ -164,4 +164,7 @@ cortez-motion.js
 cortez-motion-api.js
 cortez-portrait-api.js
 assets/portraits/cortez-orly-lucero-2017.jpg
+assets/portraits/cortez-amy-huckins-2021.jpg
+assets/portraits/cortez-rachel-medina-2022.jpg
+assets/portraits/cortez-robert-dobry-2020.jpg
 public/cortez-motion-v1.json

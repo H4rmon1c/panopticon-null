@@ -7,7 +7,7 @@ import { votePortraits } from "../portraits/portraits.js";
 import { matchesDenverGallery } from "../portraits/lookup.js";
 import { validateResearch } from "../research-api.js";
 import { validateCortezMotion, validateCortezResearchBinding } from "../cortez-motion-api.js";
-import { luceroPortrait, cortezPortraitFor } from "../cortez-portrait-api.js";
+import { cortezPortraits, cortezPortraitFor } from "../cortez-portrait-api.js";
 import { validateKeenesburgMotion, validateKeenesburgResearchBinding } from "../keenesburg-motion-api.js";
 import { validateGardenMotion, validateGardenResearchBinding } from "../garden-motion-api.js";
 import { gardenPortraits, validateGardenPortraitProof } from "../garden-portraits-api.js";
@@ -50,18 +50,17 @@ try {
   const research = validateResearch(JSON.parse(contents.get("public/research-signals.json") ?? ""));
   const cortez = validateCortezMotion(JSON.parse(contents.get("public/cortez-motion-v1.json") ?? ""));
   validateCortezResearchBinding(cortez, research);
-  if (cortez.state === 'available' && cortez.votes.filter(vote => cortezPortraitFor(vote)).length !== 1)
+  if (cortez.state === 'available' && cortez.votes.filter(vote => cortezPortraitFor(vote)).length !== cortezPortraits.length)
     throw new Error('Cortez portrait voter binding differs');
-  const luceroPath = join(root, luceroPortrait.src);
-  let luceroMeta;
-  try { luceroMeta = await lstat(luceroPath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (luceroMeta) {
-    if (!luceroMeta.isFile() || luceroMeta.isSymbolicLink() || luceroMeta.size !== luceroPortrait.bytes)
-      throw new Error('Cortez portrait file differs');
-    const body = await readFile(luceroPath);
-    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff ||
-        createHash('sha256').update(body).digest('hex') !== luceroPortrait.sha256)
-      throw new Error('Cortez portrait digest or type differs');
+  for (const portrait of cortezPortraits) {
+    const path = join(root, portrait.src); let meta;
+    try { meta = await lstat(path); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (meta) {
+      if (!meta.isFile() || meta.isSymbolicLink() || meta.size !== portrait.bytes) throw new Error('Cortez portrait file differs');
+      const body = await readFile(path);
+      if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff ||
+          createHash('sha256').update(body).digest('hex') !== portrait.sha256) throw new Error('Cortez portrait digest or type differs');
+    }
   }
   const keenesburg = validateKeenesburgMotion(JSON.parse(contents.get("public/keenesburg-motion-v1.json") ?? ""));
   validateKeenesburgResearchBinding(keenesburg, research);
