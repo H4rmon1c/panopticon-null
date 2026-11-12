@@ -183,3 +183,8 @@ clearcreek-motion.html
 clearcreek-motion.js
 clearcreek-motion-api.js
 public/clearcreek-motion-v1.json
+
+gunnison-motion.html
+gunnison-motion.js
+gunnison-motion-api.js
+public/gunnison-motion-v1.json

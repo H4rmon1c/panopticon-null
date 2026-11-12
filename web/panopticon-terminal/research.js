@@ -79,6 +79,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound consent agenda and attendance ↗');
       related.href = './clearcreek-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-90325481a4958003979ad7f9') {
+      const related = node('a', 'source', 'Open the source-bound nonrenewal motion ↗');
+      related.href = './gunnison-motion.html'; card.append(related);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));
