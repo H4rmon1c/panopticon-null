@@ -195,3 +195,8 @@ assets/portraits/yuma-scott-weaver.jpg
 assets/portraits/yuma-mike-leerar.jpg
 
 assets/portraits/cortez-arlina-yazzie-cra.png
+
+columbine-motion.html
+columbine-motion.js
+columbine-motion-api.js
+public/columbine-motion-v1.json
