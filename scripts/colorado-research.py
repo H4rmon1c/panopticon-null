@@ -2262,6 +2262,30 @@ def public_text(value, limit=400):
     return ' '.join(value.split())[:limit]
 
 
+GARDEN_CITY_MISLABELED_AGENDA = {
+    'jurisdiction': 'us-co-place-0829185',
+    'url': 'https://www.townofgardencity.com/files/a569014df/Minutes+8.3.26.pdf',
+    'digest': 'e4df150a1a56a2dc21d12da1e8a7e0d0264b03330d144c455897c09939c75f3e',
+    'heading': 'Board of Trustees Regular Meeting Agenda',
+}
+
+
+def document_file_label(data_dir, ref, url, digest, candidate, lines):
+    """Resolve one proven town-index mislabel without changing source evidence."""
+    fixed = GARDEN_CITY_MISLABELED_AGENDA
+    if (ref, url, digest) != (fixed['jurisdiction'], fixed['url'], fixed['digest']):
+        return public_text(candidate.get('label'), 120)
+    if not lines or lines[0].strip() != fixed['heading']:
+        raise ValueError('Garden City agenda heading does not match preserved extraction')
+    index_url = candidate['index_url']
+    links, _ = page_links(source_blob(data_dir, candidate['index_sha256']), index_url)
+    anchor = candidate['anchor_index']
+    if type(anchor) is not int or not 0 <= anchor < len(links):
+        raise ValueError('Garden City index anchor is invalid')
+    label = ' '.join(links[anchor][1].split())
+    return 'Agenda (town index labels this Minutes)' if label.casefold() == 'minutes' else 'Agenda'
+
+
 def reference_title(value, labels, private_context=False):
     if private_context or re.search(r'\b(?:Mr|Mrs|Ms|v|vs)\.|\b(?:resident|citizen|complainant|victim|juvenile|applicant|petitioner)\b|^\s*\d+\.\s+[A-Z][a-z]+\s+[A-Z][a-z]+\s*[-–—]', value, re.I):
         return 'Possible ' + ', '.join(labels) + ' reference in a public record.'
@@ -3782,7 +3806,7 @@ def export_report(data_dir, db, output, assets_dir=None):
             record = {'id': 'co-document-' + sha((ref + '\0' + doc_digest).encode())[:24],
                 'kind': 'meeting_document', 'confidence': 'unconfirmed_source_reference', 'jurisdiction_ref': ref, 'jurisdiction': jurisdiction_name(geography[ref]),
                 'file': ('School district meeting document' if school else 'Special district meeting document' if special
-                         else public_text(candidate.get('label'), 120)), 'title': title,
+                         else document_file_label(data_dir, ref, url, doc_digest, candidate, lines)), 'title': title,
                 'signals': labels, 'source_status': '', 'source_url': url,
                 'source_sha256': doc_digest, 'locator': f'extracted line {number}',
                 'captured_at': receipt['retrieved_at'], 'last_screened_at': updated,

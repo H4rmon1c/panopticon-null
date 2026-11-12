@@ -44,6 +44,49 @@ def word_fixture(xml):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_garden_city_mislabeled_minutes_fallback_remains_an_agenda(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); db = module.root_store(root)
+            try:
+                ref = 'us-co-place-0829185'
+                url = module.GARDEN_CITY_MISLABELED_AGENDA['url']
+                index = 'https://www.townofgardencity.com/board-meetings'
+                page = f'<a href="{url}">Minutes</a>'.encode()
+                pdf = b'%PDF-fake-agenda-fixture'
+                quote = 'Consider new 5-year contract with Axon Enterprise, Inc'
+                text = ('Board of Trustees Regular Meeting Agenda\n' + quote + '\n').encode()
+                pdf_receipt = receipt(url, pdf)
+                module.archive(root, [(receipt(index, page), page), (pdf_receipt, pdf)])
+                (root / 'extracted').mkdir()
+                (root / 'extracted' / module.sha(text)).write_bytes(text)
+                candidate = {'url': url, 'index_url': index, 'index_sha256': module.sha(page),
+                             'anchor_index': 0, 'kind': 'minutes', 'label': 'Minutes'}
+                result = {'state': 'matched', 'receipt': pdf_receipt, 'candidate': candidate,
+                          'document_sha256': module.sha(pdf), 'extracted_sha256': module.sha(text),
+                          'evidence_id': 'evidence:agenda', 'finding': {'evidence_id': 'evidence:agenda',
+                          'matched_rule_ids': ['vendor.axon'], 'citations': [{'evidence_id': 'evidence:agenda',
+                          'locator': {'kind': 'line', 'start': 2}, 'quote': quote}]}}
+                with db:
+                    db.execute('INSERT INTO discovery VALUES (?,?,?,?)', (ref, 'https://www.townofgardencity.com/', module.utcnow(), '{}'))
+                    db.execute('''INSERT INTO document_candidates(jurisdiction_ref,url,candidate_json,state,result_json,updated_at)
+                                  VALUES (?,?,?,'matched',?,?)''', (ref, url, json.dumps(candidate), json.dumps(result), module.utcnow()))
+                fixed = {**module.GARDEN_CITY_MISLABELED_AGENDA, 'digest': module.sha(pdf)}
+                output = root / 'public.json'
+                with patch.object(module, 'GARDEN_CITY_MISLABELED_AGENDA', fixed):
+                    module.export_report(root, db, output)
+                    record = json.loads(output.read_text())['records'][0]
+                    self.assertEqual(record['file'], 'Agenda (town index labels this Minutes)')
+                    self.assertEqual(record['title'], quote)
+                    self.assertEqual(record['source_url'], url)
+                    self.assertEqual(record['source_sha256'], module.sha(pdf))
+                    self.assertEqual(record['locator'], 'extracted line 2')
+                    self.assertNotIn('actions', record)
+                    with self.assertRaises(ValueError):
+                        module.document_file_label(root, ref, url, module.sha(pdf), candidate, ['Altered heading'])
+                    self.assertEqual(module.document_file_label(root, ref, url + '?other', module.sha(pdf), candidate, ['Other']), 'Minutes')
+            finally:
+                db.close()
+
     def test_county_clerk_lead_also_searches_same_host_county_root(self):
         root = 'https://county.example.org/'
         clerk = root + 'clerk-and-recorder'

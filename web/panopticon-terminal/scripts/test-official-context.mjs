@@ -32,8 +32,8 @@ test('six official technology pages validate only as context', () => {
 test('research page loads matching versioned modules', async () => {
   const html = await readFile(new URL('../research.html', import.meta.url), 'utf8');
   const script = await readFile(new URL('../research.js', import.meta.url), 'utf8');
-  assert.match(html, /research\.js\?v=pdf-coverage-1/);
-  assert.match(script, /research-api\.js\?v=pdf-coverage-1/);
+  assert.match(html, /research\.js\?v=garden-motion-1/);
+  assert.match(script, /research-api\.js\?v=garden-motion-1/);
 });
 test('Sterling context cannot be swapped or given an invented approval', () => {
   for (const change of [
