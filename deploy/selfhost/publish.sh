@@ -158,9 +158,18 @@ if [[ -e "$research_dir/research.sqlite3" || -L "$research_dir/research.sqlite3"
         --output "$stage/public/garden-city-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
     python3 "$PNUL_REPO_DIR/scripts/keenesburg-motion-sidecar.py" --data-dir "$research_dir" \
         --output "$stage/public/keenesburg-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
+    python3 "$PNUL_REPO_DIR/scripts/cortez-motion-sidecar.py" --data-dir "$research_dir" \
+        --output "$stage/public/cortez-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
 else
     printf '{"schema_version":"pnull-keenesburg-motion-v1","state":"not_available"}\n' > "$stage/public/keenesburg-motion-v1.json"
+    printf '{"schema_version":"pnull-cortez-motion-v1","state":"not_available"}\n' > "$stage/public/cortez-motion-v1.json"
     printf '{"schema_version":"pnull-garden-city-motion-v1","state":"not_available"}\n' > "$stage/public/garden-city-motion-v1.json"
+fi
+# The vote card remains available independently, but the historical image is
+# withheld unless its own source PDF, capture receipt and embedded bytes verify.
+if ! grep -Fq '"state":"available"' "$stage/public/cortez-motion-v1.json" ||
+   ! python3 "$PNUL_REPO_DIR/scripts/verify-cortez-lucero-portrait.py" --archive "$research_dir"; then
+    rm -f -- "$stage/assets/portraits/cortez-orly-lucero-2017.jpg"
 fi
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2

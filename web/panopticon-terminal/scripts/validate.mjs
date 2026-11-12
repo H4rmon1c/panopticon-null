@@ -6,6 +6,8 @@ import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
 import { matchesDenverGallery } from "../portraits/lookup.js";
 import { validateResearch } from "../research-api.js";
+import { validateCortezMotion, validateCortezResearchBinding } from "../cortez-motion-api.js";
+import { luceroPortrait, cortezPortraitFor } from "../cortez-portrait-api.js";
 import { validateKeenesburgMotion, validateKeenesburgResearchBinding } from "../keenesburg-motion-api.js";
 import { validateGardenMotion, validateGardenResearchBinding } from "../garden-motion-api.js";
 import { gardenPortraits, validateGardenPortraitProof } from "../garden-portraits-api.js";
@@ -31,7 +33,7 @@ const styles = [
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "keenesburg-motion.html", "keenesburg-motion.js", "keenesburg-motion-api.js", "public/keenesburg-motion-v1.json", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "cortez-motion.html", "cortez-motion.js", "cortez-motion-api.js", "public/cortez-motion-v1.json", "keenesburg-motion.html", "keenesburg-motion.js", "keenesburg-motion-api.js", "public/keenesburg-motion-v1.json", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -46,6 +48,21 @@ for (const path of required) {
 
 try {
   const research = validateResearch(JSON.parse(contents.get("public/research-signals.json") ?? ""));
+  const cortez = validateCortezMotion(JSON.parse(contents.get("public/cortez-motion-v1.json") ?? ""));
+  validateCortezResearchBinding(cortez, research);
+  if (cortez.state === 'available' && cortez.votes.filter(vote => cortezPortraitFor(vote)).length !== 1)
+    throw new Error('Cortez portrait voter binding differs');
+  const luceroPath = join(root, luceroPortrait.src);
+  let luceroMeta;
+  try { luceroMeta = await lstat(luceroPath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (luceroMeta) {
+    if (!luceroMeta.isFile() || luceroMeta.isSymbolicLink() || luceroMeta.size !== luceroPortrait.bytes)
+      throw new Error('Cortez portrait file differs');
+    const body = await readFile(luceroPath);
+    if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff ||
+        createHash('sha256').update(body).digest('hex') !== luceroPortrait.sha256)
+      throw new Error('Cortez portrait digest or type differs');
+  }
   const keenesburg = validateKeenesburgMotion(JSON.parse(contents.get("public/keenesburg-motion-v1.json") ?? ""));
   validateKeenesburgResearchBinding(keenesburg, research);
   const garden = validateGardenMotion(JSON.parse(contents.get("public/garden-city-motion-v1.json") ?? ""));
