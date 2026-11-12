@@ -237,6 +237,16 @@ for (const asset of ["./styles.css", "./app.js"]) {
   if (!index.includes(asset)) failures.push(`index.html: missing asset reference ${asset}`);
 }
 
+// The landing page is separately served at /; index.html retains atlas deep links.
+try {
+  const home = await readFile(join(root, "home.html"), "utf8");
+  await readFile(join(root, "home.css"));
+  for (const target of ["./home.css", "./index.html", "./research.html", "./decisions/co-colorado-springs-25-581-2025-11-25.html", "./decisions/co-denver-25-0413-2025-05-05.html"]) {
+    if (!home.includes(`href="${target}"`)) failures.push(`home.html: missing link ${target}`);
+  }
+  if (!home.includes("Coverage is incomplete")) failures.push("home.html: missing coverage limitation");
+} catch (error) { failures.push(`home page: ${error.message}`); }
+
 const shell = templates.map((path) => contents.get(path) ?? "").join("");
 for (const id of [
   "app", "world-canvas", "main-content", "global-search", "activity-list",

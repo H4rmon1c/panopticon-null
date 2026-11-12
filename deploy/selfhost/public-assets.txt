@@ -1,5 +1,7 @@
 # Only these reviewed files may enter a public release. Add new assets deliberately.
 index.html
+home.html
+home.css
 decision.html
 styles.css
 app.js
