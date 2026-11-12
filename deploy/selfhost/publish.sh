@@ -168,9 +168,12 @@ if [[ -e "$research_dir/research.sqlite3" || -L "$research_dir/research.sqlite3"
         --output "$stage/public/gunnison-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
     python3 "$PNUL_REPO_DIR/scripts/clearcreek-motion-sidecar.py" --data-dir "$research_dir" \
         --output "$stage/public/clearcreek-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
+    python3 "$PNUL_REPO_DIR/scripts/buenavista-motion-sidecar.py" --data-dir "$research_dir" \
+        --output "$stage/public/buenavista-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
     python3 "$PNUL_REPO_DIR/scripts/columbine-motion-sidecar.py" --data-dir "$research_dir" \
         --output "$stage/public/columbine-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
 else
+    printf '{"schema_version":"pnull-buenavista-motion-v1","state":"not_available"}\n' > "$stage/public/buenavista-motion-v1.json"
     printf '{"schema_version":"pnull-columbine-motion-v1","state":"not_available"}\n' > "$stage/public/columbine-motion-v1.json"
     printf '{"schema_version":"pnull-ouray-motion-v1","state":"not_available"}\n' > "$stage/public/ouray-motion-v1.json"
     printf '{"schema_version":"pnull-gunnison-motion-v1","state":"not_available"}\n' > "$stage/public/gunnison-motion-v1.json"
