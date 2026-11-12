@@ -6,6 +6,8 @@ import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
 import { matchesDenverGallery } from "../portraits/lookup.js";
 import { validateResearch } from "../research-api.js";
+import { validateGardenMotion, validateGardenResearchBinding } from "../garden-motion-api.js";
+import { gardenPortraits, validateGardenPortraitProof } from "../garden-portraits-api.js";
 import { assertEmbeddedPortraitMatches } from "./validate-embedded-portrait.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,7 +30,7 @@ const styles = [
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -43,6 +45,26 @@ for (const path of required) {
 
 try {
   const research = validateResearch(JSON.parse(contents.get("public/research-signals.json") ?? ""));
+  const garden = validateGardenMotion(JSON.parse(contents.get("public/garden-city-motion-v1.json") ?? ""));
+  validateGardenResearchBinding(garden, research);
+  const gardenProof = JSON.parse(await readFile(join(repositoryRoot, "fixtures/atlas/portrait-sources/garden-city-2026.json"), "utf8"));
+  validateGardenPortraitProof(gardenProof);
+  const paths = Object.values(gardenPortraits).map((portrait) => join(root, portrait.src));
+  const present = await Promise.all(paths.map(async (path) => {
+    try { await lstat(path); return true; } catch (error) { if (error.code === "ENOENT") return false; throw error; }
+  }));
+  if (garden.state === "available" || present.some(Boolean)) {
+    for (const [i, portrait] of Object.values(gardenPortraits).entries()) {
+      if (!present[i]) throw new Error("Garden City portrait set incomplete");
+      const meta = await lstat(paths[i]);
+      if (!meta.isFile() || meta.isSymbolicLink() || meta.size !== portrait.image_bytes || meta.size > 2_000_000)
+        throw new Error("Garden City portrait file is unsafe or wrong size");
+      const body = await readFile(paths[i]);
+      if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff ||
+          createHash("sha256").update(body).digest("hex") !== portrait.image_sha256)
+        throw new Error("Garden City portrait digest or type differs");
+    }
+  }
   const people = research.records.flatMap((item) => [
     ...(item.people_context ?? []),
     ...(item.actions ?? []).flatMap((motion) => motion.votes),

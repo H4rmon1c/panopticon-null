@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { votePortraits } from "../portraits/portraits.js";
 import { lookupPortrait } from "../portraits/lookup.js";
+import { validateGardenMotion, validateGardenResearchBinding } from "../garden-motion-api.js";
+import { gardenPortraits } from "../garden-portraits-api.js";
 
 export function selectPublishedPortraits(snapshot, registry) {
   if (snapshot.schema_version !== "pnull-public-snapshot-v1" || snapshot.demo || snapshot.preview ||
@@ -23,6 +25,18 @@ export function selectPublishedPortraits(snapshot, registry) {
   return kept;
 }
 
+export async function filterGardenPortraits(stage, rawGarden, research) {
+  const garden = validateGardenMotion(rawGarden);
+  validateGardenResearchBinding(garden, research);
+  const allowed = new Set(Object.values(gardenPortraits).map((portrait) => portrait.image_sha256 + ".jpg"));
+  const entries = await readdir(resolve(stage, "garden-portraits"), { withFileTypes: true });
+  if (garden.state === "available" && entries.length !== allowed.size) throw new Error("Garden City portrait set incomplete");
+  for (const entry of entries) {
+    if (!entry.isFile() || !allowed.has(entry.name)) throw new Error(`unexpected Garden City portrait asset: ${entry.name}`);
+    if (garden.state !== "available") await unlink(resolve(stage, "garden-portraits", entry.name));
+  }
+}
+
 async function main() {
   const stage = resolve(process.argv[2] ?? ".");
   const snapshot = JSON.parse(await readFile(resolve(stage, "public/public-snapshot.json"), "utf8"));
@@ -40,6 +54,9 @@ async function main() {
     if (!entry.isFile()) throw new Error(`unexpected portrait asset: ${entry.name}`);
     await unlink(resolve(stage, "portraits", entry.name));
   }
+  const garden = JSON.parse(await readFile(resolve(stage, "public/garden-city-motion-v1.json"), "utf8"));
+  const research = JSON.parse(await readFile(resolve(stage, "public/research-signals.json"), "utf8"));
+  await filterGardenPortraits(stage, garden, research);
   const source = `import { lookupPortrait } from "./lookup.js";\n` +
     `export const votePortraits = Object.freeze(${JSON.stringify(kept, null, 2)});\n` +
     `export function portraitForRecordedVote(vote, voter) {\n` +

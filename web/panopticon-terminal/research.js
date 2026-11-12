@@ -1,4 +1,4 @@
-import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=pdf-coverage-1';
+import { matchesResearchQuery, readBoundedResearchResponse, researchReferenceScope, validResearchJurisdiction } from './research-api.js?v=garden-motion-1';
 import { votePortraits } from './portraits/portraits.js';
 import { lookupResearchPortrait } from './portraits/lookup.js';
 
@@ -54,6 +54,10 @@ function render(report) {
         list.append(node('li', '', `${highlight.locator}: ${highlight.title}`));
       }
       details.append(list); card.append(details);
+    }
+    if (item.id === 'co-document-65cfe2b3b5d87f9ab45c4235') {
+      const related = node('a', 'source', 'Open the source-bound motion and roll call ↗');
+      related.href = './garden-motion.html'; card.append(related);
     }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');

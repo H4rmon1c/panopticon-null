@@ -154,6 +154,10 @@ if [[ -e "$research_dir/research.sqlite3" || -L "$research_dir/research.sqlite3"
     }
     python3 "$PNUL_REPO_DIR/scripts/colorado-research.py" --data-dir "$research_dir" \
         export --output "$stage/public/research-signals.json" --assets-dir "$stage/research-portraits"
+    python3 "$PNUL_REPO_DIR/scripts/garden-city-motion-sidecar.py" --data-dir "$research_dir" \
+        --output "$stage/public/garden-city-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
+else
+    printf '{"schema_version":"pnull-garden-city-motion-v1","state":"not_available"}\n' > "$stage/public/garden-city-motion-v1.json"
 fi
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2

@@ -44,6 +44,8 @@ jobs:
       - name: Test preliminary research provenance and public API
         run: |
           python3 scripts/test-colorado-research.py
+          python3 scripts/test-garden-city-motion-sidecar.py
+          python3 scripts/test-colorado-garden-portraits.py
           python3 scripts/test-colorado-official-context.py
           python3 scripts/sync-colorado-context-allowlist.py
           python3 scripts/test-colorado-cisc-2018-members.py
@@ -58,6 +60,8 @@ jobs:
           python3 scripts/test-colorado-shared-followup.py
           python3 scripts/test-colorado-eff-private-leads.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
+          node --test web/panopticon-terminal/scripts/test-garden-motion.mjs
+          node --test web/panopticon-terminal/scripts/test-garden-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-official-context.mjs
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-littleton-portraits.mjs

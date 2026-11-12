@@ -33,3 +33,10 @@ input { width: 100%; padding: 14px; border: 1px solid #4d737e; background: #081a
 .motion h3 { margin: 0; font-size: 12px; color: #e5eded; }
 .footer { margin-top: 40px; }
 @media (max-width: 700px) { .page { padding: 24px 16px 60px; } .results { grid-template-columns: 1fr; } .eyebrow { margin-top: 48px; } }
+
+.garden-votes { list-style: none; margin: 16px 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.garden-vote { display: flex; gap: 14px; align-items: center; min-width: 0; border: 1px solid #29444b; background: #0a1a22; padding: 12px; }
+.garden-vote__photo { width: 96px; height: 120px; object-fit: cover; object-position: center 20%; flex: none; border: 1px solid #4d737e; }
+.garden-vote__details { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.garden-vote__details p { margin: 5px 0; }
+@media (max-width: 600px) { .garden-votes { grid-template-columns: 1fr; } }
