@@ -71,6 +71,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound motion and attendance ↗');
       related.href = './yuma-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-a715fed2f776dc7376814eb0') {
+      const related = node('a', 'source', 'Open the source-bound motion and attendance ↗');
+      related.href = './ouray-motion.html'; card.append(related);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));

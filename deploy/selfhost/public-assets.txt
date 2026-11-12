@@ -173,3 +173,8 @@ yuma-motion.html
 yuma-motion.js
 yuma-motion-api.js
 public/yuma-motion-v1.json
+
+ouray-motion.html
+ouray-motion.js
+ouray-motion-api.js
+public/ouray-motion-v1.json

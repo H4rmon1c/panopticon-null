@@ -48,6 +48,7 @@ jobs:
           python3 scripts/test-keenesburg-motion-sidecar.py
           python3 scripts/test-cortez-motion-sidecar.py
           python3 scripts/test-yuma-motion-sidecar.py
+          python3 scripts/test-ouray-motion-sidecar.py
           python3 scripts/test-colorado-garden-portraits.py
           python3 scripts/test-cortez-lucero-portrait.py
           python3 scripts/test-cortez-press-portraits.py
@@ -69,6 +70,7 @@ jobs:
           node --test web/panopticon-terminal/scripts/test-keenesburg-motion.mjs
           node --test web/panopticon-terminal/scripts/test-cortez-motion.mjs
           node --test web/panopticon-terminal/scripts/test-yuma-motion.mjs
+          node --test web/panopticon-terminal/scripts/test-ouray-motion.mjs
           node --test web/panopticon-terminal/scripts/test-cortez-portrait.mjs
           node --test web/panopticon-terminal/scripts/test-garden-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-official-context.mjs
