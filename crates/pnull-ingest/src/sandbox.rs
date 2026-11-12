@@ -100,6 +100,8 @@ pub struct SandboxConfig {
     pub max_output_bytes: u64,
     /// Strict page-only mode binds only a single known output file writable.
     pub page_mode: bool,
+    /// Harden devices and user namespaces for a cgroup-bounded whole document.
+    pub bounded_document_mode: bool,
 }
 
 impl SandboxConfig {
@@ -110,6 +112,7 @@ impl SandboxConfig {
             max_file_size_bytes: 52_428_800,
             max_output_bytes: 5 * 1024 * 1024,
             page_mode: false,
+            bounded_document_mode: false,
         }
     }
 }
@@ -203,7 +206,7 @@ impl Sandbox for BubblewrapSandbox {
             .arg(format!("--as={}", self.config.max_address_bytes))
             .arg(format!("--cpu={}", self.config.max_cpu_seconds))
             .arg(format!("--fsize={}", self.config.max_file_size_bytes));
-        if self.config.page_mode {
+        if self.config.page_mode || self.config.bounded_document_mode {
             command.arg("--nofile=64");
         }
         command.arg("--");
@@ -215,7 +218,10 @@ impl Sandbox for BubblewrapSandbox {
             .arg("--ro-bind")
             .arg(ro_dir.path())
             .arg("/work-ro");
-        bind_devices(&mut command, self.config.page_mode);
+        bind_devices(
+            &mut command,
+            self.config.page_mode || self.config.bounded_document_mode,
+        );
         command
             .arg("--proc")
             .arg("/proc")
@@ -239,12 +245,7 @@ impl Sandbox for BubblewrapSandbox {
             .arg("--setenv")
             .arg("OMP_THREAD_LIMIT")
             .arg("1");
-        if self.config.page_mode {
-            // Prevent a compromised extractor from creating a fresh user/mount
-            // namespace and remounting paths that were made read-only above.
-            command.arg("--unshare-user").arg("--disable-userns");
-            protect_page_mounts(&mut command);
-        }
+        configure_restricted_namespaces(&mut command, &self.config);
         // Only a directory already exposed by the read-only runtime mounts
         // may be passed through; no other host environment is inherited.
         if program == "tesseract"
@@ -291,6 +292,16 @@ impl Sandbox for BubblewrapSandbox {
             stderr,
             success,
         })
+    }
+}
+
+fn configure_restricted_namespaces(command: &mut Command, config: &SandboxConfig) {
+    if config.page_mode || config.bounded_document_mode {
+        // Prevent a compromised extractor from creating a fresh user/mount namespace.
+        command.arg("--unshare-user").arg("--disable-userns");
+        if config.page_mode {
+            protect_page_mounts(command);
+        }
     }
 }
 
@@ -887,6 +898,20 @@ mod tests {
             Duration::from_secs(10),
         )
         .expect("host configuration must not be mounted");
+    }
+
+    #[test]
+    fn bounded_document_mode_blocks_pty_and_nested_user_namespaces() {
+        if !page_sandbox_available() {
+            return;
+        }
+        let mut config = SandboxConfig::defaults();
+        config.bounded_document_mode = true;
+        let sandbox = BubblewrapSandbox::new(config).expect("bounded document sandbox");
+        let script = r#"test ! -e /dev/ptmx && test ! -e /dev/pts/ptmx && test $(ulimit -n) -le 64 && command -v unshare >/dev/null && command -v mount >/dev/null && printf ok >/dev/null || exit 1; output=$(unshare --user --map-root-user --mount --fork true 2>&1); status=$?; test $status -ne 0 && printf '%s' "$output" | grep -Eq 'Operation not permitted|No space left on device|Too many users' || exit 1; mount -t tmpfs -o size=1g tmpfs /work >/dev/null 2>&1 && exit 1; if mknod /work/ptmx c 5 2 2>/dev/null; then (exec 3<>/work/ptmx) 2>/dev/null && exit 1; fi; exit 0"#;
+        let output =
+            shell(&sandbox, script, Duration::from_secs(10)).expect("restricted document sandbox");
+        assert!(output.success);
     }
 
     #[test]

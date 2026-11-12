@@ -84,6 +84,12 @@ fn read_input(
     Ok(bytes)
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct PdfScreenOptions {
+    pub ocr: bool,
+    pub bounded_private: bool,
+}
+
 pub(super) fn screen_pdf(
     data_dir: &Path,
     rules_path: &Path,
@@ -91,13 +97,21 @@ pub(super) fn screen_pdf(
     source_url: &str,
     jurisdiction_ref: &str,
     retrieved_at: &str,
-    ocr: bool,
+    options: PdfScreenOptions,
 ) -> Result<()> {
+    if options.bounded_private {
+        require_bounded_cgroup()?;
+        require_bounded_scratch()?;
+    }
     let bytes = read_input(data_dir, digest, source_url, jurisdiction_ref, retrieved_at)?;
     let rules = load_rules(rules_path)?;
     let rule_digest = rules_digest(&rules);
-    let sandbox = RealSandbox::new(pnull_ingest::ExtractionSandboxConfig::defaults())
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let mut config = pnull_ingest::ExtractionSandboxConfig::defaults();
+    config.bounded_document_mode = options.bounded_private;
+    if options.bounded_private {
+        config.max_file_size_bytes = 8 * 1024 * 1024;
+    }
+    let sandbox = RealSandbox::new(config).map_err(|error| anyhow::anyhow!(error.to_string()))?;
     // Separate temporary evidence stores keep failed extraction attempts from
     // poisoning the first-write-only evidence row for a later successful retry.
     let temporary = tempfile::Builder::new()
@@ -123,7 +137,7 @@ pub(super) fn screen_pdf(
             mime_type: "application/pdf".to_owned(),
             original_filename: "meeting.pdf".to_owned(),
             supersedes: None,
-            enable_ocr: ocr,
+            enable_ocr: options.ocr,
             ocr_language: "eng".to_owned(),
             max_bytes: usize::try_from(MAX_PDF)?,
         },
