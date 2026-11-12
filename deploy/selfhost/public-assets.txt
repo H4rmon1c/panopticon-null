@@ -215,3 +215,6 @@ georgetown-motion.html
 georgetown-motion.js
 georgetown-motion-api.js
 public/georgetown-motion-v1.json
+
+styles/11-decision-cards.css
+scripts/25-decision-cards.mjs

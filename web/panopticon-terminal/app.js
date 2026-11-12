@@ -1,5 +1,10 @@
 import { PanopticonClient, startSnapshotRefresh } from "./api.js";
 import { installColoradoCoverage } from "./scripts/24-colorado-coverage.mjs";
+import { linkedDecisions, renderDecisionCards } from "./scripts/25-decision-cards.mjs";
+window.renderDecisionCards = renderDecisionCards;
+window.linkedDecisions = linkedDecisions;
+window.atlasInitialHash = location.hash;
+window.atlasLinkedEntity = new URLSearchParams(location.hash.slice(1)).get("entity");
 
 const templateParts = [
   "./templates/shell-00.html",
@@ -66,6 +71,11 @@ window.client = new PanopticonClient({ demo: params.get("demo") === "1", preview
 window.boot().then(() => startSnapshotRefresh(window.client, { onError: () => {
   const label = document.querySelector("#system-state-label");
   if (label) label.textContent = "UPDATE CHECK FAILED // SHOWING LOADED SNAPSHOT";
+  const notice = document.querySelector("#records-mode-notice");
+  if (notice) {
+    notice.hidden = false;
+    notice.textContent = "The update check failed. Showing the last loaded records.";
+  }
 } })).catch((error) => {
   console.error(error);
   document.querySelector("#system-state")?.classList.add("is-stale");
@@ -73,5 +83,14 @@ window.boot().then(() => startSnapshotRefresh(window.client, { onError: () => {
   if (label) label.textContent = "OFFLINE";
   const brief = document.querySelector("#civic-brief-text");
   if (brief) brief.textContent = "Reviewed public data is unavailable.";
+  const count = document.querySelector("#records-count");
+  if (count) count.textContent = "Decisions could not be loaded.";
+  const list = document.querySelector("#atlas-record-list");
+  if (list) {
+    const message = document.createElement("p");
+    message.className = "record-empty";
+    message.textContent = "The public records could not be loaded. Please refresh this page and try again.";
+    list.replaceChildren(message);
+  }
   window.toast?.(`TERMINAL FAILED // ${error.message}`);
 });

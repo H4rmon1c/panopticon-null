@@ -1,0 +1,106 @@
+/* A calm, readable default. The original investigation canvas remains opt-in. */
+html[data-atlas-view="records"] { height:auto; min-height:100%; overflow:auto; }
+body[data-atlas-view="records"] { height:auto; min-height:100vh; overflow:auto; background:#071019; color:#edf3f0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+body[data-atlas-view="records"] .app-shell { position:static; display:block; height:auto; min-height:100vh; overflow:visible; background:#071019; }
+body[data-atlas-view="records"] .topbar,
+body[data-atlas-view="records"] .hud,
+body[data-atlas-view="records"] #world-canvas,
+body[data-atlas-view="records"] #civic-canvas,
+body[data-atlas-view="records"] .world-grid,
+body[data-atlas-view="records"] .world-noise,
+body[data-atlas-view="records"] .world-vignette,
+body[data-atlas-view="records"] .world-scanlines,
+body[data-atlas-view="records"] .civic-atlas-label,
+body[data-atlas-view="records"] .civic-principle,
+body[data-atlas-view="records"] .map-legend { display:none !important; }
+body[data-atlas-view="records"] .civic-record-browser { position:static; width:auto; max-width:none; height:auto; margin:0; padding:0; overflow:visible; border:0; background:transparent; }
+.records-topbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; max-width:1200px; margin:auto; padding:22px 28px; border-bottom:1px solid #29434d; }
+.records-brand { color:#f0f7f5; text-decoration:none; font-weight:850; letter-spacing:.07em; font-size:14px; white-space:nowrap; }
+.records-brand span { color:#79dfeb; margin-right:.5rem; }
+.records-topbar nav { display:flex; align-items:center; gap:22px; }
+.records-topbar nav a, .records-topbar nav button { color:#b9ced0; background:none; border:0; font:600 14px/1.4 system-ui,sans-serif; text-decoration:none; cursor:pointer; padding:8px 0; }
+.records-topbar nav a:hover, .records-topbar nav button:hover { color:#88e4ed; }
+body[data-atlas-view="records"] #atlas-view-toggle { border:0; padding:8px 0; background:transparent; color:#b9ced0; font:600 14px/1.4 system-ui,sans-serif; }
+.records-content { max-width:1200px; margin:auto; padding:36px 28px 96px; }
+.records-intro { display:block !important; max-width:760px; }
+.records-eyebrow { color:#7ed9e2 !important; font-size:12px !important; font-weight:800; letter-spacing:.12em; margin:0 0 14px; }
+.records-intro h1 { margin:0 0 10px; font-size:clamp(2rem,4vw,3rem); line-height:1.08; letter-spacing:-.04em; color:#f2f7f4; }
+.records-intro > p:last-child { margin:0; font-size:17px; line-height:1.6; color:#bbced1; }
+.records-mode-notice { margin-top:24px; padding:15px; border:1px solid #a6802d; background:#392c14; color:#ffe1a0; font-weight:700; }
+.records-linked:not([hidden]) { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; margin-top:20px; padding:16px; border:1px solid #48747a; background:#102d35; color:#e3f5f2; }
+.records-linked a, .records-linked button { color:#8ce1e9; background:none; border:0; padding:0; font:700 14px/1.4 system-ui,sans-serif; text-decoration:underline; cursor:pointer; }
+.records-search { margin:24px 0 32px; padding:18px; border:1px solid #31535c; background:#10232c; }
+.records-search label { display:block; color:#eef6f3; font-size:15px; font-weight:750; margin-bottom:10px; }
+.records-search__row { display:flex; gap:10px; }
+.records-search input { flex:1; min-width:0; padding:13px 15px; border:1px solid #52737b; border-radius:4px; background:#07151c; color:#f5fbfa; font:400 16px/1.4 system-ui,sans-serif; }
+.records-search input::placeholder { color:#a4b9bd; }
+.records-search button { padding:12px 18px; border:1px solid #78dbe4; border-radius:4px; background:#78dbe4; color:#06151a; font-size:14px; font-weight:800; cursor:pointer; }
+.records-search p { margin:10px 0 0; color:#a8bfc3; font-size:13px; line-height:1.5; }
+.records-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; }
+.records-heading h2 { margin:0; font-size:26px; letter-spacing:-.03em; }
+.records-heading p { margin:5px 0 0; color:#a9c2c4; font-size:14px; }
+.records-heading a { color:#8be4ef; font-weight:700; font-size:14px; }
+.records-caveat { margin:14px 0 0; color:#d7c99c; font-size:14px; line-height:1.5; }
+.civic-record-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:22px; }
+.decision-card { min-width:0; padding:24px; border:1px solid #34505a; border-radius:5px; background:#0d2029; }
+.decision-card__top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
+.decision-card__place { margin:0 !important; color:#a8c2c6 !important; font-size:13px !important; font-weight:700; }
+.decision-card__outcome { padding:5px 10px; border:1px solid #7b8d91; border-radius:999px; color:#d9e7e5; font-size:12px; font-weight:800; }
+.decision-card__outcome.is-passed { color:#a3e9dc; border-color:#4a9c91; }
+.decision-card__outcome.is-failed { color:#ffd2b1; border-color:#b47f5d; }
+.decision-card__title { margin:16px 0 10px; color:#f2f8f5; font-size:22px; line-height:1.2; letter-spacing:-.025em; }
+.decision-card__title a { color:inherit; text-decoration:none; }
+.decision-card__title a:hover { color:#91e5ed; text-decoration:underline; }
+.decision-card__summary { margin:0 0 9px !important; color:#c2d1d2 !important; font-size:14px !important; line-height:1.55 !important; }
+.decision-card__official { margin:0 !important; color:#9bb1b5 !important; font-size:12px !important; }
+.decision-card__votes { display:flex; align-items:baseline; gap:10px; margin-top:21px; padding-top:15px; border-top:1px solid #29444d; }
+.decision-card__vote-label { color:#a8bfc0; font-size:13px; }
+.decision-card__tally { color:#f4f8f3; font-size:15px; }
+.decision-card__people { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:14px; }
+.record-person { min-width:0; color:#d9e8e6; text-decoration:none; font-size:12px; line-height:1.25; }
+.record-person__face { position:relative; display:grid; place-items:center; width:100%; max-width:82px; aspect-ratio:1; overflow:hidden; border-radius:4px; background:#25424a; color:#d1e9e8; }
+.record-person__face img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center 22%; }
+.record-person__name, .record-person__vote { display:block; margin-top:5px; overflow-wrap:anywhere; }
+.record-person__name { font-weight:750; }
+.record-person__vote { color:#a9c5c7; }
+.decision-card__photo-note { margin:12px 0 0 !important; color:#9bb1b5 !important; font-size:12px !important; line-height:1.4 !important; }
+.decision-card__actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; margin-top:22px; }
+.decision-card__actions a { font-size:14px; font-weight:800; text-decoration:none; }
+.decision-card__primary { display:inline-block; padding:11px 14px; border-radius:3px; background:#7cdee6; color:#07171d; }
+.decision-card__secondary { color:#8ce1e9; }
+.record-empty { grid-column:1/-1; padding:28px; border:1px solid #36515a; background:#10232c; color:#eff6f3; }
+.record-empty p { margin:8px 0 0; color:#b8cbcd; line-height:1.5; }
+/* The place directory is part of the simple browsing flow too. */
+body[data-atlas-view="records"] .coverage-dialog { font-family:system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-dialog__body { grid-template-columns:minmax(285px,1fr) minmax(0,1.25fr); }
+body[data-atlas-view="records"] .coverage-dialog__intro, body[data-atlas-view="records"] .coverage-summary, body[data-atlas-view="records"] .coverage-detail { font-size:14px; }
+body[data-atlas-view="records"] .coverage-tabs button { min-height:40px; font:700 12px system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-search-label { font:700 13px system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-browser input { font:400 16px system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-result-count { font-size:12px; }
+body[data-atlas-view="records"] .coverage-result strong { font:700 14px system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-result span { font:400 12px system-ui,sans-serif; }
+body[data-atlas-view="records"] .coverage-detail h3 { font:700 18px system-ui,sans-serif; }
+body[data-atlas-view="map"] .civic-record-browser { position:fixed; top:78px; left:auto; right:14px; bottom:auto; z-index:80; padding:0; border:0; background:transparent; overflow:visible; }
+body[data-atlas-view="map"] .records-topbar { padding:0; border:0; }
+body[data-atlas-view="map"] .records-topbar > a, body[data-atlas-view="map"] .records-topbar nav a, body[data-atlas-view="map"] .records-content { display:none; }
+body[data-atlas-view="map"] #atlas-view-toggle { padding:11px 16px; border:1px solid #6fe1f1; border-radius:3px; background:#102832; color:#c3f5f4; font-size:13px; }
+@media (max-width:800px) {
+ body[data-atlas-view="records"] .coverage-dialog__body { grid-template-columns:1fr; }
+}
+@media (max-width:760px) {
+ .records-topbar { padding:16px 18px; align-items:flex-start; }
+ .records-topbar nav { gap:12px; flex-wrap:wrap; justify-content:flex-end; }
+ .records-topbar nav a, .records-topbar nav button { font-size:12px; }
+ .records-content { padding:28px 18px 70px; }
+ .records-intro > p:last-child { font-size:15px; }
+ .records-search { margin:22px 0 28px; padding:16px; }
+ .records-search__row { flex-direction:column; }
+ .records-search button { width:100%; }
+ .records-heading { align-items:flex-start; flex-direction:column; }
+ .civic-record-list { grid-template-columns:1fr; }
+ .decision-card { padding:19px; }
+ .decision-card__title { font-size:20px; }
+ .decision-card__people { gap:7px; }
+ .record-person { font-size:11px; }
+}
