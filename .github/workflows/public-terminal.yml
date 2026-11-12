@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 scripts/test-colorado-research.py
           python3 scripts/test-garden-city-motion-sidecar.py
+          python3 scripts/test-keenesburg-motion-sidecar.py
           python3 scripts/test-colorado-garden-portraits.py
           python3 scripts/test-colorado-official-context.py
           python3 scripts/sync-colorado-context-allowlist.py
@@ -61,6 +62,7 @@ jobs:
           python3 scripts/test-colorado-eff-private-leads.py
           node --test web/panopticon-terminal/scripts/test-research-api.mjs
           node --test web/panopticon-terminal/scripts/test-garden-motion.mjs
+          node --test web/panopticon-terminal/scripts/test-keenesburg-motion.mjs
           node --test web/panopticon-terminal/scripts/test-garden-portraits.mjs
           node --test web/panopticon-terminal/scripts/test-official-context.mjs
           node --test web/panopticon-terminal/scripts/test-arapahoe-portraits.mjs

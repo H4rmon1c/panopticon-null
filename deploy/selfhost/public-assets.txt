@@ -10,6 +10,10 @@ research.html
 research.css
 research.js
 research-api.js
+keenesburg-motion.html
+keenesburg-motion.js
+keenesburg-motion-api.js
+public/keenesburg-motion-v1.json
 garden-motion.html
 garden-motion.js
 garden-motion-api.js

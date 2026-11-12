@@ -59,6 +59,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound motion and roll call ↗');
       related.href = './garden-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-e71c09481c6f2e4f709aeec8') {
+      const related = node('a', 'source', 'Open the source-bound motion and roll call ↗');
+      related.href = './keenesburg-motion.html'; card.append(related);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));
