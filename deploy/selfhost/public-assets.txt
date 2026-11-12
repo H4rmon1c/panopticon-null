@@ -158,3 +158,10 @@ garden-portraits/4f44e3f3a81340b38ee28fdec5c494d4da4151f25749c5b100878f2c85d7094
 garden-portraits/5c0af4e74784a4b4566d8d7a61303dfe1d684e0326c96723357c076ebd9a7564.jpg
 garden-portraits/ba132238ef8f1c56aa49c3d2154a3b83bda2421ade51a211682606d4a00fac93.jpg
 garden-portraits/ed5f53d3c855369be1f9f43736c2af146743b0fcbf5f752e0baa885d9fd32d69.jpg
+
+cortez-motion.html
+cortez-motion.js
+cortez-motion-api.js
+cortez-portrait-api.js
+assets/portraits/cortez-orly-lucero-2017.jpg
+public/cortez-motion-v1.json
