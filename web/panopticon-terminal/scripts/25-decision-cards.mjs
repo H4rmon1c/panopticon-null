@@ -6,26 +6,31 @@ import { portraitForRecordedVote } from '../portraits/portraits.js';
 // A correction to the published snapshot must immediately take precedence.
 const copy = Object.freeze({
   'co-castle-rock-res-2025-071-2025-06-03': {
+    digest: 'sha256:4cddd5b3a65b537df43d520c882c35ffdcdfd558c5e0b05c450e2f886a9b5511',
     expected: 'Castle Rock, CO approved RES 2025-071: Flock Safety Drone-As-First-Responder Program on 2025-06-03. The direct roll call records 6 Yes, 1 Abstain. Council approval of a sole-source agreement is documented. Town execution and payments are not established by these records.',
     title: 'Castle Rock approved a drone-response agreement',
     summary: 'Council approved a sole-source agreement with Flock. The records do not establish whether the town signed it or paid.'
   },
   'co-colorado-springs-25-581-2025-11-25': {
+    digest: 'sha256:64e23d56e655f81c4b525af97f1d0712dce63bc7f8b911bd793c9695e8deca59',
     expected: 'The City Council finally passed Ordinance 25-93, amending city code to assess a Police Department Technology Surcharge.',
     title: 'Colorado Springs approved a police technology surcharge',
     summary: 'City Council passed a police technology surcharge. This was not itself a vote on a Flock or Axon contract.'
   },
   'co-commerce-city-ord-2755-2026-04-06': {
+    digest: 'sha256:027f64e7735eae264c7c1dd69b384921c253641c2dab8224f3e2e0ac3fe1cb37',
     expected: 'Commerce City, Colorado approved Ord 2755: Flock Group, Inc. on 2026-04-06. The direct roll call records 7 Aye, 2 Nay. Council approval of the attached agreement format is documented. Signed city execution and payments are not established by these records.',
     title: 'Commerce City approved a Flock agreement format',
     summary: 'Council approved the format of a Flock agreement. A signed agreement or payments are not established.'
   },
   'co-commerce-city-ord-2756-2026-04-06': {
+    digest: 'sha256:056ed3d074e8b132dc0721c933b83f633e76f57a32fba3a404c7690cbd3e5a17',
     expected: 'Commerce City, Colorado approved Ord 2756: Flock Expansion Project on 2026-04-06. The direct roll call records 7 Aye, 2 Nay. The $608,900 appropriation does not itself establish a signed agreement, payment, or equipment deployment.',
     title: 'Commerce City approved funding for a Flock expansion',
     summary: 'Council approved a $608,900 appropriation for a Flock expansion. Payment and deployment are not established.'
   },
   'co-denver-25-0413-2025-05-05': {
+    digest: 'sha256:e8b498f58d7210ed3fd13ce8c6906d4855b894035fa4db03a8f996a0b595852c',
     expected: 'City and County of Denver did not approve 25-0413: Flock Group, Inc. on 2025-05-05. The direct roll call records 12 Nay, 1 Absent. This proposed amendment failed. The recorded vote does not approve that additional amount, a new execution, or payment.',
     title: 'Denver rejected a proposed Flock contract amendment',
     summary: 'A proposed contract amendment failed. This vote did not approve additional spending.'
@@ -84,6 +89,7 @@ function showDate(value) {
 export function decisionCardModels(snapshot, mode = 'public') {
   const entities = Array.isArray(snapshot?.entities) ? snapshot.entities : [];
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
+  const releases = new Map((snapshot?.case_releases ?? []).map((item) => [item.case_id, item.release]));
   return entities.filter((entity) => String(entity.type).toUpperCase() === 'DECISION').map((record) => {
     const place = (record.jurisdiction_ids ?? []).map((id) => byId.get(id)?.name).find(Boolean) ?? 'Colorado';
     const votes = record.consent_block ? (record.consent_block.roll_call ?? []) : (record.votes ?? []);
@@ -91,7 +97,9 @@ export function decisionCardModels(snapshot, mode = 'public') {
     const sourceText = record.summary ?? record.description ?? 'Open the record to see what the sources establish.';
     const outcome = outcomeLabel(record);
     const expectedOutcome = record.slug === 'co-denver-25-0413-2025-05-05' ? 'Failed' : 'Passed';
-    const editorial = copy[record.slug]?.expected === sourceText && outcome === expectedOutcome ? copy[record.slug] : null;
+    const release = releases.get(record.slug);
+    const editorial = copy[record.slug]?.expected === sourceText && outcome === expectedOutcome &&
+      release?.bound_digest === copy[record.slug]?.digest && !(release?.corrections?.length) ? copy[record.slug] : null;
     const rawDate = record.date ?? record.timeline?.[0]?.date;
     return { record, place, title: editorial?.title ?? record.name ?? 'Public decision', summary: editorial?.summary ?? sourceText,
       rawDate, date: showDate(rawDate), outcome, tally: voteSummary(record), people, href: decisionHref(record, mode) };

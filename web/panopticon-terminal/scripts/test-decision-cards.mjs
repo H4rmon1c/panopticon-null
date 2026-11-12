@@ -67,6 +67,14 @@ test('a corrected decision takes precedence over the editorial summary', () => {
   const changed = decisionCardModels(revisedOutcome).find((c) => c.record.id === revisedSprings.id);
   assert.equal(changed.title, revisedSprings.name);
   assert.equal(changed.outcome, 'Failed');
+  const newRevision = structuredClone(snapshot);
+  newRevision.case_releases.find((release) => release.case_id === springs.slug).release.bound_digest = `sha256:${'a'.repeat(64)}`;
+  const revisedCard = decisionCardModels(newRevision).find((c) => c.record.id === springs.id);
+  assert.equal(revisedCard.title, springs.name);
+  assert.equal(revisedCard.summary, snapshot.entities.find((e) => e.id === springs.id).description);
+  const corrected = structuredClone(snapshot);
+  corrected.case_releases.find((release) => release.case_id === springs.slug).release.corrections = [{id:'correction-1'}];
+  assert.equal(decisionCardModels(corrected).find((c) => c.record.id === springs.id).title, springs.name);
 });
 
 test('unsafe slugs cannot become links and demo records remain in demo mode', () => {
