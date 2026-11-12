@@ -46,3 +46,24 @@ Private report locations below are relative to `/home/owo/Documents/ChatGPT/Ston
 - Pueblo and Snowmass Village: `.panopticon-private-civicclerk-archived-batch-03/pagination-sample-01/report/results.json` and `pagination-sample-snowmass/report/results.json` under the same parent.
 - Berthoud, Glenwood Springs, and La Junta: `.panopticon-private-civicclerk-archived-batch-20261111/pagination-sample-berthoud/report/results.json`, `pagination-sample-01/report/results.json`, and `pagination-sample-lajunta/report/results.json` under the same parent.
 - Greenwood Village: `.panopticon-private-civicclerk-greenwood-20261111/pagination-sample-greenwood/report/results.json`.
+
+## Hardened native-text replay, November 11, 2026
+
+The later hardened, source-bound scanner replayed the **same twelve previously captured sample PDFs** described above, one at a time. It did not fetch additional PDFs, so these are not twelve new documents or additional jurisdiction coverage. Each run replayed the first-party portal anchor, list, selected file and preserved receipt chain. Ten returned `unverified_no_keyword_in_extracted_text`; Erie returned the already reported preliminary keyword lead; and Monument returned `incomplete` because the native extractor did not establish usable text. The scanner did not OCR any of these PDFs; the separate previously reported four-page Monument OCR remains a distinct earlier operation.
+
+Native extraction can omit scanned or image-only content. No keyword in extracted text does not establish that a document or jurisdiction lacks relevant information. Erie’s lead is the same public-comment mention noted above, not an established approval or item vote. These are private research results, not public cases; no research database or public dataset was changed.
+
+Private result paths below are relative to `/home/owo/Documents/ChatGPT/Stonk/`. Each directory contains `results.json`; the retained source and capture archives named earlier in this note hold the original bytes and receipts. Keep all of them outside served paths and public artifacts.
+
+- Monument: `.panopticon-private-civicclerk-archived-batch-02/private-pdf-screen-us-co-place-0851800-20261111/`
+- Pagosa Springs: `.panopticon-private-civicclerk-archived-batch-02/private-pdf-screen-pagosa-20261111/`
+- Parker: `.panopticon-private-civicclerk-archived-batch-02/private-pdf-screen-us-co-place-0857630-20261111/`
+- Pueblo: `.panopticon-private-civicclerk-archived-batch-03/private-pdf-screen-us-co-place-0862000-20261111/`
+- Snowmass Village: `.panopticon-private-civicclerk-archived-batch-03/private-pdf-screen-us-co-place-0871755-20261111/`
+- Berthoud: `.panopticon-private-civicclerk-archived-batch-20261111/private-pdf-screen-us-co-place-0806255-20261111/`
+- Glenwood Springs: `.panopticon-private-civicclerk-archived-batch-20261111/private-pdf-screen-us-co-place-0830780-20261111/`
+- La Junta: `.panopticon-private-civicclerk-archived-batch-20261111/private-pdf-screen-us-co-place-0842110-20261111/`
+- Greenwood Village: `.panopticon-private-civicclerk-greenwood-20261111/private-pdf-screen-us-co-place-0833035-20261111/`
+- Erie: `.panopticon-private-civicclerk-recon-20261111/private-pdf-screen-us-co-place-0824950-20261111/`
+- Firestone: `.panopticon-private-civicclerk-recon-20261111/private-pdf-screen-us-co-place-0826600-20261111/`
+- Greeley: `.panopticon-private-civicclerk-recon-20261111/private-pdf-screen-us-co-place-0832155-20261111/`
