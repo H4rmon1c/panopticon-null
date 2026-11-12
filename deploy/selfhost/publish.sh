@@ -160,7 +160,10 @@ if [[ -e "$research_dir/research.sqlite3" || -L "$research_dir/research.sqlite3"
         --output "$stage/public/keenesburg-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
     python3 "$PNUL_REPO_DIR/scripts/cortez-motion-sidecar.py" --data-dir "$research_dir" \
         --output "$stage/public/cortez-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
+    python3 "$PNUL_REPO_DIR/scripts/yuma-motion-sidecar.py" --data-dir "$research_dir" \
+        --output "$stage/public/yuma-motion-v1.json" --research-snapshot "$stage/public/research-signals.json"
 else
+    printf '{"schema_version":"pnull-yuma-motion-v1","state":"not_available"}\n' > "$stage/public/yuma-motion-v1.json"
     printf '{"schema_version":"pnull-keenesburg-motion-v1","state":"not_available"}\n' > "$stage/public/keenesburg-motion-v1.json"
     printf '{"schema_version":"pnull-cortez-motion-v1","state":"not_available"}\n' > "$stage/public/cortez-motion-v1.json"
     printf '{"schema_version":"pnull-garden-city-motion-v1","state":"not_available"}\n' > "$stage/public/garden-city-motion-v1.json"

@@ -168,3 +168,8 @@ assets/portraits/cortez-amy-huckins-2021.jpg
 assets/portraits/cortez-rachel-medina-2022.jpg
 assets/portraits/cortez-robert-dobry-2020.jpg
 public/cortez-motion-v1.json
+
+yuma-motion.html
+yuma-motion.js
+yuma-motion-api.js
+public/yuma-motion-v1.json

@@ -67,6 +67,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound final-reading vote ↗');
       related.href = './cortez-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-7f8320f04b37d2c99c52bcf4') {
+      const related = node('a', 'source', 'Open the source-bound motion and attendance ↗');
+      related.href = './yuma-motion.html'; card.append(related);
+    }
     for (const motion of item.actions ?? []) {
       const section = node('section', 'motion');
       section.append(node('h3', '', `Recorded action · ${motion.date.replace('not_established', 'date not established')}`));
