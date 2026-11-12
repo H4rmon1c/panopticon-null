@@ -5,7 +5,7 @@ Creates a fresh private archive, not a research database or a publication.
 Vendor metadata is a lead and does not establish a responsible body or vote.
 """
 import argparse
-from datetime import date
+from datetime import date,datetime,timezone
 from html.parser import HTMLParser
 import importlib.util
 import json
@@ -25,7 +25,11 @@ ASSETS={'/assets/apis-WKEMuBZZ.js':'e0b03d739157d2cb40bd40ade958dd75f4ddea4c2778
         '/assets/actions-CMJ3lQwM.js':'1070b512225da0f7b6fd5182b0d60f8cf5bb8dcce2e164c307c1fe002e478ab8'}
 UTILITY_PATH='/assets/utils-C7X9g4QK.js'
 UTILITY_SHA='9e1d60411447198f1964447303ec0c73d98170dc91c0f81474f910d31d00b1fd'
-MAX_TENANTS=3;MAX_EVENTS=100;MAX_FILES=20;MAX_JSON=2*1024*1024;MAX_PDF=8*1024*1024
+MAX_TENANTS=3;MAX_LIST_PAGES=2;MAX_RESUME_ARCHIVES=16;MAX_EVENTS=100;MAX_FILES=20;MAX_JSON=2*1024*1024;MAX_PDF=8*1024*1024
+PAGINATION_INDEX='/assets/index-DOHLNEJb.js'
+PAGINATION_INDEX_SHA='6290028848edbc67b1cfa9f14bed77885cbddb459ef2864d853e14f7c5dd9955'
+PAGINATION_LIST='/assets/EventList-YeUmi4cy.js'
+PAGINATION_LIST_SHA='6e7dca12c301731a615095415d37b51f32bd76ad3004f31990f6fc8234375b1f'
 
 class Assets(HTMLParser):
     def __init__(self):super().__init__();self.paths=[];self.events=0
@@ -110,7 +114,7 @@ def unique_object(pairs):
 def summarize(body,cutoff):
     obj=json.loads(body,object_pairs_hook=unique_object);items=obj.get('items') if isinstance(obj,dict) else None
     if not isinstance(items,list) or len(items)>MAX_EVENTS or type(obj.get('hasMore')) is not bool:raise ValueError('unexpected event list shape')
-    events=[];seen_events=set()
+    events=[];seen_events=set();previous=None;ties=False
     for n,e in enumerate(items):
         if not isinstance(e,dict) or type(e.get('id')) is not int or not 0<e['id']<1000000000:raise ValueError('invalid event ID')
         if e['id'] in seen_events:raise ValueError('duplicate event ID')
@@ -121,6 +125,14 @@ def summarize(body,cutoff):
         files=[] if raw_files is None else raw_files
         if not isinstance(stamp,str) or not re.match(r'^\d{4}-\d{2}-\d{2}T',stamp):raise ValueError('invalid event date')
         if date.fromisoformat(stamp[:10])>=cutoff:raise ValueError('non-past event date')
+        try:
+            instant=datetime.fromisoformat(stamp.replace('Z','+00:00'))
+            if instant.tzinfo is None or instant.utcoffset() is None:raise ValueError('event timestamp lacks timezone')
+            instant=instant.astimezone(timezone.utc)
+        except OverflowError:raise ValueError('event timestamp outside supported UTC range') from None
+        if previous is not None and instant>previous:raise ValueError('event order is not descending')
+        if previous is not None and instant==previous:ties=True
+        previous=instant
         if not isinstance(name,str) or len(name)>500 or not isinstance(category,str) or len(category)>500 or not isinstance(files,list) or len(files)>MAX_FILES:raise ValueError('invalid event metadata')
         saved=[];seen_files=set()
         for i,f in enumerate(files):
@@ -136,13 +148,91 @@ def summarize(body,cutoff):
             elif mode is None or filetype is None or 'streamUrl' not in f:eligible=None
             else:eligible=(wanted==filetype)
             saved.append({'file_id':f['fileId'],'type':f['type'],'file_type':filetype if type(filetype) is int else None,'file_endpoint_eligible':eligible,'json_path':f'$.items[{n}].publishedFiles[{i}]'})
-        events.append({'event_id':e['id'],'event_name':name,'category':category,'date':stamp[:10],'json_path':f'$.items[{n}]','published_files_state':file_state,'published_files':saved})
-    return {'items_count':len(items),'has_more':obj['hasMore'],'events':events}
+        events.append({'event_id':e['id'],'event_name':name,'category':category,'date':stamp[:10],'timestamp':instant.isoformat(),'json_path':f'$.items[{n}]','published_files_state':file_state,'published_files':saved})
+    if obj['hasMore'] and not events:raise ValueError('empty page claims more events')
+    return {'items_count':len(items),'has_more':obj['hasMore'],'timestamp_ties_observed':ties,'events':events}
 
-def list_url(tenant,cutoff):
+def list_url(tenant,cutoff,cursor=0):
     if not re.fullmatch(r'[a-z0-9-]{1,80}',tenant):raise ValueError('invalid tenant')
-    path="/Events/GetEventsList(fromDate='',toDate='"+cutoff.isoformat()+"',categoryIds=[],skip=0,sortDescending=true,cursorId=0)"
+    if type(cursor) is not int or not 0<=cursor<1000000000:raise ValueError('invalid numeric cursor')
+    path="/Events/GetEventsList(fromDate='',toDate='"+cutoff.isoformat()+"',categoryIds=[],skip=0,sortDescending=true,cursorId="+str(cursor)+")"
     host=tenant+'.api.civicclerk.com';return host,'https://'+host+'/v1'+quote(path,safe="/(),=:'")
+
+def pagination_assets(out,item,budget,ignore_robots):
+    """Bind the cursor implementation to the captured portal and its scripts."""
+    host=urlsplit(item['portal_url']).hostname
+    shell=next(proof[3] for proof in item['capture_proofs'] if proof[0]==item['portal_url'])
+    parser=Assets();parser.feed(shell.decode('utf8','strict'))
+    if parser.paths.count(PAGINATION_INDEX)!=1:raise ValueError('pagination entry asset not linked')
+    try:rules,observations=r.get_robots(host,{host},budget);r.archive(out,observations)
+    except r.RobotsDenied as e:r.archive(out,e.observations);raise
+    robots_receipts=[r.sha((json.dumps(meta,sort_keys=True,separators=(',',':'))+'\n').encode()) for meta,_ in observations]
+    proofs=[];index_body=None
+    for path,expected in ((PAGINATION_INDEX,PAGINATION_INDEX_SHA),(PAGINATION_LIST,PAGINATION_LIST_SHA)):
+        if path==PAGINATION_LIST and (index_body is None or path[1:] not in index_body.decode('utf8','strict')):raise ValueError('pagination list asset not linked')
+        url='https://'+host+path;allowed=r.allowed(rules,url)
+        if not allowed and not ignore_robots:raise ValueError('robots disallows pagination asset')
+        captures=r.get(url,{host},maximum=MAX_JSON,timeout=12,redirects=0,stop_at_redirect=True,budget=budget);r.archive(out,captures);meta,body=captures[-1]
+        if meta['status']!=200 or meta['sha256']!=expected:raise ValueError('pagination asset differs or HTTP '+str(meta['status']))
+        if path==PAGINATION_INDEX:index_body=body
+        proofs.append({'url':url,'sha256':meta['sha256'],'receipt_sha256':r.sha((json.dumps(meta,sort_keys=True,separators=(',',':'))+'\n').encode()),'robots_allowed':allowed,'robots_override':not allowed and ignore_robots,'robots_receipt_sha256':robots_receipts})
+    return proofs
+
+def checked_prior_page(root,page,tenant,cutoff):
+    cursor=page.get('input_cursor',0);host,url=list_url(tenant,cutoff,cursor)
+    if page.get('list_url')!=url:raise ValueError('prior list URL or cursor differs')
+    sha=page.get('sha256');receipt_sha=page.get('receipt_sha256')
+    if not isinstance(receipt_sha,str) or not re.fullmatch(r'[0-9a-f]{64}',receipt_sha):raise ValueError('invalid prior receipt digest')
+    raw=r.read_blob(root/'observations'/(receipt_sha+'.json'),65536)
+    if r.sha(raw)!=receipt_sha:raise ValueError('prior receipt digest differs')
+    receipt=json.loads(raw)
+    if not r.receipt_valid(receipt,url,sha) or not isinstance(receipt.get('content_type'),str) or 'json' not in receipt['content_type'].lower():raise ValueError('prior list receipt differs')
+    body=r.source_blob(root,sha,MAX_JSON);metadata=summarize(body,cutoff)
+    if not metadata['has_more'] or not metadata['events']:raise ValueError('prior list has no verified continuation')
+    return metadata,receipt,body
+
+def resume_cursor(root,parent,item,cutoff):
+    """Recheck bounded ancestor chain from cursor zero, preserving omissions."""
+    chain=[];seen_paths=set();current=root
+    for _ in range(MAX_RESUME_ARCHIVES):
+        if (not current.is_absolute() or current.parent!=parent or current.is_symlink() or current.resolve()!=current
+            or not current.is_dir() or current.stat().st_uid!=os.geteuid() or current.stat().st_mode&0o077):raise ValueError('resume archive must be an owner-only direct child of output parent')
+        if current in seen_paths:raise ValueError('resume archive cycle')
+        seen_paths.add(current)
+        for name in ('content','observations','report'):
+            path=current/name
+            if path.is_symlink() or not path.is_dir():raise ValueError('invalid resume archive child')
+        prior=json.loads(r.read_blob(current/'report/results.json',8*1024*1024))
+        if not isinstance(prior,dict):raise ValueError('invalid prior report object')
+        prior_rows=prior.get('results')
+        if not isinstance(prior_rows,list) or len(prior_rows)>MAX_TENANTS or any(not isinstance(v,dict) for v in prior_rows):raise ValueError('invalid prior result rows')
+        if prior.get('schema_version') not in ('pnull-private-civicclerk-v1','pnull-private-civicclerk-v2') or prior.get('cutoff')!=cutoff.isoformat():raise ValueError('prior schema or cutoff differs')
+        rows=[v for v in prior_rows if v.get('jurisdiction_ref')==item['jurisdiction_ref']]
+        if len(rows)!=1 or rows[0].get('tenant')!=item['tenant'] or rows[0].get('portal_url')!=item['portal_url'] or rows[0].get('source_anchor')!=item['source_anchor']:raise ValueError('prior tenant or source binding differs')
+        row=rows[0];pages=row.get('pages') if 'pages' in row else [row]
+        if not isinstance(pages,list) or not 1<=len(pages)<=MAX_LIST_PAGES or any(not isinstance(p,dict) or p.get('state')!='list_captured' for p in pages):raise ValueError('prior pages contain a gap or error')
+        chain.append((current,pages))
+        previous=prior.get('resume_parent')
+        if previous is None:break
+        if not isinstance(previous,str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',previous):raise ValueError('invalid prior archive name')
+        current=parent/previous
+    else:raise ValueError('resume ancestry limit exceeded')
+    expected_cursor=0;seen=set();previous_time=None;ties=False;last=None
+    for archive,pages in reversed(chain):
+        for page in pages:
+            if page.get('input_cursor',0)!=expected_cursor:raise ValueError('prior cursor chain differs')
+            metadata,receipt,body=checked_prior_page(archive,page,item['tenant'],cutoff)
+            ids={e['event_id'] for e in metadata['events']}
+            if seen&ids:raise ValueError('prior pages repeat event IDs')
+            first=datetime.fromisoformat(metadata['events'][0]['timestamp'])
+            if previous_time is not None and first>previous_time:raise ValueError('prior page ordering differs')
+            if previous_time is not None and first==previous_time:ties=True
+            ties=ties or metadata['timestamp_ties_observed'];previous_time=datetime.fromisoformat(metadata['events'][-1]['timestamp'])
+            seen.update(ids);expected_cursor=metadata['events'][-1]['event_id']
+            if expected_cursor==page.get('input_cursor',0):raise ValueError('repeated prior cursor')
+            last=(archive,page,metadata,receipt,body)
+    return expected_cursor,seen,previous_time,ties,last
+
 
 def capture_file(out,item,row,rules,host,budget,ignore_robots):
     try:
@@ -174,10 +264,10 @@ def capture_file(out,item,row,rules,host,budget,ignore_robots):
         return {'state':'error','reason':str(e)[:150]}
 
 def main(deadline):
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-archive',type=Path,required=True);p.add_argument('--output-parent',type=Path,required=True);p.add_argument('--output-name',required=True);p.add_argument('--seed-name',default='private-probe-results-v3.json');p.add_argument('--before',required=True,type=date.fromisoformat);p.add_argument('--limit',type=int,default=3);p.add_argument('--jurisdiction',action='append',required=True,help='explicit municipal jurisdiction reference; repeat up to the limit');p.add_argument('--ignore-robots',action='store_true');p.add_argument('--fetch-files',action='store_true',help='capture at most one explicit published PDF per tenant');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-archive',type=Path,required=True);p.add_argument('--output-parent',type=Path,required=True);p.add_argument('--output-name',required=True);p.add_argument('--seed-name',default='private-probe-results-v3.json');p.add_argument('--before',required=True,type=date.fromisoformat);p.add_argument('--limit',type=int,default=3);p.add_argument('--pages',type=int,default=1);p.add_argument('--resume-archive',type=Path);p.add_argument('--jurisdiction',action='append',required=True,help='explicit municipal jurisdiction reference; repeat up to the limit');p.add_argument('--ignore-robots',action='store_true');p.add_argument('--fetch-files',action='store_true',help='capture at most one explicit published PDF per tenant');a=p.parse_args()
     for path in (a.source_archive,a.output_parent):
         if not path.is_absolute() or path.is_symlink() or path.resolve()!=path or not path.is_dir() or path.stat().st_uid!=os.geteuid() or path.stat().st_mode&0o077:p.error('archives must be real owner-only absolute directories')
-    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',a.output_name) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}\.json',a.seed_name) or not 1<=a.limit<=MAX_TENANTS or not 1<=len(a.jurisdiction)<=a.limit or len(set(a.jurisdiction))!=len(a.jurisdiction) or any(not re.fullmatch(r'us-co-place-[0-9]{7}',ref) for ref in a.jurisdiction) or a.before>date.today():p.error('invalid output, seed name, selection, limit, or cutoff')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',a.output_name) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}\.json',a.seed_name) or not 1<=a.limit<=MAX_TENANTS or not 1<=a.pages<=MAX_LIST_PAGES or (a.resume_archive is not None and len(a.jurisdiction)!=1) or not 1<=len(a.jurisdiction)<=a.limit or len(set(a.jurisdiction))!=len(a.jurisdiction) or any(not re.fullmatch(r'us-co-place-[0-9]{7}',ref) for ref in a.jurisdiction) or a.before>date.today():p.error('invalid output, seed name, selection, limit, or cutoff')
     for name in ('content','observations'):
         path=a.source_archive/name
         if path.is_symlink() or not path.is_dir():p.error('invalid source archive child')
@@ -210,22 +300,60 @@ def main(deadline):
             r.archive(out,[(receipt,body)])
             encoded=(json.dumps(receipt,sort_keys=True,separators=(',',':'))+'\n').encode()
             row['source_proofs'].append({'url':proof_url,'sha256':proof_sha,'receipt_sha256':r.sha(encoded)})
-        host,url=list_url(item['tenant'],a.before);row['list_url']=url
+        row['pages']=[];row['pagination_state']='incomplete_error';row['pagination_notice']='Pagination remains incomplete; ties, concurrent changes and source omissions may hide records.'
+        cursor=0;seen=set();previous_time=None;ties=False
         try:
+            if a.resume_archive is not None:
+                cursor,seen,previous_time,ties,last=resume_cursor(a.resume_archive,a.output_parent,item,a.before)
+                prior_archive,prior_page,prior_metadata,prior_receipt,prior_body=last
+                r.archive(out,[(prior_receipt,prior_body)])
+                row['resume_anchor']={'list_url':prior_page['list_url'],'sha256':prior_page['sha256'],'receipt_sha256':prior_page['receipt_sha256'],'next_cursor':cursor}
+            if a.pages>1 or a.resume_archive is not None:row['pagination_asset_proofs']=pagination_assets(out,item,budget,a.ignore_robots)
+            host,_=list_url(item['tenant'],a.before)
             try:
                 rules,observations=r.get_robots(host,{host},budget);r.archive(out,observations)
                 row['robots_receipt_sha256']=[r.sha((json.dumps(meta,sort_keys=True,separators=(',',':'))+'\n').encode()) for meta,_ in observations]
             except r.RobotsDenied as e:r.archive(out,e.observations);raise
-            allow=r.allowed(rules,url);row['robots_allowed']=allow;row['robots_override']=not allow and a.ignore_robots
-            if not allow and not a.ignore_robots:raise ValueError('robots disallows list request')
-            captures=r.get(url,{host},maximum=MAX_JSON,timeout=12,redirects=0,stop_at_redirect=True,budget=budget);r.archive(out,captures);meta,body=captures[-1];row.update(status=meta['status'],sha256=meta['sha256'],receipt_sha256=r.sha((json.dumps(meta,sort_keys=True,separators=(',',':'))+'\n').encode()))
-            if meta['status']!=200:raise ValueError('HTTP '+str(meta['status']))
-            if 'json' not in meta.get('content_type','').lower():raise ValueError('unexpected content type')
-            row['metadata']=summarize(body,a.before);row['state']='list_captured'
-            if a.fetch_files:row['file_probe']=capture_file(out,item,row,rules,host,budget,a.ignore_robots)
-        except (OSError,ValueError,TypeError,KeyError,RuntimeError,RecursionError) as e:row['state']='error';row['reason']=str(e)[:150]
+            visited_cursors=set()
+            for _ in range(a.pages):
+                if cursor in visited_cursors:raise ValueError('repeated pagination cursor')
+                visited_cursors.add(cursor);_,url=list_url(item['tenant'],a.before,cursor);page={'input_cursor':cursor,'list_url':url,'state':'error'}
+                try:
+                    allow=r.allowed(rules,url);page['robots_allowed']=allow;page['robots_override']=not allow and a.ignore_robots;row['robots_allowed']=allow;row['robots_override']=page['robots_override']
+                    if not allow and not a.ignore_robots:raise ValueError('robots disallows list request')
+                    captures=r.get(url,{host},maximum=MAX_JSON,timeout=12,redirects=0,stop_at_redirect=True,budget=budget);r.archive(out,captures);meta,body=captures[-1]
+                    page.update(status=meta['status'],sha256=meta['sha256'],receipt_sha256=r.sha((json.dumps(meta,sort_keys=True,separators=(',',':'))+'\n').encode()));row['status']=meta['status']
+                    if meta['status']!=200:raise ValueError('HTTP '+str(meta['status']))
+                    if 'json' not in meta.get('content_type','').lower():raise ValueError('unexpected content type')
+                    metadata=summarize(body,a.before);ids={e['event_id'] for e in metadata['events']}
+                    if seen&ids:raise ValueError('pagination repeats event IDs')
+                    if metadata['events']:
+                        first=datetime.fromisoformat(metadata['events'][0]['timestamp'])
+                        if previous_time is not None and first>previous_time:raise ValueError('pagination ordering changed')
+                        if previous_time is not None and first==previous_time:ties=True
+                        previous_time=datetime.fromisoformat(metadata['events'][-1]['timestamp'])
+                    ties=ties or metadata['timestamp_ties_observed'];seen.update(ids)
+                    next_cursor=metadata['events'][-1]['event_id'] if metadata['has_more'] else None
+                    if next_cursor is not None and (next_cursor==cursor or next_cursor in visited_cursors):raise ValueError('repeated pagination cursor')
+                    page.update(state='list_captured',metadata=metadata)
+                    if next_cursor is not None:page['next_cursor']=next_cursor
+                    row['pages'].append(page)
+                    # Compatibility fields refer to the last validated list page.
+                    row.update(list_url=url,status=meta['status'],sha256=meta['sha256'],receipt_sha256=page['receipt_sha256'],metadata=metadata,state='list_captured')
+                    if next_cursor is None:
+                        row['pagination_state']='source_end_unverified';break
+                    cursor=next_cursor;row['pagination_state']='page_limit_reached'
+                except (OSError,ValueError,TypeError,KeyError,RuntimeError,RecursionError) as e:
+                    page.update(state='error',reason=str(e)[:150]);row['pages'].append(page);raise
+            row['timestamp_ties_observed']=ties
+            if a.fetch_files and row.get('state')=='list_captured':
+                row['file_probe']=capture_file(out,item,row,rules,host,budget,a.ignore_robots)
+                row['file_probe']['source_list_url']=row['list_url'];row['file_probe']['source_list_sha256']=row['sha256'];row['file_probe']['source_list_receipt_sha256']=row['receipt_sha256']
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError,RecursionError) as e:
+            if row.get('state')!='list_captured':row['state']='error'
+            row['pagination_state']='incomplete_error';row['reason']=str(e)[:150]
         results.append(row)
-    payload={'schema_version':'pnull-private-civicclerk-v1','notice':'Private source-linked metadata and optional PDF bytes only. Jurisdiction/body attribution, document completeness, OCR, text screening and decisions remain unverified. No pagination or public promotion was performed.','cutoff':a.before.isoformat(),'requested_jurisdictions':a.jurisdiction,'results':results,'errors':errors}
+    payload={'schema_version':'pnull-private-civicclerk-v2','notice':'Private source-linked metadata and optional PDF bytes only. Jurisdiction/body attribution, document completeness, OCR, text screening and decisions remain unverified. Pagination is bounded; completeness and public promotion are not asserted.','cutoff':a.before.isoformat(),'resume_parent':a.resume_archive.name if a.resume_archive is not None else None,'requested_jurisdictions':a.jurisdiction,'results':results,'errors':errors}
     h.atomic_output(out/'report',h.bounded_json(payload),deadline)
     print(f'Private list requests: {len(results)}; successful: {sum(x.get("state")=="list_captured" for x in results)}; source bindings withheld: {len(errors)}.')
 
