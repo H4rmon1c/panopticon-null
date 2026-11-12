@@ -6,6 +6,10 @@ export const luceroPortrait = Object.freeze({name:'Orly Lucero',role:'Councilmem
   sha256:'792f36327372957b5cd20b24fa7d138a9a15715f00b085711c9d334b154a4e0c',bytes:9297});
 export const cortezPortraits = Object.freeze([
   luceroPortrait,
+  Object.freeze({name:'Arlina Yazzie',role:'Councilmember',src:'./assets/portraits/cortez-arlina-yazzie-cra.png',
+    source:'https://www.cra-online.org/uncategorized/2022-cra-scholarship-program-recipients/',
+    label:'Colorado Retirement Association scholarship profile ↗',credit:'Colorado Retirement Association profile; photographer not identified',
+    sha256:'107ff6f3b9219f1052dcc64da05b51fd6f53a3e270efb8869dd2b6bd835c1ffb',bytes:1597599}),
   Object.freeze({name:'Amy Huckins',role:'Councilmember',src:'./assets/portraits/cortez-amy-huckins-2021.jpg',
     source:'https://www.the-journal.com/amy-huckins-steps-down-from-city-council-position/',
     label:'The Journal, April 2021 ↗',credit:'The Journal file',

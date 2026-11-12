@@ -193,3 +193,5 @@ yuma-portraits-api.js
 assets/portraits/yuma-adam-gates.jpg
 assets/portraits/yuma-scott-weaver.jpg
 assets/portraits/yuma-mike-leerar.jpg
+
+assets/portraits/cortez-arlina-yazzie-cra.png

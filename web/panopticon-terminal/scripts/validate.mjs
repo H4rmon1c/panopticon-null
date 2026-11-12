@@ -81,7 +81,7 @@ try {
     if (meta) {
       if (!meta.isFile() || meta.isSymbolicLink() || meta.size !== portrait.bytes) throw new Error('Cortez portrait file differs');
       const body = await readFile(path);
-      if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff ||
+      if (!(portrait.src.endsWith('.png') ? body.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) ||
           createHash('sha256').update(body).digest('hex') !== portrait.sha256) throw new Error('Cortez portrait digest or type differs');
     }
   }
