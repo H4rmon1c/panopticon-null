@@ -209,3 +209,7 @@ hudson-motion.html
 hudson-motion.js
 hudson-motion-api.js
 public/hudson-motion-v1.json
+georgetown-motion.html
+georgetown-motion.js
+georgetown-motion-api.js
+public/georgetown-motion-v1.json

@@ -56,6 +56,7 @@ jobs:
           python3 scripts/test-clearcreek-motion-sidecar.py
           python3 scripts/test-gunnison-motion-sidecar.py
           python3 scripts/test-columbine-motion-sidecar.py
+          python3 scripts/test-georgetown-motion-sidecar.py
           python3 scripts/test-hudson-motion-sidecar.py
           python3 scripts/test-buenavista-motion-sidecar.py
           python3 scripts/test-colorado-garden-portraits.py
@@ -86,6 +87,7 @@ jobs:
           node --test web/panopticon-terminal/scripts/test-clearcreek-motion.mjs
           node --test web/panopticon-terminal/scripts/test-gunnison-motion.mjs
           node --test web/panopticon-terminal/scripts/test-columbine-motion.mjs
+          node --test web/panopticon-terminal/scripts/test-georgetown-motion.mjs
           node --test web/panopticon-terminal/scripts/test-hudson-motion.mjs
           node --test web/panopticon-terminal/scripts/test-buenavista-motion.mjs
           node --test web/panopticon-terminal/scripts/test-cortez-portrait.mjs
