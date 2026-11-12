@@ -1,0 +1,5 @@
+# Clear Creek County consent agenda source card
+
+The December 16, 2025 Clear Creek County commissioners' minutes list an Axon quote and master services agreement as item 7C of a multi-item consent agenda. The minutes say Commissioner Hartman-Ball moved to approve the consent agenda, Commissioner Lloyd seconded, and the block passed unanimously. The card does not claim a separate item vote or individual roll-call votes; execution, delivery, deployment, and office terms are not established by this record. Attendance uses the spelling on the minutes' attendance line; the motion uses the hyphenated surname as printed there.
+
+The separate `pnull-clearcreek-motion-v1` sidecar verifies the exact source PDF and extracted text, historical and current county index anchors and receipts, and a current matching `pnull-research-v1` reference. On self-host publication, missing or changed evidence yields a `not_available` marker. This preliminary source card does not modify the research-v1 schema or establish statewide completeness.

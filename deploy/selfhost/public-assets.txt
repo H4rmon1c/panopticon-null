@@ -178,3 +178,8 @@ ouray-motion.html
 ouray-motion.js
 ouray-motion-api.js
 public/ouray-motion-v1.json
+
+clearcreek-motion.html
+clearcreek-motion.js
+clearcreek-motion-api.js
+public/clearcreek-motion-v1.json
