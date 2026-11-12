@@ -14,9 +14,11 @@ async function boot() {
   state.activity = bootstrap.activity ?? [];
 
   const summaries = await client.search("", { limit: 100 });
+  const requested = new URLSearchParams(location.hash.slice(1)).get("entity");
   const ids = [...new Set([
     ...(bootstrap.featured ?? []).map((item) => item.id),
     ...summaries.filter((item) => item.kind !== "source").map((item) => item.id),
+    requested,
   ])].filter(Boolean);
   const hydrated = await client.getEntitiesByIds(ids);
   const fallback = (bootstrap.featured ?? []).filter((item) => item.relationships || item.attributes);
@@ -30,7 +32,6 @@ async function boot() {
   renderTimeline();
   renderCommands();
 
-  const requested = new URLSearchParams(location.hash.slice(1)).get("entity");
   const initial = state.byId.has(requested)
     ? requested
     : state.mode === "demo" && state.byId.has("ent_front_range")
@@ -86,6 +87,9 @@ function wireUi() {
   document.addEventListener("keydown", globalKeys);
   window.addEventListener("hashchange", () => {
     const id = new URLSearchParams(location.hash.slice(1)).get("entity");
-    if (id && state.byId.has(id) && id !== state.selected?.id) selectEntity(id, true, true);
+    if (id && id !== state.selected?.id &&
+        (state.byId.has(id) || client.snapshot?.entities?.some((entity) => entity.id === id))) {
+      selectEntity(id, true, true);
+    }
   });
 }

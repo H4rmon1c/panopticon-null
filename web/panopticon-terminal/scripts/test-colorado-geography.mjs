@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { coverageDecisionIndex, coverageDecisionsFor } from "./24-colorado-coverage.mjs";
+import { coverageDecisionIndex, coverageDecisionsFor, findCoveragePlaces } from "./24-colorado-coverage.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const registry = JSON.parse(readFileSync(join(root, "geography/colorado-jurisdictions.json"), "utf8"));
@@ -55,6 +55,14 @@ assert.equal(springs.published_entity_id, "jurisdiction_co_colorado_springs");
 assert.ok(registry.jurisdictions.some((record) => record.id === "us-co-place-0816495"));
 assert.ok(registry.jurisdictions.some((record) => record.id === "us-co-place-0812415"));
 assert.ok(registry.jurisdictions.some((record) => record.id === "us-co-place-0820000"));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "Colorado Springs, CO").some((record) => record.id === springs.id));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "El Paso County").some((record) => record.id === "us-co-county-08041"));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "County of El Paso, CO").some((record) => record.id === "us-co-county-08041"));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "Denver CO").some((record) => record.id === "us-co-place-0820000"));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "Town of Parker").some((record) => record.kind === "municipality"));
+assert.ok(findCoveragePlaces(registry.jurisdictions, "Garden City, Colorado").some((record) => record.kind === "municipality"));
+assert.equal(findCoveragePlaces(registry.jurisdictions, "not a colorado place").length, 0);
+assert.ok(findCoveragePlaces(registry.jurisdictions, "Denver", "county").every((record) => record.kind === "county"));
 
 const publicSnapshot = {
   mode: "public",

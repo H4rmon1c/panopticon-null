@@ -27,6 +27,12 @@ function renderLayers() {
 function renderActivity() {
   const list = $("#activity-list");
   list.replaceChildren();
+  if (!state.activity.length) {
+    const notice = document.createElement("p");
+    notice.textContent = "No recent changes are listed in this snapshot.";
+    notice.className = "activity-empty";
+    list.append(notice);
+  }
   state.activity.slice(0, 8).forEach((item, index) => {
     const entity = state.byId.get(item.entity_id);
     const button = document.createElement("button");
