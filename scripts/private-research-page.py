@@ -15,6 +15,10 @@ import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('research',ROOT/'scripts/colorado-research.py')
 r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
+spec=importlib.util.spec_from_file_location('private_html',ROOT/'scripts/private-html-meeting-screen.py')
+h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
+spec=importlib.util.spec_from_file_location('private_civic',ROOT/'scripts/private-civicclerk-discovery.py')
+c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 METHOD='pnull-research-page-v1; poppler-pdftotext-layout; pdftoppm-200dpi-4000max; tesseract-eng-tsv'
 
 
@@ -112,6 +116,61 @@ def check_direct_candidate(content_fd,url,candidate):
         raise ValueError('document is not bound to its preserved source index')
 
 
+# One exact reviewed private source chain; this is not a generic release adapter.
+MONUMENT={
+ 'ref':'us-co-place-0851800','gov':'https://www.townofmonument.org/260/Town-Council',
+ 'portal':'https://monumentco.portal.civicclerk.com/',
+ 'list':"https://monumentco.api.civicclerk.com/v1/Events/GetEventsList(fromDate='',toDate='2026-11-11',categoryIds=%5B%5D,skip=0,sortDescending=true,cursorId=0)",
+ 'pdf':'https://monumentco.api.civicclerk.com/v1/Meetings/GetMeetingFileStream(fileId=4894,plainText=false)',
+ 'pdf_sha':'1aeb9bb48e7830c8e28af34f9d9ca19514b341144041948e160fb9ebc1fb7208',
+ 'index_sha':'8a48a59fdf8ce389f685290f37d86b5c5abfe1ec4d8acc6fdb2a0e77a402395b',
+}
+MONUMENT_PROOFS=[
+ ('gov','3a39b6b2e59d3b230937ff8dd84c2fac1d3d5d7f675d940b4a77ca374db3d782','f233ec85e751662ab83f0a70e5c11defb11512d3f3841315d2c6757684b91931','html'),
+ ('portal','fee1dc9cde8159a8be488c5c78da4a1b25a61429b00b824eebc6613aebfa463b','df753bdd9c13faa64fcd959a939e3af381ef32e211e1343b766a89e711713a5d','html'),
+ ('/assets/apis-WKEMuBZZ.js','e0b03d739157d2cb40bd40ade958dd75f4ddea4c27787239d25dbc27f96d92fe','b261d9eb7e1c9ba3a32e82fd72ee1696a4eb1e754a312e4959c584ca25557700','javascript'),
+ ('/assets/actions-CMJ3lQwM.js','1070b512225da0f7b6fd5182b0d60f8cf5bb8dcce2e164c307c1fe002e478ab8','d357420929ae6162dfbf1e7e2cdf20ae86aa14c4829830aede8a208003326667','javascript'),
+ ('/assets/utils-C7X9g4QK.js','9e1d60411447198f1964447303ec0c73d98170dc91c0f81474f910d31d00b1fd','aebc3a071396fe993fbe3de97216aaae73c1a6ec4d2f28572de56779992f04ca','javascript'),
+ ('list',MONUMENT['index_sha'],'ef39c82ad1164169a6e1436d09204705dcb40721f3b9e420d9174b01bc9ae36e','json'),
+ ('pdf',MONUMENT['pdf_sha'],'141c2862d8cdbc6c9c1246bdbb3370dac22582de52e76b173e554f3d9044cc41','pdf'),
+]
+
+def civic_receipt(observations_fd,name,url,digest,mime):
+    raw=read_at(observations_fd,name+'.json',65536)
+    if hashlib.sha256(raw).hexdigest()!=name:raise ValueError('CivicClerk receipt digest differs')
+    receipt=json.loads(raw)
+    if not r.receipt_valid(receipt,url,digest) or not isinstance(receipt.get('content_type'),str) or mime not in receipt['content_type'].lower():raise ValueError('CivicClerk source receipt differs')
+    return receipt
+
+def check_monument_candidate(content_fd,observations_fd,url,digest,ref,candidate):
+    expected={'source_kind':'civicclerk-monument-2026-v1','url':MONUMENT['pdf'],'index_url':MONUMENT['list'],'index_sha256':MONUMENT['index_sha'],'event_index':2,'file_index':2}
+    if candidate!=expected or url!=MONUMENT['pdf'] or digest!=MONUMENT['pdf_sha'] or ref!=MONUMENT['ref']:
+        raise ValueError('CivicClerk source identity differs')
+    directory=json.loads(r.read_blob(r.DIRECTORY,2000000))['municipalities']
+    leads=[x for x in directory if x.get('jurisdiction_ref')==ref]
+    if len(leads)!=1 or r.normalized_home(leads[0]['website_url'])!='https://www.townofmonument.org/':raise ValueError('municipal directory differs')
+    bodies={}; receipts={}
+    for key,sha,receipt_sha,mime in MONUMENT_PROOFS:
+        proof_url=MONUMENT[key] if key in MONUMENT else MONUMENT['portal'].rstrip('/')+key
+        bodies[key]=archive_blob(content_fd,sha,20*1024*1024 if key=='pdf' else 2*1024*1024)
+        receipts[key]=civic_receipt(observations_fd,receipt_sha,proof_url,sha,mime)
+    gov=bodies['gov'];index=h.IndexLinks();index.feed(gov.decode('utf8','strict'));links,base=r.page_links(gov,MONUMENT['gov'])
+    if len(links)!=len(index.visibility) or len(links)<=21 or not index.visibility[21] or r.resolve_page_link(MONUMENT['gov'],base,links[21][0])!=MONUMENT['portal']:
+        raise ValueError('municipal portal anchor differs')
+    shell=c.Assets();shell.feed(bodies['portal'].decode('utf8','strict'))
+    for path in (*c.ASSETS,c.UTILITY_PATH):
+        if shell.paths.count(path)!=1:raise ValueError('portal asset binding differs')
+    data=json.loads(bodies['list'],object_pairs_hook=c.unique_object);events=data['items']
+    if not isinstance(events,list) or len(events)<=2:raise ValueError('event list differs')
+    event=events[2];files=event['publishedFiles']
+    if (event.get('id')!=557 or event.get('eventName')!='Town Council Regular Meeting' or event.get('eventDate')!='2026-10-19T18:30:00Z' or event.get('categoryName')!='Town Council' or event.get('cpMediaOnly') is not False
+        or not isinstance(files,list) or len(files)<=2):raise ValueError('event binding differs')
+    file=files[2]
+    if (file.get('fileId')!=4894 or file.get('fileType')!=4 or file.get('type')!='Minutes' or 'streamUrl' not in file or file['streamUrl'] is not None):raise ValueError('published file binding differs')
+    if not bodies['pdf'].startswith(b'%PDF-'):raise ValueError('CivicClerk PDF differs')
+    return {(MONUMENT['list'],MONUMENT['index_sha']):receipts['list'],(MONUMENT['pdf'],MONUMENT['pdf_sha']):receipts['pdf']}
+
+
 def input_receipts(observations_fd, pairs):
     found={}
     for name in os.listdir(observations_fd):
@@ -166,10 +225,14 @@ def main():
     content_fd=open_dir_at(root_fd,'content'); observations_fd=open_dir_at(root_fd,'observations')
     doc=json.loads(read_at(root_fd,'screen.json',2*1024*1024))
     candidate=doc['candidate'];url=doc['url'];digest=doc['document_sha256'];ref=doc['jurisdiction_ref']
-    check_direct_candidate(content_fd,url,candidate)
     archive_blob(content_fd,digest,20*1024*1024)
-    pairs=[(url,digest),(candidate['index_url'],candidate['index_sha256'])]
-    receipts=input_receipts(observations_fd,pairs);receipt=receipts[(url,digest)]
+    if candidate.get('source_kind')=='civicclerk-monument-2026-v1':
+        receipts=check_monument_candidate(content_fd,observations_fd,url,digest,ref,candidate)
+    else:
+        check_direct_candidate(content_fd,url,candidate)
+        pairs=[(url,digest),(candidate['index_url'],candidate['index_sha256'])]
+        receipts=input_receipts(observations_fd,pairs)
+    receipt=receipts[(url,digest)]
     tools=provenance(a.binary,a.tessdata)
     try:os.mkdir('ocr-pages',mode=0o700,dir_fd=root_fd)
     except FileExistsError:pass
