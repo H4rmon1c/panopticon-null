@@ -140,10 +140,27 @@ class Tests(unittest.TestCase):
   with self.assertRaises(ValueError):m.resume_cursor(self.root/'chain-0',self.root,item,date(2020,1,2))
   x=self.prior_archive('wrong-host',0,self.event);report=json.loads((x/'report/results.json').read_text());report['results'][0]['pages'][0]['list_url']='https://evil.example/';(x/'report/results.json').write_text(json.dumps(report))
   with self.assertRaises(ValueError):m.resume_cursor(x,self.root,item,date(2020,1,2))
+ def test_malformed_prior_report_fails_closed_before_network(self):
+  prior=self.prior_archive('bad-prior',0,self.event);(self.root/'private-probe-results-v3.json').write_text(json.dumps({'results':[self.entry]}))
+  for n,value in enumerate(([],{'schema_version':'pnull-private-civicclerk-v2','cutoff':'2020-01-02','results':[None]})):
+   (prior/'report/results.json').write_text(json.dumps(value));argv=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--output-name','bad-resume-'+str(n),'--before','2020-01-02','--jurisdiction',self.ref,'--resume-archive',str(prior)]
+   with patch.object(sys,'argv',argv),patch.object(m.r,'get') as get,patch.object(m.r,'get_robots') as robots:m.main(None)
+   row=json.loads((self.root/('bad-resume-'+str(n))/'report/results.json').read_text())['results'][0];self.assertEqual(row['pagination_state'],'incomplete_error');get.assert_not_called();robots.assert_not_called()
  def test_empty_more_and_nondescending_events_are_rejected(self):
   with self.assertRaises(ValueError):m.summarize(b'{"hasMore":true,"items":[]}',date(2020,1,2))
   later={**self.event,'id':11,'eventDate':'2020-01-01T13:00:00Z'}
   with self.assertRaises(ValueError):m.summarize(json.dumps({'hasMore':False,'items':[self.event,later]}).encode(),date(2020,1,2))
+ def test_timestamp_overflow_is_local_error_and_next_tenant_proceeds(self):
+  malformed={**self.event,'eventDate':'0001-01-01T00:00:00+23:59'}
+  with self.assertRaises(ValueError):m.summarize(json.dumps({'hasMore':False,'items':[malformed]}).encode(),date(2020,1,2))
+  second='us-co-place-0826600';(self.root/'private-probe-results-v3.json').write_text(json.dumps({'results':[self.entry,{'jurisdiction_ref':second,'state':'html_screened'}]}));calls=[]
+  def bind(root,ref,entries,lookup):
+   tenant='erieco' if ref==self.ref else 'firestoneco';return {'jurisdiction_ref':ref,'tenant':tenant,'portal_url':'https://'+tenant+'.portal.civicclerk.com/','source_anchor':{},'capture_proofs':[]},[]
+  def get(url,hosts,**kw):
+   calls.append(url);event=malformed if 'erieco.api.' in url else self.event;body=json.dumps({'hasMore':False,'items':[event]}).encode();return [(receipt(url,body,'application/json'),body)]
+  argv=['adapter','--source-archive',str(self.root),'--output-parent',str(self.root),'--output-name','overflow','--before','2020-01-02','--limit','2','--jurisdiction',self.ref,'--jurisdiction',second]
+  with patch.object(sys,'argv',argv),patch.object(m,'bind_group',side_effect=bind),patch.object(m.r,'get_robots',return_value=(None,[])),patch.object(m.r,'get',side_effect=get):m.main(None)
+  rows=json.loads((self.root/'overflow/report/results.json').read_text())['results'];self.assertEqual([v['state'] for v in rows],['error','list_captured']);self.assertEqual(rows[0]['pagination_state'],'incomplete_error');self.assertEqual(len(calls),2)
  def test_two_pages_then_explicit_resume_stays_private(self):
   (self.root/'private-probe-results-v3.json').write_text(json.dumps({'results':[self.entry]}));calls=[]
   def get(url,hosts,**kw):

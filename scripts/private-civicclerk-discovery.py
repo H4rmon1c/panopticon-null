@@ -125,9 +125,11 @@ def summarize(body,cutoff):
         files=[] if raw_files is None else raw_files
         if not isinstance(stamp,str) or not re.match(r'^\d{4}-\d{2}-\d{2}T',stamp):raise ValueError('invalid event date')
         if date.fromisoformat(stamp[:10])>=cutoff:raise ValueError('non-past event date')
-        instant=datetime.fromisoformat(stamp.replace('Z','+00:00'))
-        if instant.tzinfo is None or instant.utcoffset() is None:raise ValueError('event timestamp lacks timezone')
-        instant=instant.astimezone(timezone.utc)
+        try:
+            instant=datetime.fromisoformat(stamp.replace('Z','+00:00'))
+            if instant.tzinfo is None or instant.utcoffset() is None:raise ValueError('event timestamp lacks timezone')
+            instant=instant.astimezone(timezone.utc)
+        except OverflowError:raise ValueError('event timestamp outside supported UTC range') from None
         if previous is not None and instant>previous:raise ValueError('event order is not descending')
         if previous is not None and instant==previous:ties=True
         previous=instant
@@ -201,8 +203,11 @@ def resume_cursor(root,parent,item,cutoff):
             path=current/name
             if path.is_symlink() or not path.is_dir():raise ValueError('invalid resume archive child')
         prior=json.loads(r.read_blob(current/'report/results.json',8*1024*1024))
+        if not isinstance(prior,dict):raise ValueError('invalid prior report object')
+        prior_rows=prior.get('results')
+        if not isinstance(prior_rows,list) or len(prior_rows)>MAX_TENANTS or any(not isinstance(v,dict) for v in prior_rows):raise ValueError('invalid prior result rows')
         if prior.get('schema_version') not in ('pnull-private-civicclerk-v1','pnull-private-civicclerk-v2') or prior.get('cutoff')!=cutoff.isoformat():raise ValueError('prior schema or cutoff differs')
-        rows=[v for v in prior.get('results',[]) if v.get('jurisdiction_ref')==item['jurisdiction_ref']]
+        rows=[v for v in prior_rows if v.get('jurisdiction_ref')==item['jurisdiction_ref']]
         if len(rows)!=1 or rows[0].get('tenant')!=item['tenant'] or rows[0].get('portal_url')!=item['portal_url'] or rows[0].get('source_anchor')!=item['source_anchor']:raise ValueError('prior tenant or source binding differs')
         row=rows[0];pages=row.get('pages') if 'pages' in row else [row]
         if not isinstance(pages,list) or not 1<=len(pages)<=MAX_LIST_PAGES or any(not isinstance(p,dict) or p.get('state')!='list_captured' for p in pages):raise ValueError('prior pages contain a gap or error')
