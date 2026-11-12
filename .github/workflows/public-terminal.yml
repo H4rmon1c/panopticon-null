@@ -44,6 +44,7 @@ jobs:
       - name: Test preliminary research provenance and public API
         run: |
           python3 scripts/test-colorado-research.py
+          python3 scripts/test-private-html-meeting-screen.py
           python3 scripts/test-garden-city-motion-sidecar.py
           python3 scripts/test-keenesburg-motion-sidecar.py
           python3 scripts/test-cortez-motion-sidecar.py
