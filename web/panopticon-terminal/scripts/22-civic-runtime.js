@@ -198,7 +198,7 @@ function renderRecordList() {
       for (const match of matches) {
         const link = document.createElement("a");
         link.href = match.href;
-        link.textContent = `${match.card.record.id === entity.id ? "View decision" : "View recorded position"} — ${match.card.place}`;
+        link.textContent = `${match.card.record.id === entity.id ? "View decision" : "View recorded position"} — ${match.card.title}`;
         linked.append(link);
       }
       if (!matches.length) {
