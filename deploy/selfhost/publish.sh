@@ -171,6 +171,16 @@ if ! grep -Fq '"state":"available"' "$stage/public/cortez-motion-v1.json" ||
    ! python3 "$PNUL_REPO_DIR/scripts/verify-cortez-lucero-portrait.py" --archive "$research_dir"; then
     rm -f -- "$stage/assets/portraits/cortez-orly-lucero-2017.jpg"
 fi
+# Each press portrait is withheld independently if its exact captioned source
+# and image receipts are absent; the vote remains available.
+press_names=('Amy Huckins' 'Rachel Medina' 'Robert Dobry')
+press_files=('cortez-amy-huckins-2021.jpg' 'cortez-rachel-medina-2022.jpg' 'cortez-robert-dobry-2020.jpg')
+for i in "${!press_names[@]}"; do
+    if ! grep -Fq '"state":"available"' "$stage/public/cortez-motion-v1.json" ||
+       ! python3 "$PNUL_REPO_DIR/scripts/verify-cortez-press-portraits.py" --archive "$research_dir" --person "${press_names[$i]}" >/dev/null 2>&1; then
+        rm -f -- "$stage/assets/portraits/${press_files[$i]}"
+    fi
+done
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2
     exit 1

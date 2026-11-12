@@ -54,6 +54,9 @@ grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/garden-city-motion
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/keenesburg-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/cortez-motion-v1.json"
 [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/cortez-orly-lucero-2017.jpg" ]] || { echo "unavailable Cortez motion leaked portrait" >&2; exit 1; }
+for photo in cortez-amy-huckins-2021.jpg cortez-rachel-medina-2022.jpg cortez-robert-dobry-2020.jpg; do
+    [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/$photo" ]] || { echo "unavailable Cortez motion leaked press portrait" >&2; exit 1; }
+done
 [[ -z "$(find "$PNUL_CURRENT_LINK/garden-portraits" -type f -print -quit)" ]] || { echo "unavailable Garden City motion leaked portraits" >&2; exit 1; }
 spring_page="$PNUL_CURRENT_LINK/decisions/co-colorado-springs-25-581-2025-11-25.html"
 [[ -f "$spring_page" ]]

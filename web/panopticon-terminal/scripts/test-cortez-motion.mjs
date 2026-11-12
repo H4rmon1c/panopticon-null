@@ -39,11 +39,11 @@ test('browser displays seven votes only when sidecar and research both match', a
   const ok = await render(valid,research,'valid');
   assert.match(ok.status.textContent,/preliminary/);
   assert.equal(ok.content.children.find(x => x.tag === 'ul').children.length,7);
-  assert.ok(ok.content.children.some(x => x.textContent.includes('When available, Lucero’s portrait') && x.textContent.includes('unknown')));
+  assert.ok(ok.content.children.some(x => x.textContent.includes('When available, portraits') && x.textContent.includes('unknown')));
   const voters = ok.content.children.find(x => x.tag === 'ul').children;
   const images = voters.flatMap(v => v.children.filter(child => child.tag === 'img'));
-  assert.equal(images.length, 1);
-  assert.match(images[0].alt, /Orly Lucero/);
+  assert.equal(images.length, 4);
+  assert.ok(images.some(image => image.alt.includes("Orly Lucero")));
   images[0].error(); assert.equal(images[0].removed, true);
   const missing = await render({schema_version:valid.schema_version,state:'not_available'},research,'missing');
   assert.match(missing.status.textContent,/unavailable/); assert.equal(missing.content.children.length,0);

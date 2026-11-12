@@ -5,7 +5,9 @@ import {cortezPortraitFor, cortezPortraitImage, luceroPortrait} from '../cortez-
 test('only the exact Cortez voter and meeting role receive the historical portrait', () => {
   assert.equal(cortezPortraitFor({name:'Orly Lucero',role:'Councilmember'}),luceroPortrait);
   assert.equal(cortezPortraitFor({name:'Orly Lucero',role:'Mayor'}),null);
-  assert.equal(cortezPortraitFor({name:'Robert Dobry',role:'Councilmember'}),null);
+  assert.equal(cortezPortraitFor({name:'Robert Dobry',role:'Councilmember'}).credit,'The Journal file');
+  assert.equal(cortezPortraitFor({name:'Rachel Medina',role:'Mayor'}),null);
+  assert.equal(cortezPortraitFor({name:'Rachel Medina',role:'Mayor Pro Tem'}).credit,'Courtesy photo, via The Journal');
   assert.match(luceroPortrait.source,/2017-Budget-in-Brief\?bidId=#page=2$/);
 });
 
