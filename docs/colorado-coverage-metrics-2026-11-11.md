@@ -1,9 +1,29 @@
 # Colorado coverage measures — November 11, 2026
 
-At 21:47 UTC, the private collector snapshot recorded at least one document-text
+The later private snapshot at 2026-11-12 01:33 UTC contains **289 preliminary
+references across 61 mapped jurisdictions**. Those references are leads with
+varying evidence, not a count of approvals or independently established cases.
+No complete inventory of relevant Colorado decisions exists here, so their
+percentage covered cannot be calculated.
+
+Of 4,111 mapped entries, 967 (23.5%) had a website reached. Seven (0.17%)
+had at least one retrieved portal or agenda meeting page recorded by the
+collector. These are different measures of collection activity, not estimates
+of complete jurisdiction coverage. The roster includes 3,595 provisional
+special-district entries and is not an inventory of every public body. The
+snapshot's document screening states were 28,884 `error` and 1,836
+`redirected`; the `error` category includes screens reclassified as incomplete
+because their full image, page, or document-part coverage was not established,
+not just technical fetch or parser errors. Existing positive references were
+retained and remain preliminary.
+
+## Historical partial-screen measure
+
+At 21:47 UTC on November 11, the private collector snapshot recorded at least one document-text
 or portal screen for **545 of 4,111 mapped entries (13.3%)**. Document screens in
-this historical count lack validated image, page, and document-part coverage; they do not
-establish complete document screening. This is
+this historical count lack validated image, page, and document-part coverage;
+they have since been reclassified as incomplete and do not establish complete
+document screening. This was
 an activity measure, not the percentage of Colorado decisions or records
 covered. Neither a complete statewide universe of relevant decisions nor a
 complete lookback window has been established. The geography includes 3,595
