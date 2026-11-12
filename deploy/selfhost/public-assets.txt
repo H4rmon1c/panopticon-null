@@ -200,3 +200,8 @@ columbine-motion.html
 columbine-motion.js
 columbine-motion-api.js
 public/columbine-motion-v1.json
+
+buenavista-motion.html
+buenavista-motion.js
+buenavista-motion-api.js
+public/buenavista-motion-v1.json
