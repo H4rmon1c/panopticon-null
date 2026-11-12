@@ -202,6 +202,11 @@ for i in "${!yuma_names[@]}"; do
         rm -f -- "$stage/assets/portraits/${yuma_files[$i]}"
     fi
 done
+# The scholarship portrait is separate from both the vote and other photos.
+if ! grep -Fq '"state":"available"' "$stage/public/cortez-motion-v1.json" ||
+   ! python3 "$PNUL_REPO_DIR/scripts/verify-cortez-yazzie-portrait.py" --archive "$research_dir" >/dev/null 2>&1; then
+    rm -f -- "$stage/assets/portraits/cortez-arlina-yazzie-cra.png"
+fi
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2
     exit 1

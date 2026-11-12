@@ -1,6 +1,6 @@
 import {validateCortezMotion,validateCortezResearchBinding} from './cortez-motion-api.js?v=1';
 import {readBoundedResearchResponse} from './research-api.js?v=garden-motion-1';
-import {cortezPortraitFor,cortezPortraitImage} from './cortez-portrait-api.js?v=2';
+import {cortezPortraitFor,cortezPortraitImage} from './cortez-portrait-api.js?v=3';
 const status=document.querySelector('#motion-status');const content=document.querySelector('#motion-content');
 const node=(tag,text,cls='')=>{const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el;};
 const link=(url,label)=>{const el=node('a',label,'source');el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
@@ -20,7 +20,7 @@ try {
   content.append(node('h2',data.motion));content.append(node('p',data.outcome,'title'));
   content.append(node('p',data.scope,'note'),node('p',data.notice,'note'));
   content.append(node('h3','Recorded votes on final reading'));
-  content.append(node('p','When available, portraits come from the linked city report or newspaper articles; photograph dates are unknown. The meeting minutes separately record the vote. Other portraits are unavailable.','meta'));
+  content.append(node('p','When available, portraits come from the linked city, news or scholarship sources; photograph dates are unknown. The meeting minutes separately record the vote. Other portraits are unavailable.','meta'));
   const list=node('ul','','garden-votes');
   for(const vote of data.votes){
     const item=node('li','','garden-vote'), portrait=cortezPortraitFor(vote);

@@ -53,6 +53,7 @@ export PNUL_TEST_SNAPSHOT="$repo_dir/web/panopticon-terminal/public/public-snaps
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/garden-city-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/keenesburg-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/cortez-motion-v1.json"
+[[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/cortez-arlina-yazzie-cra.png" ]] || { echo "unavailable Cortez motion leaked Yazzie portrait" >&2; exit 1; }
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/yuma-motion-v1.json"
 for photo in yuma-adam-gates.jpg yuma-scott-weaver.jpg yuma-mike-leerar.jpg; do
     [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/$photo" ]] || { echo "unavailable Yuma motion leaked portrait" >&2; exit 1; }
