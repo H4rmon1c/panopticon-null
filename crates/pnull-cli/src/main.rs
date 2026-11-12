@@ -419,6 +419,9 @@ enum SourceCommand {
         retrieved_at: String,
         #[arg(long)]
         ocr: bool,
+        /// Require cgroup, bounded scratch and hardened whole-document sandbox.
+        #[arg(long)]
+        bounded_private: bool,
     },
 }
 
@@ -683,6 +686,7 @@ fn run(cli: Cli) -> Result<()> {
                     jurisdiction_ref,
                     retrieved_at,
                     ocr,
+                    bounded_private,
                 },
         } => research_screen::screen_pdf(
             &cli.data_dir,
@@ -691,7 +695,10 @@ fn run(cli: Cli) -> Result<()> {
             &source_url,
             &jurisdiction_ref,
             &retrieved_at,
-            ocr,
+            research_screen::PdfScreenOptions {
+                ocr,
+                bounded_private,
+            },
         ),
         Command::Ingest(args) => live_ingest(&cli.data_dir, &config, &args),
         Command::Scan => scan_all(&cli.data_dir, &cli.rules),
