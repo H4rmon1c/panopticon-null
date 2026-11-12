@@ -6,6 +6,7 @@ import { validateSnapshot } from "../api.js";
 import { votePortraits } from "../portraits/portraits.js";
 import { matchesDenverGallery } from "../portraits/lookup.js";
 import { validateResearch } from "../research-api.js";
+import { validateClearCreekMotion, validateClearCreekResearchBinding } from "../clearcreek-motion-api.js";
 import { validateOurayMotion, validateOurayResearchBinding } from "../ouray-motion-api.js";
 import { validateYumaMotion, validateYumaResearchBinding } from "../yuma-motion-api.js";
 import { validateCortezMotion, validateCortezResearchBinding } from "../cortez-motion-api.js";
@@ -35,7 +36,7 @@ const styles = [
   "styles/09-civic-polish.css",
   "styles/10-colorado-coverage.css",
 ];
-const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "ouray-motion.html", "ouray-motion.js", "ouray-motion-api.js", "public/ouray-motion-v1.json", "yuma-motion.html", "yuma-motion.js", "yuma-motion-api.js", "public/yuma-motion-v1.json", "cortez-motion.html", "cortez-motion.js", "cortez-motion-api.js", "public/cortez-motion-v1.json", "keenesburg-motion.html", "keenesburg-motion.js", "keenesburg-motion-api.js", "public/keenesburg-motion-v1.json", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
+const required = ["index.html", "styles.css", "app.js", "api.js", "decision.html", "decision.css", "decision.js", "research.html", "research.css", "research.js", "research-api.js", "clearcreek-motion.html", "clearcreek-motion.js", "clearcreek-motion-api.js", "public/clearcreek-motion-v1.json", "ouray-motion.html", "ouray-motion.js", "ouray-motion-api.js", "public/ouray-motion-v1.json", "yuma-motion.html", "yuma-motion.js", "yuma-motion-api.js", "public/yuma-motion-v1.json", "cortez-motion.html", "cortez-motion.js", "cortez-motion-api.js", "public/cortez-motion-v1.json", "keenesburg-motion.html", "keenesburg-motion.js", "keenesburg-motion-api.js", "public/keenesburg-motion-v1.json", "garden-motion.html", "garden-motion.js", "garden-motion-api.js", "garden-portraits-api.js", "public/garden-city-motion-v1.json", "public/research-signals.json", "portraits/portraits.js", "portraits/lookup.js", "mock/public-snapshot.json", "public/public-snapshot.json", "geography/colorado-jurisdictions.json", "scripts/build-decision-pages.mjs", "scripts/filter-portraits.mjs", ...templates, ...scripts, ...styles];
 const failures = [];
 const contents = new Map();
 
@@ -50,6 +51,8 @@ for (const path of required) {
 
 try {
   const research = validateResearch(JSON.parse(contents.get("public/research-signals.json") ?? ""));
+  const clearcreek = validateClearCreekMotion(JSON.parse(contents.get("public/clearcreek-motion-v1.json") ?? ""));
+  validateClearCreekResearchBinding(clearcreek, research);
   const ouray = validateOurayMotion(JSON.parse(contents.get("public/ouray-motion-v1.json") ?? ""));
   validateOurayResearchBinding(ouray, research);
   const yuma = validateYumaMotion(JSON.parse(contents.get("public/yuma-motion-v1.json") ?? ""));
