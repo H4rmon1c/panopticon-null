@@ -87,6 +87,10 @@ function render(report) {
       const related = node('a', 'source', 'Open the source-bound motion and attendance ↗');
       related.href = './columbine-motion.html'; card.append(related);
     }
+    if (item.id === 'co-document-84c83a2e5166b057153d3d7d') {
+      const related = node('a', 'source', 'Open the source-bound nonrenewal vote ↗');
+      related.href = './hudson-motion.html'; card.append(related);
+    }
     if (item.id === 'co-document-70b769207d0e0c7d13953611') {
       const related = node('a', 'source', 'Open the source-bound staff evaluation vote ↗');
       related.href = './buenavista-motion.html'; card.append(related);
