@@ -51,6 +51,7 @@ export PNUL_TEST_SNAPSHOT="$repo_dir/web/panopticon-terminal/public/public-snaps
 [[ -L "$PNUL_CURRENT_LINK" ]]
 [[ -f "$PNUL_CURRENT_LINK/public/public-snapshot.json" ]]
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/garden-city-motion-v1.json"
+grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/keenesburg-motion-v1.json"
 [[ -z "$(find "$PNUL_CURRENT_LINK/garden-portraits" -type f -print -quit)" ]] || { echo "unavailable Garden City motion leaked portraits" >&2; exit 1; }
 spring_page="$PNUL_CURRENT_LINK/decisions/co-colorado-springs-25-581-2025-11-25.html"
 [[ -f "$spring_page" ]]
