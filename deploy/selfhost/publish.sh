@@ -193,6 +193,15 @@ for i in "${!press_names[@]}"; do
         rm -f -- "$stage/assets/portraits/${press_files[$i]}"
     fi
 done
+# A Yuma photo requires the available action plus its own county source proof.
+yuma_names=('Adam Gates' 'Scott Weaver' 'Mike Leerar')
+yuma_files=('yuma-adam-gates.jpg' 'yuma-scott-weaver.jpg' 'yuma-mike-leerar.jpg')
+for i in "${!yuma_names[@]}"; do
+    if ! grep -Fq '"state":"available"' "$stage/public/yuma-motion-v1.json" ||
+       ! python3 "$PNUL_REPO_DIR/scripts/verify-yuma-portraits.py" --archive "$research_dir" --person "${yuma_names[$i]}" >/dev/null 2>&1; then
+        rm -f -- "$stage/assets/portraits/${yuma_files[$i]}"
+    fi
+done
 if [[ -n "$(find "$stage" -type l -print -quit)" ]]; then
     echo "site assets contain a symlink" >&2
     exit 1

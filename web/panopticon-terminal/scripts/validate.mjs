@@ -9,6 +9,7 @@ import { validateResearch } from "../research-api.js";
 import { validateClearCreekMotion, validateClearCreekResearchBinding } from "../clearcreek-motion-api.js";
 import { validateGunnisonMotion, validateGunnisonResearchBinding } from "../gunnison-motion-api.js";
 import { validateOurayMotion, validateOurayResearchBinding } from "../ouray-motion-api.js";
+import { yumaPortraits, yumaPortraitFor } from "../yuma-portraits-api.js";
 import { validateYumaMotion, validateYumaResearchBinding } from "../yuma-motion-api.js";
 import { validateCortezMotion, validateCortezResearchBinding } from "../cortez-motion-api.js";
 import { cortezPortraits, cortezPortraitFor } from "../cortez-portrait-api.js";
@@ -60,6 +61,16 @@ try {
   validateOurayResearchBinding(ouray, research);
   const yuma = validateYumaMotion(JSON.parse(contents.get("public/yuma-motion-v1.json") ?? ""));
   validateYumaResearchBinding(yuma, research);
+  if (yuma.state === 'available' && yuma.attendance.filter(person=>yumaPortraitFor(person)).length !== yumaPortraits.length)
+    throw new Error('Yuma portrait attendance binding differs');
+  for (const portrait of yumaPortraits) {
+    const path=join(root,portrait.src);let meta;
+    try {meta=await lstat(path);} catch (error) {if(error.code!=='ENOENT')throw error;}
+    if(meta){if(!meta.isFile()||meta.isSymbolicLink()||meta.size!==portrait.bytes)throw new Error('Yuma portrait file differs');
+      const body=await readFile(path);
+      if(body[0]!==0xff||body[1]!==0xd8||body[2]!==0xff||createHash('sha256').update(body).digest('hex')!==portrait.sha256)
+        throw new Error('Yuma portrait digest or type differs');}
+  }
   const cortez = validateCortezMotion(JSON.parse(contents.get("public/cortez-motion-v1.json") ?? ""));
   validateCortezResearchBinding(cortez, research);
   if (cortez.state === 'available' && cortez.votes.filter(vote => cortezPortraitFor(vote)).length !== cortezPortraits.length)

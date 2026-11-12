@@ -54,6 +54,9 @@ grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/garden-city-motion
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/keenesburg-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/cortez-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/yuma-motion-v1.json"
+for photo in yuma-adam-gates.jpg yuma-scott-weaver.jpg yuma-mike-leerar.jpg; do
+    [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/$photo" ]] || { echo "unavailable Yuma motion leaked portrait" >&2; exit 1; }
+done
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/ouray-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/clearcreek-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/gunnison-motion-v1.json"

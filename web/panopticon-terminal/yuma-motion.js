@@ -1,4 +1,5 @@
 import {validateYumaMotion,validateYumaResearchBinding} from './yuma-motion-api.js?v=1';
+import {yumaPortraitFor,yumaPortraitImage} from './yuma-portraits-api.js?v=1';
 import {readBoundedResearchResponse} from './research-api.js?v=garden-motion-1';
 const status=document.querySelector('#motion-status'), content=document.querySelector('#motion-content');
 const node=(tag,text,cls='')=>{const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;};
@@ -17,7 +18,13 @@ try{
   content.append(node('h2',data.motion),node('p',data.outcome,'title'),node('p',data.notice,'note'));
   content.append(node('h3','Commissioners present throughout the day'));
   content.append(node('p','Attendance is not an individual roll call on this motion.','meta'));
-  const list=node('ul','');for(const person of data.attendance)list.append(node('li',`${person.name} · ${person.role} · ${person.individual_vote}`));content.append(list);
+  content.append(node('p','When available, portraits come from Yuma County profiles captured in November 2026; photograph dates are unknown. Roles shown are from the 2025 meeting. Attendance does not establish an individual vote.','meta'));
+  const list=node('ul','','garden-votes');for(const person of data.attendance){
+    const item=node('li','','garden-vote'),portrait=yumaPortraitFor(person);if(portrait)item.append(yumaPortraitImage(document,person));
+    const details=node('div','','garden-vote__details');details.append(node('strong',person.name),node('p',`${person.role} · ${person.individual_vote}`,'meta'));
+    if(portrait)details.append(link('https://yumacounty.net/commissioners/','Yuma County commissioners and portraits ↗'));
+    item.append(details);list.append(item);
+  }content.append(list);
   content.append(link(`${data.source.url}#page=${data.source.motion_page}`,'Open the motion and unanimous outcome, page 2 ↗'));
   content.append(link(`${data.source.url}#page=${data.source.attendance_page}`,'Open the meeting attendance, page 1 ↗'));
   content.append(link(data.source.index_url,'Open the county commissioners’ source index ↗'));
