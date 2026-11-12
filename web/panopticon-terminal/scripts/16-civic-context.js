@@ -34,10 +34,17 @@ function updateCivicContext(entity = currentState().selected) {
     });
   }
 
-  const entityLocation = entity.geo?.label;
+  const jurisdiction = (entity.relationships ?? [])
+    .map((item) => snapshot.byId?.get?.(item.target_entity_id))
+    .find((item) => String(item?.type ?? "").toUpperCase() === "JURISDICTION");
+  const entityLocation = jurisdiction?.name ?? entity.geo?.label;
   if (entityLocation && !/approximate/i.test(entityLocation)) {
     const clean = entityLocation.replace(/\s+demonstration\s+(region|headquarters|network office)/i, "").trim();
-    if (clean) place = clean.toUpperCase();
+    if (clean) {
+      place = clean.toUpperCase();
+      const placeInput = civic$("#civic-place-input");
+      if (placeInput && document.activeElement !== placeInput) placeInput.value = clean;
+    }
   }
   updatePlaceLabel();
 }
@@ -71,10 +78,13 @@ function civicUnknowns(entity, snapshot) {
   if (!attributes.some((item) => /\$|cost|amount|price|award|value|spend/i.test(`${item.label} ${item.value}`))) {
     unknowns.push("No public dollar amount is linked to this record yet.");
   }
-  if (!targetTypes.some((type) => /PERSON|OFFICIAL|OFFICEHOLDER/i.test(type))) {
-    unknowns.push("No named decision-maker in a documented public role is linked yet.");
+  const hasNamedParticipant = targetTypes.some((type) => /PERSON|OFFICIAL|OFFICEHOLDER|RECORDED_VOTER/i.test(type))
+    || relationships.some((item) => /RECORDED_VOTE/i.test(item.type ?? ""));
+  if (!hasNamedParticipant) {
+    unknowns.push("No named participant is linked to this record yet.");
   }
-  if (!timeline.some((item) => /VOTE|MEETING|ORDINANCE|HEARING/i.test(`${item.type} ${item.title}`))) {
+  if (!relationships.some((item) => /RECORDED_VOTE/i.test(item.type ?? "")) &&
+      !timeline.some((item) => /VOTE|MEETING|ORDINANCE|HEARING/i.test(`${item.type} ${item.title}`))) {
     unknowns.push("No vote, hearing, or meeting record is linked yet.");
   }
   if (!attributes.some((item) => /tax|incentive|subsid|abatement/i.test(`${item.label} ${item.value}`))) {

@@ -53,8 +53,8 @@ function applyCivicShell() {
         <button id="coverage-open" class="civic-coverage-trigger" type="button">COLORADO INDEX ↗</button>
       </header>
       <form id="civic-place-form" class="civic-place-form">
-        <input id="civic-place-input" value="Colorado Springs, CO" autocomplete="off" aria-label="Town, county, or ZIP code" />
-        <button type="submit">OPEN</button>
+        <input id="civic-place-input" placeholder="Enter a Colorado city, town, or county" autocomplete="off" aria-label="Colorado city, town, or county" />
+        <button type="submit">FIND PLACE</button>
       </form>
       <div class="civic-question-grid" aria-label="Common public questions">
         <button type="button" data-civic-action="changes">WHAT CHANGED?</button>

@@ -19,9 +19,8 @@ function renderDossier(entity) {
   $("#entity-status").textContent = entity.status ?? "STATUS UNKNOWN";
   $("#entity-location").textContent = entity.geo?.label ?? "NON-SPATIAL RECORD";
   $("#entity-updated").textContent = entity.updated_at ? `UPDATED ${relative(entity.updated_at)}` : "UPDATED UNKNOWN";
-  const confidence = averageConfidence(entity);
-  $("#confidence-value").textContent = Math.round(confidence * 100);
-  $("#confidence-orbit").setAttribute("aria-label", `Evidence confidence ${Math.round(confidence * 100)} percent`);
+  // The release model has verification states, not a numeric confidence score.
+  $("#confidence-orbit").hidden = true;
   renderMetrics(entity);
   renderAttributes(entity);
   renderRelations(entity);
@@ -68,7 +67,8 @@ function renderRelations(entity) {
     button.type = "button";
     button.className = "relation";
     button.title = "Open related entity. Hold Shift to inspect supporting evidence.";
-    button.innerHTML = `<em>${escapeHtml(item.type)}</em><span><b>${escapeHtml(target?.name ?? item.target_entity_id)}</b><small>${escapeHtml(item.label)} · ${escapeHtml(item.source_count ?? 1)} SOURCE${item.source_count === 1 ? "" : "S"}</small></span><strong>${Math.round(Number(item.confidence ?? 0) * 100)}%</strong>`;
+    const status = item.review_state === "SOURCE_VERIFIED" ? "SOURCE VERIFIED" : "";
+    button.innerHTML = `<em>${escapeHtml(item.type)}</em><span><b>${escapeHtml(target?.name ?? item.target_entity_id)}</b><small>${escapeHtml(item.label)} · ${escapeHtml(item.source_count ?? 1)} SOURCE${item.source_count === 1 ? "" : "S"}</small></span><strong>${status}</strong>`;
     button.addEventListener("click", (event) => event.shiftKey && item.evidence_id ? openEvidence(item.evidence_id) : selectEntity(item.target_entity_id));
     list.append(button);
   });

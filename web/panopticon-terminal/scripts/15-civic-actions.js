@@ -99,13 +99,7 @@ function wireCivicUi() {
     event.preventDefault();
     const value = civic$("#civic-place-input")?.value.trim();
     if (!value) return;
-    place = value.toUpperCase();
-    updatePlaceLabel();
-    if (/colorado springs/i.test(value) && currentState().byId?.has?.("ent_front_range")) {
-      selectRecord("ent_front_range");
-    } else if (typeof openSearch === "function") {
-      openSearch(value);
-    }
+    window.dispatchEvent(new CustomEvent("pnull:find-place", { detail: { query: value } }));
   });
 
   civic$$("[data-civic-action]").forEach((button) => {
@@ -134,9 +128,11 @@ function updateAudienceUi() {
 function runCivicAction(action) {
   const snapshot = currentState();
   if (action === "changes") {
+    const show = document.body.dataset.activity !== "visible";
+    document.body.dataset.activity = show ? "visible" : "hidden";
     civic$(".activity-panel")?.classList.add("is-emphasized");
     setTimeout(() => civic$(".activity-panel")?.classList.remove("is-emphasized"), 900);
-    announce("SHOWING RECENT PUBLISHED CHANGES");
+    announce(show ? "SHOWING RECENT PUBLISHED CHANGES" : "RECENT CHANGES CLOSED");
     return;
   }
   if (action === "money") {

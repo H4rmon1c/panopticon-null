@@ -7,6 +7,24 @@ const KIND_LABELS = {
   district_provisional: "District in DOLA discovery layer",
 };
 
+export function normalizePlaceQuery(value) {
+  return String(value ?? "").trim()
+    .replace(/(?:,\s*|\s+)(?:co|colorado)\s*$/i, "")
+    .replace(/^county\s+of\s+(.+)$/i, "$1 county")
+    .replace(/^(?:city|town)\s+of\s+/i, "")
+    .replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+// A typed place can match a municipality or a county even when neither has a
+// published decision. The roster is a directory, not evidence of surveillance.
+export function findCoveragePlaces(records, query, kind = null) {
+  const needle = normalizePlaceQuery(query);
+  const priority = { municipality: 0, county: 1, state: 2, school_district: 3, district_provisional: 4 };
+  return records.filter((record) => (!kind || record.kind === kind) &&
+    (!needle || normalizePlaceQuery(`${record.name} ${record.code}`).includes(needle)))
+    .sort((a, b) => (priority[a.kind] ?? 5) - (priority[b.kind] ?? 5) || a.name.localeCompare(b.name));
+}
+
 // A geography row cannot create a case. Only a released decision in the
 // validated public snapshot can be linked to it.
 export function coverageDecisionIndex(records, snapshot) {
@@ -91,6 +109,8 @@ export function installColoradoCoverage({ getSnapshot }) {
   let registry;
   let loadPromise;
   let kind = "municipality";
+  let searchAllKinds = false;
+  let pendingQuery = null;
   let selectedId = null;
   let indexedEntities = null;
   let indexedMode = null;
@@ -114,8 +134,8 @@ export function installColoradoCoverage({ getSnapshot }) {
     selectedId = record.id;
     if (kind !== record.kind) {
       kind = record.kind;
-      search.value = "";
     }
+    searchAllKinds = false;
     tabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.coverageKind === kind));
     renderList();
     renderDetail(record);
@@ -145,11 +165,7 @@ export function installColoradoCoverage({ getSnapshot }) {
 
   function renderList() {
     if (!registry) return;
-    const query = search.value.trim().toLocaleLowerCase();
-    const matches = registry.jurisdictions.filter((record) =>
-      record.kind === kind &&
-      (!query || `${record.name} ${record.code}`.toLocaleLowerCase().includes(query))
-    );
+    const matches = findCoveragePlaces(registry.jurisdictions, search.value, searchAllKinds ? null : kind);
     resultCount.textContent = `${matches.length.toLocaleString()} matches${matches.length > 100 ? " · showing first 100; narrow the search to find more" : ""}`;
     list.replaceChildren();
     for (const record of matches.slice(0, 100)) {
@@ -157,10 +173,11 @@ export function installColoradoCoverage({ getSnapshot }) {
       button.type = "button";
       button.classList.toggle("is-selected", record.id === selectedId);
       button.append(element("strong", "", record.name));
+      if (searchAllKinds) button.append(element("span", "", KIND_LABELS[record.kind] ?? "Jurisdiction"));
       const decisionCount = casesFor(record).length;
       button.append(element("span", decisionCount ? "coverage-result__published" : "", decisionCount
         ? `${decisionCount} published decision${decisionCount === 1 ? "" : "s"}`
-        : "No published decisions"));
+        : "No released decision listed"));
       button.append(element("span", "coverage-result__search", "Search coverage not established"));
       button.addEventListener("click", () => select(record));
       list.append(button);
@@ -183,11 +200,11 @@ export function installColoradoCoverage({ getSnapshot }) {
         detail.append(link);
       }
     } else {
-      detail.append(element("p", "coverage-detail__unknown", "No published decisions here. This does not establish that no relevant decision, contract, or technology exists."));
+      detail.append(element("p", "coverage-detail__unknown", "No released decision is listed for this place. Relevant records may still exist; explore the preliminary references below."));
     }
     detail.append(element("p", "coverage-detail__unknown", "Search coverage: not established. Last searched: not established. Search period: not established."));
     detail.append(element("p", "coverage-detail__caveat", "Published decisions document individual records. They do not establish that every relevant record in this jurisdiction has been searched. The directory and publication counts do not measure completed searches."));
-    const researchLink = element("a", "coverage-decision-link", "Browse preliminary source references →");
+    const researchLink = element("a", "coverage-decision-link", "Browse preliminary references for this place →");
     researchLink.href = `./research.html?jurisdiction=${encodeURIComponent(record.id)}`;
     detail.append(researchLink);
     if (record.kind === "district_provisional") {
@@ -209,13 +226,23 @@ export function installColoradoCoverage({ getSnapshot }) {
     summary.textContent = `${registry.jurisdictions.length.toLocaleString()} geography entries in the directory · 1 state · ${counts.county} counties · ${counts.municipality} cities and towns · ${counts.school_district} school districts · ${counts.district_provisional.toLocaleString()} provisional DOLA district entries · ${linked} linked published decision${linked === 1 ? "" : "s"} · Jurisdiction search coverage not established`;
     renderMap();
     const publishedPlace = registry.jurisdictions.find((record) => record.published_entity_id === "jurisdiction_co_colorado_springs");
-    if (publishedPlace) selectedId = publishedPlace.id;
+    if (pendingQuery !== null) {
+      search.value = pendingQuery;
+      searchAllKinds = true;
+      selectedId = null;
+      tabs.forEach((tab) => tab.classList.remove("is-active"));
+    } else if (publishedPlace) selectedId = publishedPlace.id;
     renderList();
-    if (publishedPlace) renderDetail(publishedPlace);
+    if (pendingQuery !== null) {
+      detail.replaceChildren(element("p", "coverage-detail__unknown", "Choose a place to see its available records and sources."));
+      pendingQuery = null;
+      search.focus();
+    } else if (publishedPlace) renderDetail(publishedPlace);
   }
 
-  function open() {
-    dialog.showModal();
+  function open(query = null) {
+    pendingQuery = query;
+    if (!dialog.open) dialog.showModal();
     if (registry) {
       render();
       return;
@@ -240,11 +267,16 @@ export function installColoradoCoverage({ getSnapshot }) {
     }
   }
 
-  openButton.addEventListener("click", open);
+  openButton.addEventListener("click", () => open());
+  window.addEventListener("pnull:find-place", (event) => {
+    const query = event.detail?.query;
+    if (typeof query === "string" && query.trim()) open(query.trim().slice(0, 200));
+  });
   closeButton.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
   tabs.forEach((tab) => tab.addEventListener("click", () => {
     kind = tab.dataset.coverageKind;
+    searchAllKinds = false;
     search.value = "";
     tabs.forEach((item) => item.classList.toggle("is-active", item === tab));
     renderList();
