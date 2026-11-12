@@ -62,6 +62,7 @@ grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/ouray-motion-v1.js
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/clearcreek-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/gunnison-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/columbine-motion-v1.json"
+grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/georgetown-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/hudson-motion-v1.json"
 grep -Fq '"state":"not_available"' "$PNUL_CURRENT_LINK/public/buenavista-motion-v1.json"
 [[ ! -e "$PNUL_CURRENT_LINK/assets/portraits/cortez-orly-lucero-2017.jpg" ]] || { echo "unavailable Cortez motion leaked portrait" >&2; exit 1; }
