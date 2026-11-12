@@ -1,0 +1,5 @@
+# Private Monument CivicClerk OCR sample
+
+This one-off source binding allows the existing private page OCR worker to process only the exact captured Monument October 19, 2026 minutes PDF. It verifies the committed municipal directory, the preserved first-party council-page portal anchor, exact portal and client-asset bytes and capture receipts, the exact captured past-events JSON and published minutes file ID, and the original PDF bytes and receipt. All archive reads remain anchored to no-follow directory descriptors, including inherited-FD checks. The OCR sandbox, cgroup, scratch and page limits are unchanged.
+
+The binding and results are private provisional research. The list's body attribution and all claims, individual votes, camera policy and document completeness require independent source review. A successful page does not establish complete-document coverage; empty OCR or any error remains incomplete. This one-off adapter is unscheduled and does not write a research database, public snapshot, or alerts.
